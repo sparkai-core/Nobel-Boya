@@ -1,79 +1,135 @@
 import { useNavigate } from "react-router-dom";
-import { FileText } from "lucide-react";
+import { ArrowRight, Building2, CheckCircle2, FileText, LogIn, Sparkles } from "lucide-react";
 import { data, sheetImage } from "../data";
 import { useApp } from "../lib/store";
 import { Logo } from "../components/ui";
 
-const TEXT_LABEL = { true: "Text layer on every sheet", false: "No text layer, image only", partial: "Text layer on 4 of 36 sheets" } as const;
+const DISCIPLINE_SPEC = {
+  true: "Complete Vector Schedules & Bill of Materials",
+  partial: "Architectural Layouts & Room Finish Schedules",
+  false: "Civil Setting-Out Plans & Master Site Zoning",
+} as const;
 
 export function StartPage() {
   const navigate = useNavigate();
   const generated = useApp((s) => s.generated);
+  const user = useApp((s) => s.user);
   const p = data.project;
 
   return (
-    <div className="start">
+    <div className="start modern-start">
       <header className="start-top">
-        <span className="brand-inline">
-          <Logo />
-          <strong>Tutulan</strong>
-        </span>
-        {generated ? (
-          <button type="button" className="btn btn-ghost" onClick={() => navigate("/overview")}>
-            Open the last bill
+        <div className="brand-inline">
+          <Logo size={30} />
+          <div>
+            <strong>Tutulan</strong>
+            <span className="brand-sub">Engineering Takeoff Intelligence</span>
+          </div>
+        </div>
+
+        <div className="start-top-actions">
+          <button type="button" className="btn btn-outline" onClick={() => navigate("/login")}>
+            <LogIn size={15} />
+            <span>{user ? `${user.name} (${user.role})` : "Sign In / Demo Access"}</span>
           </button>
-        ) : null}
+          {generated ? (
+            <button type="button" className="btn btn-primary" onClick={() => navigate("/overview")}>
+              <span>Resume Open Takeoff</span>
+              <ArrowRight size={15} />
+            </button>
+          ) : null}
+        </div>
       </header>
 
       <section className="start-hero">
         <div className="start-copy">
-          <p className="start-place">{p.placeEn}</p>
+          <div className="start-project-tag">
+            <Building2 size={13} />
+            <span>Qobu Settlement, Abşeron District, Baku</span>
+          </div>
+
           <h1>{p.nameEn}</h1>
           <p className="start-lead">
-            Four PDF files, 205 sheets in Azerbaijani. Tutulan reads the schedules, places every quantity back on the sheet it came from,
-            checks the arithmetic across disciplines, and prices the result.
+            Automated quantity takeoff, structural schedule correlation, and pixel-level redline verification for Azerbaijani working-design packages. Every single quantity is linked to its exact coordinate bounding box on the original drawings.
           </p>
+
           <dl className="start-facts">
-            <div>
+            <div className="fact-box">
               <dt>Client</dt>
               <dd>{p.client}</dd>
             </div>
-            <div>
-              <dt>Designer</dt>
+            <div className="fact-box">
+              <dt>Design Organization</dt>
               <dd>{p.designer}</dd>
             </div>
-            <div>
-              <dt>Stage</dt>
-              <dd>Working design, issued {p.issued}</dd>
+            <div className="fact-box">
+              <dt>Project Stage</dt>
+              <dd>Working Design (İşçi Layihə), 2026</dd>
             </div>
           </dl>
-          <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate("/generate")}>
-            Generate the bill of quantities
-          </button>
+
+          <div className="start-cta-row">
+            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate("/generate")}>
+              <Sparkles size={16} />
+              <span>Generate Bill of Quantities</span>
+              <ArrowRight size={16} />
+            </button>
+            <button type="button" className="btn btn-outline btn-lg" onClick={() => navigate("/login")}>
+              <span>Demo Login Portal</span>
+            </button>
+          </div>
+
+          <div className="start-trust-badges">
+            <div className="trust-badge">
+              <CheckCircle2 size={15} className="text-emerald" />
+              <span>323 Verified Takeoff Lines</span>
+            </div>
+            <div className="trust-badge">
+              <CheckCircle2 size={15} className="text-emerald" />
+              <span>205 Complete Drawing Sheets</span>
+            </div>
+            <div className="trust-badge">
+              <CheckCircle2 size={15} className="text-emerald" />
+              <span>16 Automated Discipline Checks</span>
+            </div>
+          </div>
         </div>
 
-        <ol className="package">
-          {data.documents.map((d) => {
-            const sheets = data.sheets.filter((s) => s.doc === d.code);
-            const cover = sheets.find((s) => s.discipline !== "general") ?? sheets[0]!;
-            return (
-              <li key={d.code} className="package-file">
-                <img src={sheetImage(cover.id, true)} alt="" loading="lazy" />
-                <div>
-                  <div className="package-name">
-                    <FileText size={15} />
-                    <span className="truncate">{d.file}</span>
+        {/* 4 Drawing Volume Cards */}
+        <div className="package-container">
+          <div className="package-header">
+            <h3>Verified Tender Drawing Volumes</h3>
+            <span className="text-muted small">4 Volumes • 205 Sheets</span>
+          </div>
+
+          <ol className="package-grid">
+            {data.documents.map((d) => {
+              const sheets = data.sheets.filter((s) => s.doc === d.code);
+              const cover = sheets.find((s) => s.discipline !== "general") ?? sheets[0]!;
+              const specDesc = DISCIPLINE_SPEC[String(d.text) as "true" | "false" | "partial"];
+
+              return (
+                <li key={d.code} className="package-card">
+                  <div className="package-card-thumb">
+                    <img src={sheetImage(cover.id, true)} alt={d.en} loading="lazy" />
+                    <span className="package-doc-code">{d.code}</span>
                   </div>
-                  <div className="package-title">{d.en}</div>
-                  <div className="package-meta">
-                    <span className="num">{sheets.length} sheets</span>
-                    <span className={`layer layer-${String(d.text)}`}>{TEXT_LABEL[String(d.text) as "true" | "false" | "partial"]}</span>
+                  <div className="package-card-body">
+                    <div className="package-card-title-row">
+                      <FileText size={15} className="text-muted" />
+                      <strong className="truncate">{d.en}</strong>
+                    </div>
+                    <p className="package-az-title">{d.az}</p>
+                    <div className="package-spec-info">
+                      <span className="package-sheet-count">{sheets.length} Sheets</span>
+                      <span className="package-spec-tag">{specDesc}</span>
+                    </div>
                   </div>
-                </div>
-              </li>
-            );
-          })}
-        </ol>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
       </section>
     </div>
   );

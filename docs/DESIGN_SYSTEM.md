@@ -44,3 +44,4 @@ The dashboard strictly eliminates patterns associated with low-quality AI-genera
 2. **Staged Generation:** During the "Generate Bill" sequence, drawing thumbnails tile smoothly into the grid as extraction phases advance sequentially (Master Plan $\rightarrow$ Architecture $\rightarrow$ Structure $\rightarrow$ MEP).
 3. **Physics-Based Drawers:** The Line Inspector slides in smoothly from the right with a spring damping curve, without layout thrashing.
 4. **Light-Table Blueprint Canvas:** The drawing viewer features inertial pan and smooth exponential zoom, centering directly on evidence coordinates when requested from the BOQ table.
+

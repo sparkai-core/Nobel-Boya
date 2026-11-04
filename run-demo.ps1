@@ -29,3 +29,4 @@ if ($Dev) {
     Start-Job -ScriptBlock { param($p) Start-Sleep 2; Start-Process "http://localhost:$p/#/start" } -ArgumentList $Port | Out-Null
     npx vite preview --port $Port
 }
+

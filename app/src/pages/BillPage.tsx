@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Check, Search } from "lucide-react";
 import { data } from "../data";
 import type { Method } from "../data/types";
 import { useBoq, type Line } from "../lib/boq";
@@ -16,6 +16,7 @@ type Filter = "all" | Method | "findings" | "adjusted";
 export function BillPage() {
   const boq = useBoq();
   const lang = useApp((s) => s.lang);
+  const approvedMap = useApp((s) => s.approved);
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -79,14 +80,16 @@ export function BillPage() {
   const compact = narrow && Boolean(selected);
   const span = compact ? 2 : 4;
 
+  const selectedIndex = selected ? visible.findIndex((l) => l.id === selected.id) : -1;
+
   return (
     <div className={`page page-bill${selected ? " with-drawer" : ""}`}>
       <PageHead
-        title="Bill of quantities"
+        title="Bill of Quantities"
         lead={
           <>
-            {visible.length === boq.lines.length ? `${boq.lines.length} lines` : `${visible.length} of ${boq.lines.length} lines`}, measured works{" "}
-            <span className="num-inline">{fmtMoney(shownTotal)}</span> AZN before mark-ups. Select a line to see the sheet it was read from.
+            {visible.length === boq.lines.length ? `${boq.lines.length} lines` : `${visible.length} of ${boq.lines.length} lines`} • Measured works{" "}
+            <span className="num-inline">{fmtMoney(shownTotal)} AZN</span> before commercial mark-ups. Select any line to inspect dimensions and redline drawing evidence.
           </>
         }
       />
@@ -96,14 +99,19 @@ export function BillPage() {
           <Search size={15} aria-hidden="true" />
           <input
             className="input"
-            placeholder="Search description, sheet or printed text"
+            placeholder="Search item description, drawing sheet or schedule quote..."
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search the bill"
           />
         </div>
-        <select className="input select" value={building} onChange={(e) => setParam("b", e.target.value === "all" ? null : e.target.value)} aria-label="Structure">
-          <option value="all">All structures</option>
+        <select
+          className="input select"
+          value={building}
+          onChange={(e) => setParam("b", e.target.value === "all" ? null : e.target.value)}
+          aria-label="Structure"
+        >
+          <option value="all">All project structures</option>
           {data.buildings.map((b) => (
             <option key={b.id} value={b.id}>
               {b.short}
@@ -115,11 +123,11 @@ export function BillPage() {
           value={filter}
           onChange={setFilter}
           options={[
-            { value: "all", label: "All", count: counts.all },
-            { value: "schedule", label: "Printed", count: counts.schedule },
-            { value: "derived", label: "Derived", count: counts.derived },
-            { value: "image", label: "From image", count: counts.image },
-            { value: "findings", label: "With findings", count: counts.findings },
+            { value: "all", label: "All Items", count: counts.all },
+            { value: "schedule", label: "Schedules", count: counts.schedule },
+            { value: "derived", label: "Parametric", count: counts.derived },
+            { value: "image", label: "Plan Takeoff", count: counts.image },
+            { value: "findings", label: "Audit Issues", count: counts.findings },
             ...(counts.adjusted ? [{ value: "adjusted" as Filter, label: "Adjusted", count: counts.adjusted }] : []),
           ]}
         />
@@ -127,7 +135,7 @@ export function BillPage() {
 
       <div className="bill-table scroll" ref={tableRef}>
         {!visible.length ? (
-          <Empty title="No lines match">Clear the search or choose another filter.</Empty>
+          <Empty title="No items match your criteria">Clear search filters or select another trade section.</Empty>
         ) : (
           <table className={`boq${compact ? " compact" : ""}`}>
             <colgroup>
@@ -149,13 +157,13 @@ export function BillPage() {
                 </th>
                 {compact ? null : (
                   <th scope="col" className="num">
-                    Rate
+                    Rate (AZN)
                   </th>
                 )}
                 <th scope="col" className="num">
-                  Amount
+                  Amount (AZN)
                 </th>
-                {compact ? null : <th scope="col">Source</th>}
+                {compact ? null : <th scope="col">Drawing Provenance</th>}
               </tr>
             </thead>
             <tbody>
@@ -181,9 +189,20 @@ export function BillPage() {
                             <td className="num">{fmtMoney(s.total)}</td>
                             {compact ? null : <td />}
                           </tr>
-                          {sLines.map((l) => (
-                            <LineRow key={l.id} line={l} lang={lang} compact={compact} selected={l.id === selectedId} onSelect={() => setParam("line", l.id === selectedId ? null : l.id)} />
-                          ))}
+                          {sLines.map((l) => {
+                            const isApproved = l.items[0] ? Boolean(approvedMap[l.items[0].id]) : false;
+                            return (
+                              <LineRow
+                                key={l.id}
+                                line={l}
+                                lang={lang}
+                                compact={compact}
+                                selected={l.id === selectedId}
+                                approved={isApproved}
+                                onSelect={() => setParam("line", l.id === selectedId ? null : l.id)}
+                              />
+                            );
+                          })}
                         </Fragment>
                       );
                     })}
@@ -198,25 +217,75 @@ export function BillPage() {
       <Drawer
         open={Boolean(selected)}
         onClose={() => setParam("line", null)}
-        kicker={selected ? `${selected.code}, ${data.buildings.find((b) => b.id === selected.building)?.short}` : null}
-        title={selected ? (data.sections.find((s) => s.id === selected.section)?.en ?? "") : ""}
+        kicker={selected ? `Item ${selected.code} • ${data.buildings.find((b) => b.id === selected.building)?.short}` : null}
+        title={selected ? (data.sections.find((s) => s.id === selected.section)?.en ?? "Item Inspector") : ""}
+        width={480}
       >
-        {selected ? <LineInspector key={selected.id} line={selected} /> : null}
+        {selected ? (
+          <LineInspector
+            key={selected.id}
+            line={selected}
+            position={{
+              current: selectedIndex + 1,
+              total: visible.length,
+            }}
+            onPrev={() => {
+              if (selectedIndex > 0) setParam("line", visible[selectedIndex - 1]!.id);
+            }}
+            onNext={() => {
+              if (selectedIndex < visible.length - 1) setParam("line", visible[selectedIndex + 1]!.id);
+            }}
+          />
+        ) : null}
       </Drawer>
     </div>
   );
 }
 
-function LineRow({ line, lang, compact, selected, onSelect }: { line: Line; lang: "az" | "en"; compact: boolean; selected: boolean; onSelect: () => void }) {
+function LineRow({
+  line,
+  lang,
+  compact,
+  selected,
+  approved,
+  onSelect,
+}: {
+  line: Line;
+  lang: "az" | "en";
+  compact: boolean;
+  selected: boolean;
+  approved?: boolean;
+  onSelect: () => void;
+}) {
   const sheets = [...new Set(line.items.flatMap((i) => i.src.map((s) => s.sheet)))];
   const finding = line.checks.find((c) => c.severity === "error") ?? line.checks.find((c) => c.severity === "warn");
+
   return (
-    <tr data-line={line.id} className={`row-line${selected ? " selected" : ""}`} onClick={onSelect} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect()}>
+    <tr
+      data-line={line.id}
+      className={`row-line${selected ? " selected" : ""}${approved ? " approved" : ""}`}
+      onClick={onSelect}
+      tabIndex={0}
+      onKeyDown={(e) => e.key === "Enter" && onSelect()}
+    >
       <td className="num code">{line.code}</td>
       <td className="desc">
-        <span>{lang === "az" ? line.az : line.en}</span>
-        {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? "Error" : "Conflict"}</span> : null}
-        {line.adjusted ? <span className="flag flag-adjusted">{line.adjusted === "fix" ? "Corrected" : "Overridden"}</span> : null}
+        <span className="desc-text">{lang === "az" ? line.az : line.en}</span>
+        {approved ? (
+          <span className="flag flag-approved" title="Approved by Quantity Surveyor">
+            <Check size={11} /> Approved
+          </span>
+        ) : null}
+        {finding ? (
+          <span className={`flag flag-${finding.severity}`}>
+            {finding.severity === "error" ? "Variance" : "Review"}
+          </span>
+        ) : null}
+        {line.adjusted ? (
+          <span className="flag flag-adjusted">
+            {line.adjusted === "fix" ? "Audit Resolved" : "Overridden"}
+          </span>
+        ) : null}
       </td>
       {compact ? null : <td className="unit">{unitLabel(line.unit, lang)}</td>}
       <td className="num">

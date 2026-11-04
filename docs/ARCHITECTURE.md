@@ -101,3 +101,4 @@ Unlike typical platforms that isolate numerical data from blueprints:
 - Every takeoff line maintains a reference to its source sheet ID (`KS-12`, `MEP-45`, `AR-4`) and its exact bounding box `[x0, y0, x1, y1]`.
 - When clicked, the **SheetViewer** centers on the target coordinate, computes the aspect ratio, and overlays a vector SVG redline box animated with a single stroke pass.
 - The **LineInspector** crops the exact drawing coordinate on-the-fly and presents it side-by-side with the quoted schedule text and parametric formula.
+

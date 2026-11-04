@@ -491,3 +491,339 @@
   padding: 80px 20px;
   text-align: center;
 }
+
+
+/* ==========================================================================
+   Unslop UI Enhancements: Element Tag Badges & Highlighting on Blueprint Canvas
+   ========================================================================== */
+
+.vmark {
+  cursor: pointer;
+  transition: opacity var(--d-1) var(--ease);
+}
+
+.vmark-rect {
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: var(--stamp);
+  stroke-width: 1.5;
+  transition: stroke var(--d-1) var(--ease), stroke-width var(--d-1) var(--ease), fill var(--d-1) var(--ease);
+}
+
+.vmark:hover .vmark-rect {
+  stroke-width: 2.5;
+  fill: rgba(37, 99, 235, 0.18);
+}
+
+/* Tag pin badges on drawing canvas */
+.vmark-pin {
+  cursor: pointer;
+  transition: transform var(--d-1) var(--ease);
+}
+
+.vmark-pin-bg {
+  fill: #0f172a;
+  stroke: rgba(255, 255, 255, 0.25);
+  stroke-width: 0.8;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  transition: fill var(--d-1) var(--ease);
+}
+
+.vmark-pin-text {
+  fill: #ffffff;
+  font-family: var(--font-num);
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+
+.vmark:hover .vmark-pin {
+  transform: scale(1.06) translateY(-2px);
+}
+
+.vmark:hover .vmark-pin-bg {
+  fill: var(--stamp);
+}
+
+/* Mark States: Active Selected */
+.vmark.active .vmark-rect {
+  stroke: var(--redline);
+  stroke-width: 2.5;
+  fill: rgba(220, 38, 38, 0.14);
+}
+
+.vmark.active .vmark-pin-bg {
+  fill: var(--redline);
+  stroke: #ffffff;
+  stroke-width: 1.2;
+}
+
+/* Mark States: Approved & Verified by Surveyor */
+.vmark.vmark-green .vmark-rect,
+.vmark.approved .vmark-rect {
+  stroke: var(--emerald);
+  fill: rgba(22, 163, 74, 0.1);
+}
+
+.vmark.vmark-green .vmark-pin-bg,
+.vmark.approved .vmark-pin-bg {
+  fill: var(--emerald);
+}
+
+/* Mark States: Warning / Cross-Discipline Discrepancy */
+.vmark.vmark-amber .vmark-rect {
+  stroke: var(--amber);
+  fill: rgba(217, 119, 6, 0.12);
+}
+
+.vmark.vmark-amber .vmark-pin-bg {
+  fill: var(--amber);
+}
+
+/* Sheet Metadata Bottom Pill */
+.viewer-meta-pill {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 14px;
+  border-radius: var(--r-3);
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: var(--t-12);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+}
+
+.pill-code {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: #60a5fa;
+}
+
+.pill-title {
+  color: #f1f5f9;
+  font-weight: 500;
+}
+
+.pill-count {
+  padding-left: 8px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  color: #94a3b8;
+  font-family: var(--font-num);
+}
+
+/* Viewer Controls Separator */
+.viewer-tool-sep {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.2);
+  margin: 0 2px;
+}
+
+/* ==========================================================================
+   3D Structural Frame Canvas Component (Constech Building3D)
+   ========================================================================== */
+
+.building-3d-wrap {
+  position: relative;
+  width: 100%;
+  height: 320px;
+  background: radial-gradient(circle at 50% 50%, rgba(241, 245, 249, 0.8) 0%, rgba(248, 250, 252, 0.4) 100%);
+  border: 1px solid var(--line);
+  border-radius: var(--r-3);
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.building-3d-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.building-3d-caption {
+  position: absolute;
+  left: 14px;
+  bottom: 12px;
+  right: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 12px;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: var(--r-2);
+  font-size: var(--t-12);
+  box-shadow: var(--shadow-sm);
+}
+
+.building-3d-steps {
+  display: flex;
+  gap: 4px;
+}
+
+.building-3d-steps span {
+  width: 16px;
+  height: 3px;
+  border-radius: 2px;
+  background: var(--line-strong);
+  transition: background var(--d-2) var(--ease);
+}
+
+.building-3d-steps span.active {
+  background: var(--stamp);
+}
+
+.building-3d-steps span.done {
+  background: var(--emerald);
+}
+
+.building-3d-label {
+  font-weight: 500;
+  color: var(--graphite);
+  font-family: var(--font-num);
+}
+
+/* ==========================================================================
+   Constech-Style Approval Action Buttons & Flags
+   ========================================================================== */
+
+.btn-approve {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--line-strong);
+  background: var(--sheet);
+  color: var(--graphite);
+  font-size: var(--t-12);
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--d-1) var(--ease);
+}
+
+.btn-approve:hover {
+  background: var(--ok-soft);
+  border-color: var(--emerald);
+  color: var(--emerald);
+  transform: translateY(-1px);
+}
+
+.btn-approved {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 12px;
+  border-radius: var(--r-2);
+  border: 1px solid var(--emerald);
+  background: var(--emerald);
+  color: #ffffff;
+  font-size: var(--t-12);
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 1px 2px rgba(22, 163, 74, 0.25);
+  transition: all var(--d-1) var(--ease);
+}
+
+.btn-approved:hover {
+  background: #15803d;
+  transform: translateY(-1px);
+}
+
+.btn-approve-mini {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-1);
+  border: 1px solid var(--line);
+  background: var(--sheet);
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--d-1) var(--ease);
+}
+
+.btn-approve-mini:hover {
+  border-color: var(--emerald);
+  color: var(--emerald);
+  background: var(--ok-soft);
+}
+
+.btn-approve-mini.approved {
+  background: var(--ok-soft);
+  border-color: var(--emerald);
+  color: var(--emerald);
+  font-weight: 600;
+}
+
+.flag-approved {
+  background: var(--ok-soft);
+  border: 1px solid rgba(22, 163, 74, 0.25);
+  color: var(--emerald);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
+.icon-btn-sm {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-1);
+  background: var(--sheet);
+  color: var(--muted);
+  cursor: pointer;
+  transition: all var(--d-1) var(--ease);
+}
+
+.icon-btn-sm:hover:not(:disabled) {
+  border-color: var(--graphite);
+  color: var(--graphite);
+  background: var(--sheet-3);
+}
+
+.icon-btn-sm:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.icon-btn-ghost {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border: 0;
+  border-radius: var(--r-1);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: color var(--d-1) var(--ease), background var(--d-1) var(--ease);
+}
+
+.icon-btn-ghost:hover {
+  color: var(--graphite);
+  background: var(--sheet-3);
+}
+
+.text-emerald {
+  color: var(--emerald);
+}
+
+.text-muted {
+  color: var(--muted);
+}

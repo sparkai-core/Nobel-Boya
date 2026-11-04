@@ -25,3 +25,4 @@ def resolve_pdf(code_or_name: str) -> Path:
                 if f.name.startswith(prefix):
                     return f
     raise FileNotFoundError(f"Drawing for '{code_or_name}' ({filename}) not found in {[str(d) for d in search_dirs]}")
+

@@ -61,3 +61,4 @@ To deliver instant, lag-free pan and zoom in the browser without loading multi-m
 - `tools/render_sheets.py` uses PyMuPDF's C rendering engine at $2.0\times$ matrix zoom (`alpha=False`).
 - Raster pixmaps are converted to **WebP format** at quality `82`, reducing 205 sheets (over $67\text{ MB}$ in vector PDF) to compact, retina-sharp image tiles.
 - Matching $360\text{ px}$ thumbnails (`.t.webp`) are generated for the sheet drawer, contact sheets, and generation sequence.
+

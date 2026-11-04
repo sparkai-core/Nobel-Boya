@@ -7,6 +7,7 @@ import { ChecksPage } from "./pages/ChecksPage";
 import { DrawingsPage } from "./pages/DrawingsPage";
 import { ExportPage } from "./pages/ExportPage";
 import { GeneratePage } from "./pages/GeneratePage";
+import { LoginPage } from "./pages/LoginPage";
 import { OverviewPage } from "./pages/OverviewPage";
 import { RatesPage } from "./pages/RatesPage";
 import { StartPage } from "./pages/StartPage";
@@ -20,6 +21,7 @@ export function App() {
   return (
     <Routes>
       <Route path="/" element={<StartPage />} />
+      <Route path="/login" element={<LoginPage />} />
       <Route path="/generate" element={<GeneratePage />} />
       <Route
         element={

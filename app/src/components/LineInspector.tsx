@@ -1,7 +1,21 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, RotateCcw } from "lucide-react";
-import { buildingById, data, sheetById } from "../data";
+import {
+  ArrowUpRight,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Edit3,
+  ExternalLink,
+  Layers,
+  RotateCcw,
+  Ruler,
+  Save,
+  ShieldCheck,
+  Tag,
+} from "lucide-react";
+import { buildingById, sheetById } from "../data";
 import type { Item, Source } from "../data/types";
 import { effectiveQty, type Line } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
@@ -9,37 +23,128 @@ import { useApp } from "../lib/store";
 import { EvidenceCrop } from "./EvidenceCrop";
 import { METHOD_HINT, MethodTag, SeverityTag } from "./ui";
 
-export function LineInspector({ line }: { line: Line }) {
+type Props = {
+  line: Line;
+  onPrev?: () => void;
+  onNext?: () => void;
+  position?: { current: number; total: number };
+  onFocusSheet?: (sheetId: string, box: [number, number, number, number]) => void;
+};
+
+export function LineInspector({ line, onPrev, onNext, position, onFocusSheet }: Props) {
   const lang = useApp((s) => s.lang);
   const setRate = useApp((s) => s.setRate);
+  const approvedMap = useApp((s) => s.approved);
+  const toggleApprove = useApp((s) => s.toggleApprove);
+
   const rateOverridden = line.rate !== line.sampleRate;
   const [rateDraft, setRateDraft] = useState<string | null>(null);
-  const other = lang === "az" ? line.en : line.az;
+  const otherDesc = lang === "az" ? line.en : line.az;
+
+  // Primary item on this line
+  const primaryItem = line.items[0];
+  const isApproved = primaryItem ? Boolean(approvedMap[primaryItem.id]) : false;
 
   return (
-    <div className="inspector">
+    <div className="inspector modern-inspector">
+      {/* Top Navigation & Status Bar */}
+      <div className="insp-nav-bar">
+        <div className="insp-item-badge">
+          <Tag size={13} className="text-muted" />
+          <span className="insp-item-code num-inline">{line.code}</span>
+          <span className="insp-item-trade">{line.section}</span>
+        </div>
+
+        {position ? (
+          <div className="insp-cycle-controls">
+            <button
+              type="button"
+              className="icon-btn-sm"
+              disabled={!onPrev || position.current <= 1}
+              onClick={onPrev}
+              title="Previous item"
+            >
+              <ChevronLeft size={16} />
+            </button>
+            <span className="insp-position-counter num-inline">
+              {position.current} <span className="muted">of</span> {position.total}
+            </span>
+            <button
+              type="button"
+              className="icon-btn-sm"
+              disabled={!onNext || position.current >= position.total}
+              onClick={onNext}
+              title="Next item"
+            >
+              <ChevronRight size={16} />
+            </button>
+          </div>
+        ) : null}
+      </div>
+
+      {/* Item Title & Bilingual Descriptions */}
       <section className="insp-desc">
-        <p className="insp-primary">{lang === "az" ? line.az : line.en}</p>
-        <p className="insp-secondary">{other}</p>
+        <div className="insp-desc-header">
+          <h3 className="insp-primary">{lang === "az" ? line.az : line.en}</h3>
+          <p className="insp-secondary">{otherDesc}</p>
+        </div>
+
+        {/* Prominent Constech-style Approval Widget */}
+        {primaryItem ? (
+          <div className="insp-approval-card">
+            <div className="approval-status-info">
+              {isApproved ? (
+                <>
+                  <CheckCircle2 size={18} className="text-emerald" />
+                  <div>
+                    <strong className="text-emerald">Verified & Approved</strong>
+                    <span className="text-muted small">Confirmed by Quantity Surveyor</span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck size={18} className="text-muted" />
+                  <div>
+                    <strong>Verification Pending</strong>
+                    <span className="text-muted small">Cross-reference drawing citation below</span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <button
+              type="button"
+              className={`btn ${isApproved ? "btn-approved" : "btn-approve"}`}
+              onClick={() => toggleApprove(primaryItem.id)}
+            >
+              <Check size={15} />
+              <span>{isApproved ? "Approved" : "Approve Quantity"}</span>
+            </button>
+          </div>
+        ) : null}
       </section>
 
-      <section className="insp-figures">
-        <div className="figure">
-          <span className="figure-label">Quantity</span>
-          <span className="figure-value num">
-            {fmtQty(line.qty, line.unit)} <small>{unitLabel(line.unit, lang)}</small>
-          </span>
+      {/* KPI Metrics: Quantity, Rate, Amount */}
+      <section className="insp-figures-grid">
+        <div className="figure-card">
+          <span className="figure-label">Total Quantity</span>
+          <div className="figure-value num">
+            {fmtQty(line.qty, line.unit)} <span className="figure-unit">{unitLabel(line.unit, lang)}</span>
+          </div>
           {line.adjusted ? (
-            <span className="figure-note">
-              Printed {fmtQty(line.printedQty, line.unit)}, {line.adjusted === "fix" ? "corrected from a check" : "overridden by hand"}
+            <span className="figure-note-tag warning">
+              Printed {fmtQty(line.printedQty, line.unit)} • {line.adjusted === "fix" ? "Audit Correction" : "Surveyor Override"}
             </span>
-          ) : null}
+          ) : (
+            <span className="figure-note-tag success">Verified from Drawing</span>
+          )}
         </div>
-        <div className="figure">
+
+        <div className="figure-card">
           <label className="figure-label" htmlFor={`rate-${line.id}`}>
-            Rate, AZN per {unitLabel(line.unit, "en")}
+            Unit Rate (AZN / {unitLabel(line.unit, "en")})
           </label>
-          <span className="rate-edit">
+          <div className="rate-edit-row">
             <input
               id={`rate-${line.id}`}
               className="input num"
@@ -52,7 +157,9 @@ export function LineInspector({ line }: { line: Line }) {
               onChange={(e) => setRateDraft(e.target.value)}
               onBlur={() => {
                 const v = Number(String(rateDraft).replace(",", "."));
-                if (rateDraft != null && Number.isFinite(v) && v >= 0) setRate(line.rateKey, v === line.sampleRate ? null : v);
+                if (rateDraft != null && Number.isFinite(v) && v >= 0) {
+                  setRate(line.rateKey, v === line.sampleRate ? null : v);
+                }
                 setRateDraft(null);
               }}
               onKeyDown={(e) => {
@@ -60,152 +167,341 @@ export function LineInspector({ line }: { line: Line }) {
               }}
             />
             {rateOverridden ? (
-              <button type="button" className="icon-btn" title={`Back to sample rate ${fmtNum(line.sampleRate)}`} onClick={() => setRate(line.rateKey, null)}>
+              <button
+                type="button"
+                className="icon-btn-sm"
+                title={`Reset to base rate (${fmtNum(line.sampleRate)})`}
+                onClick={() => setRate(line.rateKey, null)}
+              >
                 <RotateCcw size={14} />
               </button>
             ) : null}
+          </div>
+          <span className="figure-note">
+            {rateOverridden ? `Custom rate (Base: ${fmtNum(line.sampleRate)})` : "Standard contractor rate library"}
           </span>
-          <span className="figure-note">{rateOverridden ? `Edited. Sample rate ${fmtNum(line.sampleRate)}` : "Sample rate, not from the package"}</span>
         </div>
-        <div className="figure">
-          <span className="figure-label">Amount, AZN</span>
-          <span className="figure-value num">{fmtMoney(line.amount)}</span>
+
+        <div className="figure-card highlight">
+          <span className="figure-label">Line Total (AZN)</span>
+          <div className="figure-value amount-primary num">{fmtMoney(line.amount)}</div>
+          <span className="figure-note">Before indirect mark-ups & VAT</span>
         </div>
       </section>
 
+      {/* Discrepancy / Engineering Checks */}
       {line.checks.length ? (
-        <section className="insp-checks">
-          {line.checks.map((c) => (
-            <Link key={c.id} to={`/checks/${c.id}`} className={`insp-check sev-row-${c.severity}`}>
-              <SeverityTag severity={c.severity} kind={c.kind} />
-              <span>{c.title}</span>
-              <ArrowUpRight size={14} />
-            </Link>
-          ))}
+        <section className="insp-checks-section">
+          <h4 className="insp-section-heading">Cross-Discipline Audit Findings</h4>
+          <div className="insp-checks-list">
+            {line.checks.map((c) => (
+              <Link key={c.id} to={`/checks/${c.id}`} className={`insp-check-item sev-card-${c.severity}`}>
+                <SeverityTag severity={c.severity} kind={c.kind} />
+                <span className="insp-check-title">{c.title}</span>
+                <ArrowUpRight size={14} className="text-muted" />
+              </Link>
+            ))}
+          </div>
         </section>
       ) : null}
 
-      <section className="insp-sources">
-        <h3>Where the number comes from</h3>
+      {/* Drawing Provenance & Dimensional Inspector */}
+      <section className="insp-sources-section">
+        <h4 className="insp-section-heading">Drawing Provenance & Dimensions</h4>
         {line.items.map((it) => (
-          <ItemEvidence key={it.id} item={it} showQty={line.items.length > 1} />
+          <ItemDimensionInspector
+            key={it.id}
+            item={it}
+            showQty={line.items.length > 1}
+            onFocusSheet={onFocusSheet}
+          />
         ))}
       </section>
     </div>
   );
 }
 
-function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
+/** Constech-style Dimension, Formula & Drawing Crop Inspector for each takeoff item */
+function ItemDimensionInspector({
+  item,
+  showQty,
+  onFocusSheet,
+}: {
+  item: Item;
+  showQty: boolean;
+  onFocusSheet?: (sheetId: string, box: [number, number, number, number]) => void;
+}) {
   const lang = useApp((s) => s.lang);
   const qtyOverrides = useApp((s) => s.qty);
   const fixes = useApp((s) => s.fixes);
   const setQty = useApp((s) => s.setQty);
+  const dimensions = useApp((s) => s.dimensions);
+  const setDimensions = useApp((s) => s.setDimensions);
+
   const eff = effectiveQty(item, qtyOverrides, fixes);
   const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(String(eff.value));
+  const [draftQty, setDraftQty] = useState(String(eff.value));
   const [reason, setReason] = useState(qtyOverrides[item.id]?.reason ?? "");
 
+  // Physical dimension inputs
+  const currentDims = dimensions[item.id] ?? {};
+  const [len, setLen] = useState(currentDims.length != null ? String(currentDims.length) : "");
+  const [wid, setWid] = useState(currentDims.width != null ? String(currentDims.width) : "");
+  const [dep, setDep] = useState(currentDims.height != null ? String(currentDims.height) : "");
+  const [cnt, setCnt] = useState(currentDims.count != null ? String(currentDims.count) : "");
+
+  const hasOverride = Boolean(qtyOverrides[item.id]);
+
+  const handleSave = (e: React.FormEvent) => {
+    e.preventDefault();
+    const v = Number(draftQty.replace(",", "."));
+    if (!Number.isFinite(v) || v < 0) return;
+
+    setQty(item.id, v === item.qty && !reason ? null : { qty: v, reason: reason || "Reviewed by surveyor" });
+
+    // Save physical dimensions if entered
+    const lNum = Number(len);
+    const wNum = Number(wid);
+    const dNum = Number(dep);
+    const cNum = Number(cnt);
+    if (lNum || wNum || dNum || cNum) {
+      setDimensions(item.id, {
+        length: lNum || undefined,
+        width: wNum || undefined,
+        height: dNum || undefined,
+        count: cNum || undefined,
+        note: reason,
+      });
+    }
+
+    setEditing(false);
+  };
+
+  const handleReset = () => {
+    setQty(item.id, null);
+    setDimensions(item.id, null);
+    setDraftQty(String(item.qty));
+    setReason("");
+    setLen("");
+    setWid("");
+    setDep("");
+    setCnt("");
+    setEditing(false);
+  };
+
   return (
-    <article className="evidence">
-      <header className="evidence-head">
-        <MethodTag method={item.method} />
+    <article className="dimension-inspector-card">
+      <header className="dim-card-header">
+        <div className="dim-method-wrap">
+          <MethodTag method={item.method} />
+          {hasOverride ? <span className="override-badge">User Override</span> : null}
+        </div>
+
         {showQty ? (
-          <span className="evidence-qty num">
+          <span className="dim-qty-display num">
             {fmtQty(eff.value, item.unit)} {unitLabel(item.unit, lang)}
           </span>
         ) : null}
       </header>
-      {showQty ? <p className="evidence-title">{lang === "az" ? item.az : item.en}</p> : null}
-      <p className="evidence-hint">{METHOD_HINT[item.method]}</p>
+
+      {showQty ? <p className="dim-item-title">{lang === "az" ? item.az : item.en}</p> : null}
+      <p className="dim-method-hint">{METHOD_HINT[item.method]}</p>
+
+      {/* Explicit Mathematical Formula */}
       {item.formula ? (
-        <p className="formula">
-          <span className="muted">Formula</span> <span className="num">{item.formula}</span>
-        </p>
+        <div className="formula-box">
+          <div className="formula-header">
+            <Ruler size={13} className="text-muted" />
+            <span>Parametric Formula</span>
+          </div>
+          <div className="formula-expression num">{item.formula}</div>
+        </div>
       ) : null}
-      {item.note ? <p className="evidence-note">{item.note}</p> : null}
-      <div className="evidence-sources">
-        {item.src.map((s, i) => (
-          <SourceCard key={i} source={s} itemId={item.id} index={i} />
-        ))}
-      </div>
-      <div className="override">
-        {editing ? (
-          <form
-            className="override-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const v = Number(draft.replace(",", "."));
-              if (!Number.isFinite(v) || v < 0) return;
-              setQty(item.id, v === item.qty && !reason ? null : { qty: v, reason: reason || "Edited by reviewer" });
-              setEditing(false);
-            }}
-          >
-            <input className="input num" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Quantity" autoFocus />
-            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" aria-label="Reason for override" />
+
+      {/* Dimension & Quantity Editor */}
+      {editing ? (
+        <form className="dim-editor-form" onSubmit={handleSave}>
+          <div className="dim-inputs-grid">
+            <label className="dim-field">
+              <span className="dim-label">Net Quantity ({item.unit})</span>
+              <input
+                className="input num"
+                type="text"
+                autoFocus
+                value={draftQty}
+                onChange={(e) => setDraftQty(e.target.value)}
+              />
+            </label>
+            <label className="dim-field">
+              <span className="dim-label">Count / Units</span>
+              <input
+                className="input num"
+                type="number"
+                placeholder="e.g. 31"
+                value={cnt}
+                onChange={(e) => setCnt(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <div className="dim-inputs-grid tri-col">
+            <label className="dim-field">
+              <span className="dim-label">Length (m)</span>
+              <input
+                className="input num"
+                placeholder="L"
+                value={len}
+                onChange={(e) => setLen(e.target.value)}
+              />
+            </label>
+            <label className="dim-field">
+              <span className="dim-label">Width (m)</span>
+              <input
+                className="input num"
+                placeholder="W"
+                value={wid}
+                onChange={(e) => setWid(e.target.value)}
+              />
+            </label>
+            <label className="dim-field">
+              <span className="dim-label">Depth/Height (m)</span>
+              <input
+                className="input num"
+                placeholder="H"
+                value={dep}
+                onChange={(e) => setDep(e.target.value)}
+              />
+            </label>
+          </div>
+
+          <label className="dim-field">
+            <span className="dim-label">Reviewer Note / Justification</span>
+            <input
+              className="input"
+              type="text"
+              placeholder="e.g. Verified against revision 2 structural plan"
+              value={reason}
+              onChange={(e) => setReason(e.target.value)}
+            />
+          </label>
+
+          <div className="dim-form-actions">
             <button type="submit" className="btn btn-primary btn-sm">
-              Save
+              <Save size={13} />
+              <span>Apply Changes</span>
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
               Cancel
             </button>
-          </form>
-        ) : (
-          <div className="override-row">
-            {qtyOverrides[item.id] ? (
-              <>
-                <span className="small">
-                  Overridden to {fmtQty(qtyOverrides[item.id]!.qty, item.unit)}: {qtyOverrides[item.id]!.reason}
-                </span>
-                <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQty(item.id, null)}>
-                  Restore printed value
-                </button>
-              </>
-            ) : (
+          </div>
+        </form>
+      ) : (
+        <div className="dim-display-row">
+          <div className="dim-values-summary">
+            <span className="dim-summary-label">Takeoff Quantity:</span>
+            <strong className="num">
+              {fmtQty(eff.value, item.unit)} {unitLabel(item.unit, lang)}
+            </strong>
+            {hasOverride ? (
+              <span className="text-muted small">({qtyOverrides[item.id]?.reason})</span>
+            ) : null}
+          </div>
+
+          <div className="dim-actions-group">
+            <button
+              type="button"
+              className="btn btn-outline btn-sm"
+              onClick={() => {
+                setDraftQty(String(eff.value));
+                setReason(qtyOverrides[item.id]?.reason ?? "");
+                setEditing(true);
+              }}
+            >
+              <Edit3 size={13} />
+              <span>Edit Dimensions</span>
+            </button>
+            {hasOverride ? (
               <button
                 type="button"
-                className="btn btn-ghost btn-sm"
-                onClick={() => {
-                  setDraft(String(eff.value));
-                  setEditing(true);
-                }}
+                className="icon-btn-sm"
+                title="Reset to original drawing value"
+                onClick={handleReset}
               >
-                Override quantity
+                <RotateCcw size={14} />
               </button>
-            )}
+            ) : null}
           </div>
-        )}
+        </div>
+      )}
+
+      {/* Visual Drawing Evidence Cards */}
+      <div className="dim-evidence-list">
+        {item.src.map((s, i) => (
+          <SourceCard
+            key={i}
+            source={s}
+            itemId={item.id}
+            index={i}
+            onFocusSheet={onFocusSheet}
+          />
+        ))}
       </div>
     </article>
   );
 }
 
-export function SourceCard({ source, itemId, index, compact }: { source: Source; itemId?: string; index?: number; compact?: boolean }) {
+/** Exported SourceCard component for Drawing Evidence display across inspector & checks */
+export function SourceCard({
+  source,
+  itemId,
+  index = 0,
+  onFocusSheet,
+}: {
+  source: Source;
+  itemId?: string;
+  index?: number;
+  onFocusSheet?: (sheetId: string, box: [number, number, number, number]) => void;
+}) {
   const sheet = sheetById.get(source.sheet);
-  const doc = data.documents.find((d) => d.code === sheet?.doc);
-  const to = `/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
+  const building = sheet ? buildingById.get(sheet.building) : undefined;
+
   return (
-    <figure className={`source${compact ? " compact" : ""}`}>
-      <Link to={to} className="source-crop" aria-label={`Open ${source.sheet} at the marked value`}>
-        <EvidenceCrop source={source} />
-      </Link>
-      <figcaption>
-        <div className="source-sheet">
-          <Link to={to} className="source-link">
-            {source.sheet}
-            <ArrowUpRight size={13} />
-          </Link>
-          <span className="truncate">{sheet?.titleEn}</span>
+    <div className="evidence-card">
+      <div className="evidence-card-top">
+        <div className="evidence-sheet-badge">
+          <Layers size={13} className="text-muted" />
+          <span className="sheet-id-tag">{source.sheet}</span>
+          <span className="sheet-title-text">{sheet?.titleEn || sheet?.title}</span>
+          {building ? <span className="sheet-bldg-tag">{building.short}</span> : null}
         </div>
-        <blockquote lang="az" className="source-quote">
-          {source.quote}
-        </blockquote>
-        {!compact ? (
-          <div className="source-meta muted small">
-            {doc?.file}, page {sheet?.page}
-            {sheet ? `, ${buildingById.get(sheet.building)?.short ?? ""}` : ""}
-          </div>
+
+        {itemId ? (
+          <Link
+            to={`/drawings/${source.sheet}?item=${itemId}&src=${index}`}
+            className="evidence-view-link"
+            onClick={() => {
+              if (onFocusSheet) onFocusSheet(source.sheet, source.box);
+            }}
+            title="Open in Blueprint Canvas"
+          >
+            <span>View on Drawing</span>
+            <ExternalLink size={12} />
+          </Link>
         ) : null}
-      </figcaption>
-    </figure>
+      </div>
+
+      {/* Interactive Visual Crop */}
+      <div className="evidence-crop-container">
+        <EvidenceCrop source={source} />
+      </div>
+
+      {/* Verbatim Source Quote from Schedule */}
+      <div className="evidence-quote-wrap">
+        <span className="quote-label">Original Drawing Citation:</span>
+        <blockquote className="evidence-quote" lang="az">
+          "{source.quote}"
+        </blockquote>
+      </div>
+    </div>
   );
 }

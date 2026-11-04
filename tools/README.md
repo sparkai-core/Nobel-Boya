@@ -48,3 +48,4 @@ python tools/verify_boxes.py
 python tools/render_sheets.py
 ```
 Rasterizes all 205 sheets at 2× zoom for pristine, retina-sharp blueprint viewing in the React canvas.
+

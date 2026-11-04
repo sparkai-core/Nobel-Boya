@@ -85,3 +85,4 @@ The financial valuation engine computes commercial totals using the Azerbaijani 
 3. **Contractor Profit (*Plan yığımları*):** $+8.0\%$ on (Direct Cost + Overhead).
 4. **Contingency / Unforeseen (*Gözlənilməz xərclər*):** $+5.0\%$ on cumulative base.
 5. **Value Added Tax (*ƏDV*):** $+18.0\%$ statutory Azerbaijani VAT.
+

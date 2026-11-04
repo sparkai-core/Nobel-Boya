@@ -26,3 +26,4 @@ Working-design package for a warehouse (*anbar*) and administrative building (*i
 1. **Text Rotation:** The structural (`KS`) and MEP (`MEP`) sets are physically authored with sheets rotated 270° in the PDF container. The coordinate extraction pipeline in `tools/locate.py` multiplies entity vectors by `page.rotation_matrix` before resolving bounding boxes, ensuring that coordinates displayed on screen match the visual orientation.
 2. **Flattened Sheets:** Master Plan sheets and 32 architectural sheets have vector linework but rasterized or non-standard text. These were measured and verified with pixel-accurate bounding boxes categorized as `"how": "image"` in the takeoff audit trail.
 3. **Cyrillic & Legacy Encodings:** Sheets utilizing legacy Cyrillic-mapped Azerbaijani font encodings are normalized to modern Azerbaijani Latin characters (`ə`, `ı`, `ş`, `ç`, `ğ`, `ö`, `ü`).
+
