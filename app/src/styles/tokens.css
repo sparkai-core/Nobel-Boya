@@ -1,0 +1,67 @@
+:root {
+  color-scheme: light;
+
+  --paper: #f4f4f1;
+  --sheet: #ffffff;
+  --sheet-2: #fafaf8;
+  --sheet-3: #efefeb;
+  --graphite: #1e2227;
+  --ink-2: #3c4148;
+  --muted: #6a6e74;
+  --faint: #9a9da1;
+  --line: #e1e2dc;
+  --line-strong: #cfd0ca;
+
+  --stamp: #2d4a9a;
+  --stamp-hover: #263f86;
+  --stamp-soft: #eef1f9;
+  --stamp-line: #cdd5ec;
+
+  --redline: #d63f28;
+  --redline-soft: #fcefec;
+  --redline-line: #f1c7be;
+
+  --ok: #2e7a4e;
+  --ok-soft: #ebf4ee;
+  --amber: #a2670f;
+  --amber-soft: #fbf3e4;
+  --info: #4b5563;
+
+  --lighttable: #2a2e33;
+  --lighttable-2: #33383e;
+
+  --font: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-num: "IBM Plex Sans Condensed", "IBM Plex Sans", "Segoe UI", sans-serif;
+
+  --t-12: 12px;
+  --t-13: 13px;
+  --t-14: 14px;
+  --t-16: 16px;
+  --t-20: 20px;
+  --t-28: 28px;
+  --t-40: 40px;
+
+  --r-1: 4px;
+  --r-2: 6px;
+  --r-3: 10px;
+
+  --rail-w: 220px;
+  --inspector-w: 440px;
+
+  --ease: cubic-bezier(0.2, 0, 0, 1);
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --d-1: 120ms;
+  --d-2: 200ms;
+  --d-3: 320ms;
+
+  --focus: 0 0 0 2px var(--sheet), 0 0 0 4px var(--stamp);
+  --lift: 0 1px 0 rgba(30, 34, 39, 0.04), 0 8px 24px -12px rgba(30, 34, 39, 0.18);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-1: 0ms;
+    --d-2: 0ms;
+    --d-3: 0ms;
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "name": "tutulan-boq-platform",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Enterprise-grade automated Bill of Quantities (BOQ) takeoff platform for Azerbaijani construction packages with redline evidence verification.",
+  "scripts": {
+    "dev": "npm --prefix app run dev",
+    "build": "npm --prefix app run build",
+    "preview": "npm --prefix app run preview",
+    "pipeline:build": "py -3 tools/build_data.py",
+    "pipeline:verify": "py -3 tools/verify_boxes.py",
+    "pipeline:render": "py -3 tools/render_sheets.py"
+  },
+  "keywords": [
+    "boq",
+    "construction-estimating",
+    "takeoff",
+    "quantity-surveying",
+    "azerbaijan",
+    "cad-takeoff",
+    "redline-evidence",
+    "bim"
+  ],
+  "author": "Tutulan Engineering Intelligence",
+  "license": "UNLICENSED"
+}
