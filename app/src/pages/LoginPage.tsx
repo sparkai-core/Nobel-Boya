@@ -55,8 +55,8 @@ export function LoginPage() {
             <div className="login-brand">
               <Logo size={32} />
               <div>
-                <strong>Tutulan</strong>
-                <span className="login-brand-tag">Engineering Intelligence</span>
+                <strong>Storm</strong>
+                <span className="login-brand-tag">Takeoff &amp; BOQ Platform</span>
               </div>
             </div>
             <div className="login-status-badge">
@@ -289,3 +289,4 @@ export function LoginPage() {
     </div>
   );
 }
+

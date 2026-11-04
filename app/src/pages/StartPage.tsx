@@ -22,8 +22,8 @@ export function StartPage() {
         <div className="brand-inline">
           <Logo size={30} />
           <div>
-            <strong>Tutulan</strong>
-            <span className="brand-sub">Engineering Takeoff Intelligence</span>
+            <strong>Storm</strong>
+            <span className="brand-sub">Takeoff &amp; BOQ Intelligence</span>
           </div>
         </div>
 

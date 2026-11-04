@@ -298,3 +298,4 @@ export function Building3D({ className = "", showCaption = true }: Props) {
     </div>
   );
 }
+

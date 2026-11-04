@@ -56,7 +56,7 @@ export function ChecksPage() {
                 {list.map((c) => (
                   <li key={c.id}>
                     <button type="button" className={`check-row${c.id === check.id ? " active" : ""}`} onClick={() => navigate(`/checks/${c.id}`)}>
-                      <SeverityTag severity={c.severity} kind={c.kind} />
+                      <SeverityTag severity={c.severity} kind={c.kind} compact />
                       <span className="check-row-title">{c.title}</span>
                       <span className="check-row-meta muted small">
                         {c.id}, {buildingById.get(c.building)?.short}

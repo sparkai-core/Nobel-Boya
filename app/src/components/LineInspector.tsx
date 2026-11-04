@@ -196,7 +196,7 @@ export function LineInspector({ line, onPrev, onNext, position, onFocusSheet }: 
           <div className="insp-checks-list">
             {line.checks.map((c) => (
               <Link key={c.id} to={`/checks/${c.id}`} className={`insp-check-item sev-card-${c.severity}`}>
-                <SeverityTag severity={c.severity} kind={c.kind} />
+                <SeverityTag severity={c.severity} kind={c.kind} compact />
                 <span className="insp-check-title">{c.title}</span>
                 <ArrowUpRight size={14} className="text-muted" />
               </Link>

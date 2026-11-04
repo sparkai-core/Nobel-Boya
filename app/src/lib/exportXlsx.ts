@@ -12,7 +12,7 @@ const MONEY = "#,##0.00";
 export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Tutulan";
+  wb.creator = "Storm Takeoff";
   wb.created = new Date();
   const font = { name: "Calibri", size: 10, color: { argb: INK } };
 
@@ -206,7 +206,7 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "Qobu-BOQ-Tutulan.xlsx";
+  a.download = "Qobu-BOQ-Storm.xlsx";
   document.body.appendChild(a);
   a.click();
   a.remove();

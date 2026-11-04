@@ -59,7 +59,7 @@ export const useApp = create<State>()(
     (set) => ({
       user: DEMO_USER,
       lang: "en",
-      generated: false,
+      generated: true,
       rates: {},
       markups: DEFAULT_MARKUPS,
       qty: {},
@@ -100,6 +100,6 @@ export const useApp = create<State>()(
         }),
       resetPricing: () => set({ rates: {}, markups: DEFAULT_MARKUPS }),
     }),
-    { name: "tutulan.qobu.v2" },
+    { name: "storm.boq.v1" },
   ),
 );

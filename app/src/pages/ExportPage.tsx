@@ -63,7 +63,7 @@ export function ExportPage() {
             }}
           >
             {state === "busy" ? <span className="spinner light" /> : <Download size={18} />}
-            {state === "busy" ? "Building the workbook" : "Download Qobu-BOQ-Tutulan.xlsx"}
+            {state === "busy" ? "Building the workbook" : "Download Qobu-BOQ-Storm.xlsx"}
           </button>
           {state === "done" ? <p className="ok-text small">Downloaded.</p> : null}
           {state === "error" ? <p className="bad-text small">The workbook could not be built. Reload the page and try again.</p> : null}

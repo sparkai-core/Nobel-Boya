@@ -42,11 +42,11 @@ export function Shell() {
   return (
     <div className="app modern-app">
       <aside className="rail" aria-label="Main navigation">
-        <button type="button" className="brand" onClick={() => navigate("/")} title="Project Overview">
-          <Logo size={28} />
+        <button type="button" className="brand" onClick={() => navigate("/")} title="Storm Takeoff Platform">
+          <Logo size={32} />
           <div>
-            <strong>Tutulan</strong>
-            <small>Quantity Takeoff Intelligence</small>
+            <strong>Storm</strong>
+            <small>Takeoff &amp; BOQ Intelligence</small>
           </div>
         </button>
 

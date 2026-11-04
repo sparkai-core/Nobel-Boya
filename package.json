@@ -1,5 +1,5 @@
 {
-  "name": "tutulan-boq-platform",
+  "name": "storm-takeoff-platform",
   "version": "1.0.0",
   "private": true,
   "description": "Enterprise-grade automated Bill of Quantities (BOQ) takeoff platform for Azerbaijani construction packages with redline evidence verification.",
@@ -21,7 +21,7 @@
     "redline-evidence",
     "bim"
   ],
-  "author": "Tutulan Engineering Intelligence",
+  "author": "Storm Building MMC",
   "license": "UNLICENSED"
 }
 

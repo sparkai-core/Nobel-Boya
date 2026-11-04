@@ -350,7 +350,7 @@ export function DrawingsPage() {
               {checkHere.map((c) => (
                 <li key={c.id}>
                   <Link to={`/checks/${c.id}`} className="sheet-audit-link">
-                    <SeverityTag severity={c.severity} kind={c.kind} />
+                    <SeverityTag severity={c.severity} kind={c.kind} compact />
                     <span className="audit-link-title">{c.title}</span>
                   </Link>
                 </li>

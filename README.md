@@ -1,4 +1,4 @@
-# Tutulan — Automated Construction Takeoff & BOQ Platform
+# Storm — Automated Construction Takeoff & BOQ Platform
 
 > **Zero-black-box Bill of Quantities (BOQ) takeoff platform for Azerbaijani working-design packages, featuring pixel-level redline drawing evidence, interactive blueprint visualization, automated cross-discipline audit checks, and audit-grade Excel reporting.**
 
@@ -23,7 +23,7 @@ This platform processes the complete working-design drawing package for the **Qo
 
 ## ⚡ Core Value: Zero-Black-Box Precision
 
-Traditional construction software outputs opaque numbers in spreadsheets with no verifiable link to the underlying blueprints. **Tutulan enforces a zero-black-box standard**:
+Traditional construction software outputs opaque numbers in spreadsheets with no verifiable link to the underlying blueprints. **Storm Takeoff enforces a zero-black-box standard**:
 
 1. **Every Quantity Has a Visual Citation:** Clicking any number in the BOQ instantly opens the source sheet, centers the viewport, and draws an animated **redline evidence box** around the printed number in the designer's schedule.
 2. **Side-by-Side Contextual Quotes:** The Line Inspector displays the exact verbatim text quote from the schedule row alongside the drawing crop.

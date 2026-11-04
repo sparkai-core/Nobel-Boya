@@ -30,16 +30,38 @@ export const SEVERITY_LABEL: Record<CheckType["severity"], string> = {
   ok: "Verified Alignment",
 };
 
+export const SEVERITY_SHORT: Record<CheckType["severity"], string> = {
+  error: "Discrepancy",
+  warn: "Variance",
+  info: "Note",
+  ok: "Verified",
+};
+
 export function severityLabel(check: Pick<CheckType, "severity" | "kind">) {
   if (check.severity === "warn" && check.kind === "missing") return "Specification Pending";
   return SEVERITY_LABEL[check.severity];
 }
 
-export function SeverityTag({ severity, kind }: { severity: CheckType["severity"]; kind?: CheckType["kind"] }) {
+export function SeverityTag({
+  severity,
+  kind,
+  compact = false,
+  className = "",
+}: {
+  severity: CheckType["severity"];
+  kind?: CheckType["kind"];
+  compact?: boolean;
+  className?: string;
+}) {
+  const fullLabel = kind ? severityLabel({ severity, kind }) : SEVERITY_LABEL[severity];
+  const shortLabel = kind === "missing" ? "Pending" : SEVERITY_SHORT[severity];
   return (
-    <span className={`sev sev-${severity}`}>
+    <span
+      className={`sev sev-${severity}${compact ? " sev-compact" : ""}${className ? ` ${className}` : ""}`}
+      title={fullLabel}
+    >
       <i aria-hidden="true" />
-      {kind ? severityLabel({ severity, kind }) : SEVERITY_LABEL[severity]}
+      <span>{compact ? shortLabel : fullLabel}</span>
     </span>
   );
 }
@@ -109,10 +131,25 @@ export function Drawer({
 
 export function Logo({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true" className="logo">
-      <rect x="3.5" y="5.5" width="21" height="17" rx="2" fill="#ffffff" stroke="#0f172a" strokeWidth="1.5" />
-      <path d="M7 10.5h9M7 14h6M7 17.5h8" stroke="#0f172a" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="15.5" y="11.5" width="7" height="4.5" rx="1" fill="none" stroke="#2563eb" strokeWidth="1.6" />
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 32 32"
+      fill="none"
+      xmlns="http://www.w3.org/2000/svg"
+      className="logo"
+      aria-label="Storm Takeoff Logo"
+    >
+      <rect x="2" y="2" width="28" height="28" rx="8" fill="#0F172A" />
+      <path d="M6 16H26M16 6V26" stroke="#1E293B" strokeWidth="1" strokeDasharray="2 2" />
+      <path
+        d="M18 5L9 17H16L13 27L23 15H16L20 5H18Z"
+        fill="#2563EB"
+        stroke="#60A5FA"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
+      <circle cx="16" cy="16" r="1.5" fill="#FFFFFF" />
     </svg>
   );
 }
