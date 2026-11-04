@@ -11,7 +11,7 @@ if not exist "dist\index.html" (
 )
 
 echo Starting server and launching browser...
-start "" "http://localhost:5173/#/start"
+start "" "http://localhost:5173/#/login"
 call npx vite preview --port 5173
 pause
 
