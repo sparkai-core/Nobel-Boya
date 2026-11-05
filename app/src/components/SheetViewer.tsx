@@ -3,15 +3,7 @@ import { Maximize2, Minus, Plus } from "lucide-react";
 import { sheetImage } from "../data";
 import type { Box, Sheet } from "../data/types";
 
-export type ViewerMark = {
-  key: string;
-  box: Box;
-  tone: "red" | "blue" | "green" | "amber" | "muted";
-  active?: boolean;
-  label?: string;
-  tag?: string;
-  approved?: boolean;
-};
+export type ViewerMark = { key: string; box: Box; tone: "red" | "blue" | "muted"; active?: boolean; label?: string };
 
 export type ViewerHandle = { flyTo: (box: Box) => void; fit: () => void };
 
@@ -24,258 +16,118 @@ type Props = {
   onMark?: (key: string) => void;
 };
 
-/** Pan and zoom blueprint canvas with interactive element tag highlights and redline verification. */
+/** Pan and zoom over a rendered sheet. Coordinates are PDF points; s is points per screen pixel. */
 export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer({ sheet, marks, focus, onMark }, ref) {
   const host = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState<View>({ x: 0, y: 0, s: 1 });
   const [loaded, setLoaded] = useState(false);
-
-  // References to preserve state across frames and prevent animation clobbering
-  const viewRef = useRef<View>({ x: 0, y: 0, s: 1 });
-  const animRef = useRef<number | null>(null);
-  const dragRef = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
-  const prevSheetRef = useRef<string>(sheet.id);
-  const prevFocusRef = useRef<string | null>(null);
-  const didPanRef = useRef<boolean>(false);
-
-  // Keep viewRef synchronized with view state
-  useEffect(() => {
-    viewRef.current = view;
-  }, [view]);
+  const [hover, setHover] = useState<string | null>(null);
+  const anim = useRef<number | null>(null);
+  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
 
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
-    let prevW = el.clientWidth || 800;
-    let prevH = el.clientHeight || 600;
-
-    const ro = new ResizeObserver(([e]) => {
-      if (e?.contentRect) {
-        const nextW = Math.max(300, e.contentRect.width);
-        const nextH = Math.max(200, e.contentRect.height);
-
-        // Adjust camera view so center point does not jump when inspector drawer opens
-        if (Math.abs(nextW - prevW) > 2 || Math.abs(nextH - prevH) > 2) {
-          const cur = viewRef.current;
-          if (cur && isFinite(cur.s) && cur.s > 0 && isFinite(cur.x) && isFinite(cur.y)) {
-            const cx = cur.x + (prevW * cur.s) / 2;
-            const cy = cur.y + (prevH * cur.s) / 2;
-            const adjView: View = {
-              s: cur.s,
-              x: cx - (nextW * cur.s) / 2,
-              y: cy - (nextH * cur.s) / 2,
-            };
-            viewRef.current = adjView;
-            setView(adjView);
-          }
-          prevW = nextW;
-          prevH = nextH;
-        }
-
-        setSize({ w: nextW, h: nextH });
-      }
-    });
+    const ro = new ResizeObserver(([e]) => setSize({ w: e!.contentRect.width, h: e!.contentRect.height }));
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
-  // Compute full-sheet fit view
   const fitView = useCallback((): View => {
-    const s = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.05;
+    const s = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.06;
     return { s, x: sheet.w / 2 - (size.w * s) / 2, y: sheet.h / 2 - (size.h * s) / 2 };
   }, [sheet.w, sheet.h, size.w, size.h]);
 
-  // Compute focused box view
   const boxView = useCallback(
     (box: Box): View => {
-      const x0 = isFinite(box[0]) ? box[0] : 0;
-      const y0 = isFinite(box[1]) ? box[1] : 0;
-      const x1 = isFinite(box[2]) ? box[2] : 50;
-      const y1 = isFinite(box[3]) ? box[3] : 30;
-      const bw = Math.max(x1 - x0, 60);
-      const bh = Math.max(y1 - y0, 36);
-      const sTarget = Math.max(bw / (size.w * 0.45), bh / (size.h * 0.40));
-      const sMax = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.05;
-      const s = Math.min(Math.max(0.08, sTarget), sMax);
-      return {
-        s,
-        x: (x0 + x1) / 2 - (size.w * s) / 2,
-        y: (y0 + y1) / 2 - (size.h * s) / 2,
-      };
+      const [x0, y0, x1, y1] = box;
+      const bw = Math.max(x1 - x0, 40);
+      const bh = Math.max(y1 - y0, 20);
+      const s = Math.min(Math.max(bw / (size.w * 0.42), bh / (size.h * 0.3)), Math.max(sheet.w / size.w, sheet.h / size.h));
+      return { s, x: (x0 + x1) / 2 - (size.w * s) / 2, y: (y0 + y1) / 2 - (size.h * s) / 2 };
     },
     [size.w, size.h, sheet.w, sheet.h],
   );
 
-  // High-performance smooth camera animation
-  const animateTo = useCallback(
-    (target: View, ms = 420) => {
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
-
-      if (!isFinite(target.s) || target.s <= 0 || !isFinite(target.x) || !isFinite(target.y)) {
-        return;
-      }
-
-      const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduce || ms <= 0) {
-        viewRef.current = target;
-        setView(target);
-        return;
-      }
-
-      const from = { ...viewRef.current };
-      if (!isFinite(from.s) || from.s <= 0) from.s = 1;
-      if (!isFinite(from.x)) from.x = 0;
-      if (!isFinite(from.y)) from.y = 0;
-
-      const t0 = performance.now();
-
-      const tick = (now: number) => {
-        const elapsed = now - t0;
-        const progress = Math.min(1, elapsed / ms);
-        // Smooth Apple quintic ease-out: 1 - (1 - t)^3.5
-        const ease = 1 - Math.pow(1 - progress, 3.5);
-
-        const ls = Math.log(from.s) + (Math.log(target.s) - Math.log(from.s)) * ease;
+  const animateTo = useCallback((target: View, ms = 520) => {
+    if (anim.current) cancelAnimationFrame(anim.current);
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    if (reduce) {
+      setView(target);
+      return;
+    }
+    let from: View | null = null;
+    const t0 = performance.now();
+    const tick = (t: number) => {
+      setView((cur) => {
+        from ??= cur;
+        const k = Math.min(1, (t - t0) / ms);
+        const e = 1 - Math.pow(1 - k, 3);
+        const ls = Math.log(from.s) + (Math.log(target.s) - Math.log(from.s)) * e;
         const s = Math.exp(ls);
-
         const cx0 = from.x + (size.w * from.s) / 2;
         const cy0 = from.y + (size.h * from.s) / 2;
         const cx1 = target.x + (size.w * target.s) / 2;
         const cy1 = target.y + (size.h * target.s) / 2;
-        const cx = cx0 + (cx1 - cx0) * ease;
-        const cy = cy0 + (cy1 - cy0) * ease;
-
-        const nextView: View = {
-          s: isFinite(s) && s > 0 ? s : target.s,
-          x: isFinite(cx) ? cx - (size.w * s) / 2 : target.x,
-          y: isFinite(cy) ? cy - (size.h * s) / 2 : target.y,
-        };
-
-        viewRef.current = nextView;
-        setView(nextView);
-
-        if (progress < 1) {
-          animRef.current = requestAnimationFrame(tick);
-        } else {
-          animRef.current = null;
-        }
-      };
-
-      animRef.current = requestAnimationFrame(tick);
-    },
-    [size.w, size.h],
-  );
-
-  useImperativeHandle(
-    ref,
-    () => ({
-      flyTo: (b) => animateTo(boxView(b), 420),
-      fit: () => animateTo(fitView(), 360),
-    }),
-    [animateTo, boxView, fitView],
-  );
-
-  // Reliable native image preloader
-  useEffect(() => {
-    let active = true;
-    const url = sheetImage(sheet.id);
-    const img = new Image();
-    img.src = url;
-    if (img.complete) {
-      setLoaded(true);
-    } else {
-      img.onload = () => {
-        if (active) setLoaded(true);
-      };
-      img.onerror = () => {
-        if (active) setLoaded(true);
-      };
-    }
-    return () => {
-      active = false;
+        const cx = cx0 + (cx1 - cx0) * e;
+        const cy = cy0 + (cy1 - cy0) * e;
+        return { s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
+      });
+      if (t - t0 < ms) anim.current = requestAnimationFrame(tick);
     };
+    anim.current = requestAnimationFrame(tick);
+  }, [size.w, size.h]);
+
+  useImperativeHandle(ref, () => ({ flyTo: (b) => animateTo(boxView(b)), fit: () => animateTo(fitView()) }), [animateTo, boxView, fitView]);
+
+  useEffect(() => {
+    setLoaded(false);
   }, [sheet.id]);
 
-  // Clean viewport initialization and focus management
   useEffect(() => {
     if (size.w < 10) return;
-
-    const focusKey = focus ? focus.join(",") : null;
-    const isNewSheet = prevSheetRef.current !== sheet.id;
-
-    if (isNewSheet) {
-      prevSheetRef.current = sheet.id;
-      prevFocusRef.current = focusKey;
-      if (focus) {
-        const target = boxView(focus);
-        viewRef.current = target;
-        setView(target);
-      } else {
-        const target = fitView();
-        viewRef.current = target;
-        setView(target);
-      }
-      return;
+    if (focus) {
+      setView(fitView());
+      const id = window.setTimeout(() => animateTo(boxView(focus), 640), 120);
+      return () => window.clearTimeout(id);
     }
+    setView(fitView());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sheet.id, size.w, size.h, focus?.join(",")]);
 
-    // Same sheet: smooth fly if focused item changed
-    if (focus && focusKey !== prevFocusRef.current) {
-      prevFocusRef.current = focusKey;
-      animateTo(boxView(focus), 420);
-    } else if (!focusKey && prevFocusRef.current) {
-      prevFocusRef.current = null;
-    }
-  }, [sheet.id, size.w, size.h, focus, boxView, fitView, animateTo]);
-
-  // Mouse wheel zoom
   useEffect(() => {
     const el = host.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (animRef.current) {
-        cancelAnimationFrame(animRef.current);
-        animRef.current = null;
-      }
+      if (anim.current) cancelAnimationFrame(anim.current);
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
-      const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0016));
+      const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0018));
       setView((v) => {
-        const maxS = Math.max(sheet.w / size.w, sheet.h / size.h) * 2.2;
-        const s = Math.min(maxS, Math.max(0.02, v.s * factor));
+        const maxS = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.6;
+        const s = Math.min(maxS, Math.max(0.05, v.s * factor));
         const px = v.x + mx * v.s;
         const py = v.y + my * v.s;
-        const next = { s, x: px - mx * s, y: py - my * s };
-        viewRef.current = next;
-        return next;
+        return { s, x: px - mx * s, y: py - my * s };
       });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [sheet.w, sheet.h, size.w, size.h]);
 
-  // Clean unmount
-  useEffect(() => {
-    return () => {
-      if (animRef.current) cancelAnimationFrame(animRef.current);
-    };
-  }, []);
-
-  const zoomBy = (f: number) => {
-    const cur = viewRef.current;
-    const s = Math.min(
-      Math.max(sheet.w / size.w, sheet.h / size.h) * 2.2,
-      Math.max(0.02, cur.s * f),
+  const zoomBy = (f: number) =>
+    animateTo(
+      (() => {
+        const s = view.s * f;
+        const cx = view.x + (size.w * view.s) / 2;
+        const cy = view.y + (size.h * view.s) / 2;
+        return { s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
+      })(),
+      240,
     );
-    const cx = cur.x + (size.w * cur.s) / 2;
-    const cy = cur.y + (size.h * cur.s) / 2;
-    animateTo({ s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 }, 260);
-  };
 
   const vb = `${view.x} ${view.y} ${size.w * view.s} ${size.h * view.s}`;
   const zoomPct = Math.round((1 / view.s) * 100 / 2) * 2;
@@ -283,149 +135,96 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   return (
     <div
       ref={host}
-      className={`viewer modern-viewer${dragRef.current?.moved ? " dragging" : ""}`}
+      className={`viewer${drag.current?.moved ? " dragging" : ""}`}
       onPointerDown={(e) => {
         if ((e.target as Element).closest(".viewer-tools")) return;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        if (animRef.current) {
-          cancelAnimationFrame(animRef.current);
-          animRef.current = null;
-        }
-        dragRef.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
-        didPanRef.current = false;
+        if (anim.current) cancelAnimationFrame(anim.current);
+        drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
       }}
       onPointerMove={(e) => {
-        const d = dragRef.current;
+        const d = drag.current;
         if (!d) return;
         const dx = e.clientX - d.x;
         const dy = e.clientY - d.y;
-        if (Math.abs(dx) + Math.abs(dy) > 3) {
-          d.moved = true;
-          didPanRef.current = true;
-        }
-        const next = { ...viewRef.current, x: d.vx - dx * viewRef.current.s, y: d.vy - dy * viewRef.current.s };
-        viewRef.current = next;
-        setView(next);
+        if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
+        setView((v) => ({ ...v, x: d.vx - dx * v.s, y: d.vy - dy * v.s }));
       }}
       onPointerUp={() => {
-        dragRef.current = null;
+        drag.current = null;
       }}
       onDoubleClick={(e) => {
-        if ((e.target as Element).closest(".viewer-tools")) return;
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        const cur = viewRef.current;
-        const s = Math.max(0.02, cur.s * 0.55);
-        animateTo({ s, x: cur.x + mx * cur.s - mx * s, y: cur.y + my * cur.s - my * s }, 260);
+        const s = view.s / 2.2;
+        animateTo({ s, x: view.x + mx * view.s - mx * s, y: view.y + my * view.s - my * s }, 260);
       }}
     >
       <svg className="viewer-svg" viewBox={vb} preserveAspectRatio="none">
-        {/* Architectural Drafting Shadow & Backing */}
-        <rect className="paper-shadow" x={5} y={8} width={sheet.w} height={sheet.h} rx={2} />
-        <rect x={0} y={0} width={sheet.w} height={sheet.h} fill="#ffffff" rx={2} />
-
-        {/* Blueprint Vector Drawing Sheet */}
+        <rect className="paper-shadow" x={4} y={6} width={sheet.w} height={sheet.h} />
+        <rect x={0} y={0} width={sheet.w} height={sheet.h} fill="#fff" />
         <image
           key={sheet.id}
           href={sheetImage(sheet.id)}
-          xlinkHref={sheetImage(sheet.id)}
           width={sheet.w}
           height={sheet.h}
           preserveAspectRatio="none"
-          className="sheet-img ready"
+          className={loaded ? "sheet-img ready" : "sheet-img"}
           onLoad={() => setLoaded(true)}
         />
-
-        {/* Interactive Element Tags & Evidence Highlights */}
-        {marks.map((m) => {
-          const x0 = isFinite(m.box[0]) ? m.box[0] : 0;
-          const y0 = isFinite(m.box[1]) ? m.box[1] : 0;
-          const x1 = isFinite(m.box[2]) ? m.box[2] : 50;
-          const y1 = isFinite(m.box[3]) ? m.box[3] : 30;
-          const bw = Math.max(x1 - x0, 10);
-          const bh = Math.max(y1 - y0, 10);
-          const pillText = m.tag ? `${m.tag}${m.label ? ` • ${m.label}` : ""}` : m.label;
-          const pillW = pillText ? Math.max(48, pillText.length * 6.2 + 14) : 0;
-
-          // Clamp badge vertically: if box is near top edge, place badge below the box
-          const pinBelow = y0 < 22;
-          const pinY = pinBelow ? y1 + 16 : y0 - 4;
-          // Clamp badge horizontally: ensure it never renders outside the sheet width
-          const pinX = Math.max(4, Math.min(sheet.w - pillW - 4, x0));
-
-          return (
-            <g
-              key={m.key}
-              className={`vmark vmark-${m.tone}${m.active ? " active" : ""}${m.approved ? " approved" : ""}`}
-              onClick={(e) => {
-                e.stopPropagation();
-                if (didPanRef.current) return;
-                onMark?.(m.key);
-              }}
-            >
-              {/* Highlight bounding box */}
-              <rect
-                x={x0}
-                y={y0}
-                width={bw}
-                height={bh}
-                rx={2}
-                pathLength={1}
-                className="vmark-rect"
-                vectorEffect="non-scaling-stroke"
-              />
-
-              {/* Tag Pin Badge for discovered items */}
-              {pillText ? (
-                <g className="vmark-pin" transform={`translate(${pinX}, ${pinY})`}>
-                  <rect
-                    x={0}
-                    y={-14}
-                    width={pillW}
-                    height={14}
-                    rx={3}
-                    className="vmark-pin-bg"
-                  />
-                  <text x={7} y={-3.5} className="vmark-pin-text">
-                    {pillText}
-                  </text>
-                </g>
-              ) : null}
-            </g>
-          );
-        })}
+        {marks.map((m) => (
+          <g
+            key={m.key}
+            className={`vmark vmark-${m.tone}${m.active ? " active" : ""}`}
+            onClick={() => onMark?.(m.key)}
+            onPointerEnter={() => setHover(m.key)}
+            onPointerLeave={() => setHover((h) => (h === m.key ? null : h))}
+          >
+            <rect
+              x={m.box[0]}
+              y={m.box[1]}
+              width={m.box[2] - m.box[0]}
+              height={m.box[3] - m.box[1]}
+              rx={1.5}
+              pathLength={1}
+              vectorEffect="non-scaling-stroke"
+            />
+          </g>
+        ))}
+        {loaded
+          ? marks
+              .filter((m) => m.label && (m.active || m.key === hover || marks.length <= 10))
+              .map((m) => {
+                const fs = 11 * view.s;
+                const padX = 5 * view.s;
+                const tw = m.label!.length * fs * 0.6 + padX * 2;
+                const th = fs * 1.6;
+                const x = m.box[0];
+                const y = Math.max(0, m.box[1] - th - 3 * view.s);
+                return (
+                  <g key={`t-${m.key}`} className={`vtag${m.active ? " active" : ""}`}>
+                    <rect x={x} y={y} width={tw} height={th} rx={4 * view.s} />
+                    <text x={x + padX} y={y + th * 0.7} fontSize={fs}>
+                      {m.label}
+                    </text>
+                  </g>
+                );
+              })
+          : null}
       </svg>
-
-      {!loaded ? (
-        <div className="viewer-loading">
-          <span className="spinner" />
-          <span>Rendering drawing sheet {sheet.id}...</span>
-        </div>
-      ) : null}
-
-      {/* Floating Canvas Controls */}
+      {!loaded ? <div className="viewer-loading">Loading sheet</div> : null}
       <div className="viewer-tools">
-        <button type="button" onClick={() => zoomBy(1 / 1.4)} aria-label="Zoom in" title="Zoom In (+)">
-          <Plus size={15} />
+        <button type="button" onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom in">
+          <Plus size={16} />
         </button>
         <span className="viewer-zoom num">{zoomPct}%</span>
-        <button type="button" onClick={() => zoomBy(1.4)} aria-label="Zoom out" title="Zoom Out (-)">
-          <Minus size={15} />
+        <button type="button" onClick={() => zoomBy(1.5)} aria-label="Zoom out">
+          <Minus size={16} />
         </button>
-        <div className="viewer-tool-sep" />
-        <button type="button" onClick={() => animateTo(fitView(), 360)} aria-label="Fit sheet" title="Fit to Viewport (Space)">
-          <Maximize2 size={14} />
+        <button type="button" onClick={() => animateTo(fitView())} aria-label="Fit sheet">
+          <Maximize2 size={15} />
         </button>
-      </div>
-
-      {/* Sheet Metadata Banner */}
-      <div className="viewer-meta-pill">
-        <span className="pill-code">{sheet.id}</span>
-        <span className="pill-title">{sheet.titleEn || sheet.title}</span>
-        <span className="pill-count">
-          {marks.length} {marks.length === 1 ? "element" : "elements"} highlighted
-        </span>
       </div>
     </div>
   );

@@ -23,10 +23,18 @@ export const DISCIPLINES: Record<string, string> = {
   pa: "Public address",
 };
 
+export type SheetKind = "drawing" | "schedule" | "source";
+
+/** Drawings are plans, sections and elevations; schedules are tables; source files are covers, licences and notes. */
+export function sheetKind(s: { title: string; titleEn: string; discipline: string }): SheetKind {
+  const t = `${s.title} ${s.titleEn}`.toLowerCase();
+  if (s.discipline === "general" || /general (data|notes)|legend|şərti işarələr|ümumi/.test(t)) return "source";
+  if (/schedule|təsnifat|spesifikasiya|sərfi|cədvəl/.test(t)) return "schedule";
+  return "drawing";
+}
+
 export function sheetImage(id: string, thumb = false) {
-  const base = (import.meta.env.BASE_URL || "/").replace(/\/$/, "");
-  const prefix = base === "." || !base ? "" : base;
-  return `${prefix}/sheets/${id}${thumb ? ".t" : ""}.webp`;
+  return `./sheets/${id}${thumb ? ".t" : ""}.webp`;
 }
 
 /** Every evidence box printed on a sheet, keyed back to the takeoff item that cites it. */
