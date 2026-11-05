@@ -12,7 +12,7 @@ const MONEY = "#,##0.00";
 export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   const ExcelJS = (await import("exceljs")).default;
   const wb = new ExcelJS.Workbook();
-  wb.creator = "Tutulan";
+  wb.creator = "Nobel BOQ";
   wb.created = new Date();
   const font = { name: "Calibri", size: 10, color: { argb: INK } };
 
@@ -27,6 +27,14 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   // Summary
   const sum = wb.addWorksheet("Summary", { views: [{ showGridLines: false }] });
   sum.columns = [{ width: 8 }, { width: 58 }, { width: 46 }, { width: 18 }];
+  try {
+    const res = await fetch("./brand/nobel-logo.png");
+    const logo = wb.addImage({ buffer: await res.arrayBuffer(), extension: "png" });
+    sum.addImage(logo, { tl: { col: 3, row: 0 }, ext: { width: 110, height: 79 } });
+    sum.getRow(1).height = 22;
+  } catch {
+    /* the workbook is still valid without the logo */
+  }
   sum.getCell("A1").value = data.project.nameEn;
   sum.getCell("A1").font = { ...font, size: 14, bold: true };
   sum.getCell("A2").value = `${data.project.name}. ${data.project.place}.`;
@@ -206,7 +214,7 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "Qobu-BOQ-Tutulan.xlsx";
+  a.download = "Qobu-BOQ-Nobel.xlsx";
   document.body.appendChild(a);
   a.click();
   a.remove();

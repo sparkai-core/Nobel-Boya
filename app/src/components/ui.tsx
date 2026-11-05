@@ -87,14 +87,10 @@ export function Drawer({ open, onClose, title, kicker, children, width }: { open
   );
 }
 
-export function Logo({ size = 28 }: { size?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 28 28" aria-hidden="true" className="logo">
-      <rect x="3.5" y="5.5" width="21" height="17" rx="1.5" fill="#fff" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M7 10.5h9M7 14h6M7 17.5h8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
-      <rect x="15.6" y="12" width="6.4" height="4.2" rx="0.8" fill="none" stroke="#D63F28" strokeWidth="1.6" />
-    </svg>
-  );
+export const BRAND = { name: "Nobel", product: "Nobel BOQ", tagline: "Quantity takeoff platform" };
+
+export function Logo({ size = 32 }: { size?: number }) {
+  return <img src="./brand/nobel-logo.png" alt="Nobel" className="logo" style={{ height: size, width: "auto" }} />;
 }
 
 export function Empty({ title, children }: { title: string; children?: ReactNode }) {

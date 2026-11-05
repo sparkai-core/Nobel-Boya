@@ -1,8 +1,9 @@
 import { useState } from "react";
-import { Download } from "lucide-react";
+import { Download, Printer } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { exportWorkbook } from "../lib/exportXlsx";
+import { printBill } from "../lib/printReport";
 import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
 import { PageHead } from "../components/Shell";
@@ -12,6 +13,7 @@ export function ExportPage() {
   const fixes = useApp((s) => s.fixes);
   const overrides = useApp((s) => s.qty);
   const rates = useApp((s) => s.rates);
+  const lang = useApp((s) => s.lang);
   const [state, setState] = useState<"idle" | "busy" | "done" | "error">("idle");
   const sources = data.items.reduce((a, i) => a + i.src.length, 0);
 
@@ -63,7 +65,10 @@ export function ExportPage() {
             }}
           >
             {state === "busy" ? <span className="spinner light" /> : <Download size={18} />}
-            {state === "busy" ? "Building the workbook" : "Download Qobu-BOQ-Tutulan.xlsx"}
+            {state === "busy" ? "Building the workbook" : "Download Qobu-BOQ-Nobel.xlsx"}
+          </button>
+          <button type="button" className="btn btn-ghost btn-lg" onClick={() => printBill(boq, lang)}>
+            <Printer size={18} /> Print or save the bill as PDF
           </button>
           {state === "done" ? <p className="ok-text small">Downloaded.</p> : null}
           {state === "error" ? <p className="bad-text small">The workbook could not be built. Reload the page and try again.</p> : null}

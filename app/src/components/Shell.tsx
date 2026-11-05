@@ -1,5 +1,5 @@
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
-import { ClipboardCheck, FileSpreadsheet, Gauge, Layers, ReceiptText, Table2 } from "lucide-react";
+import { ClipboardCheck, FileSpreadsheet, FolderKanban, Gauge, Layers, ReceiptText, Table2 } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
@@ -26,16 +26,24 @@ export function Shell() {
     <div className="app">
       <aside className="rail" aria-label="Main navigation">
         <button type="button" className="brand" onClick={() => navigate("/")}>
-          <Logo />
+          <Logo size={30} />
           <span>
-            <strong>Tutulan</strong>
-            <small>Bill of quantities</small>
+            <strong>Nobel BOQ</strong>
+            <small>Quantity takeoff platform</small>
           </span>
         </button>
 
+        <nav className="rail-nav">
+          <NavLink to="/" end title="Projects" className={({ isActive }) => `rail-link${isActive ? " active" : ""}`}>
+            <FolderKanban size={17} strokeWidth={1.8} />
+            <span>Projects</span>
+          </NavLink>
+        </nav>
+
         <div className="rail-project">
+          <span className="rail-project-label">Open project</span>
           <span className="rail-project-name">{data.project.nameEn}</span>
-          <span className="rail-project-meta">{data.project.placeEn}</span>
+          <span className="rail-project-meta">4 files, 205 sheets</span>
         </div>
 
         <nav className="rail-nav">

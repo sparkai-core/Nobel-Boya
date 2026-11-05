@@ -88,7 +88,7 @@ export function GeneratePage() {
       <header className="gen-top">
         <span className="brand-inline">
           <Logo />
-          <strong>Tutulan</strong>
+          <strong>Nobel BOQ</strong>
         </span>
         {!done ? (
           <button type="button" className="btn btn-ghost" onClick={skip}>

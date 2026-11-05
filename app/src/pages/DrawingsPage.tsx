@@ -93,6 +93,10 @@ export function DrawingsPage() {
       <aside className="register">
         <div className="register-head">
           <h1>Drawings</h1>
+          <div className="reg-project">
+            <strong>{data.project.nameEn}</strong>
+            <span>4 PDF files, 205 sheets, issue {data.project.issued}</span>
+          </div>
           <div className="search">
             <Search size={15} aria-hidden="true" />
             <input className="input" placeholder="Search sheets" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search sheets" />
@@ -110,30 +114,25 @@ export function DrawingsPage() {
                   <span>{sec.title}</span>
                   <small className="num-inline">{sec.groups.reduce((a, g) => a + g.sheets.length, 0)}</small>
                 </h2>
-                {sec.groups.map(({ doc: d, sheets }) => (
-                  <div key={d.code} className="reg-group">
-                    <h3 className="reg-doc">{d.en}</h3>
-                    <ul>
-                      {sheets.map((s) => {
-                        const n = evidenceBySheet.get(s.id)?.length ?? 0;
-                        return (
-                          <li key={s.id}>
-                            <button type="button" data-sheet={s.id} className={`reg-sheet${s.id === sheet.id ? " active" : ""}`} onClick={() => open(s.id)}>
-                              <img src={sheetImage(s.id, true)} alt="" loading="lazy" />
-                              <span className="reg-text">
-                                <span className="reg-title">{s.titleEn}</span>
-                                <span className="reg-meta">
-                                  {s.id}, {buildingById.get(s.building)?.short}
-                                </span>
-                              </span>
-                              {n ? <span className="reg-count num-inline">{n}</span> : null}
-                            </button>
-                          </li>
-                        );
-                      })}
-                    </ul>
-                  </div>
-                ))}
+                <ul>
+                  {sec.groups.flatMap((g) => g.sheets).map((s) => {
+                    const n = evidenceBySheet.get(s.id)?.length ?? 0;
+                    return (
+                      <li key={s.id}>
+                        <button type="button" data-sheet={s.id} className={`reg-sheet${s.id === sheet.id ? " active" : ""}`} onClick={() => open(s.id)}>
+                          <img src={sheetImage(s.id, true)} alt="" loading="lazy" />
+                          <span className="reg-text">
+                            <span className="reg-title">{s.titleEn}</span>
+                            <span className="reg-meta">
+                              {s.id}, {buildingById.get(s.building)?.short}, {DISCIPLINES[s.discipline]?.toLowerCase()}
+                            </span>
+                          </span>
+                          {n ? <span className="reg-count num-inline">{n}</span> : null}
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
               </section>
             ) : null,
           )}
