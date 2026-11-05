@@ -30,115 +30,214 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState<View>({ x: 0, y: 0, s: 1 });
   const [loaded, setLoaded] = useState(false);
-  const anim = useRef<number | null>(null);
-  const drag = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
+
+  // References to preserve state across frames and prevent animation clobbering
+  const viewRef = useRef<View>({ x: 0, y: 0, s: 1 });
+  const animRef = useRef<number | null>(null);
+  const dragRef = useRef<{ x: number; y: number; vx: number; vy: number; moved: boolean } | null>(null);
+  const prevSheetRef = useRef<string>(sheet.id);
+  const prevFocusRef = useRef<string | null>(null);
+  const didPanRef = useRef<boolean>(false);
+
+  // Keep viewRef synchronized with view state
+  useEffect(() => {
+    viewRef.current = view;
+  }, [view]);
 
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
-    const ro = new ResizeObserver(([e]) => setSize({ w: e!.contentRect.width, h: e!.contentRect.height }));
+    const ro = new ResizeObserver(([e]) => {
+      if (e?.contentRect) {
+        setSize({ w: Math.max(300, e.contentRect.width), h: Math.max(200, e.contentRect.height) });
+      }
+    });
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
 
+  // Compute full-sheet fit view
   const fitView = useCallback((): View => {
     const s = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.05;
     return { s, x: sheet.w / 2 - (size.w * s) / 2, y: sheet.h / 2 - (size.h * s) / 2 };
   }, [sheet.w, sheet.h, size.w, size.h]);
 
+  // Compute focused box view
   const boxView = useCallback(
     (box: Box): View => {
       const [x0, y0, x1, y1] = box;
       const bw = Math.max(x1 - x0, 50);
       const bh = Math.max(y1 - y0, 30);
-      const s = Math.min(Math.max(bw / (size.w * 0.35), bh / (size.h * 0.28)), Math.max(sheet.w / size.w, sheet.h / size.h));
+      const s = Math.min(
+        Math.max(bw / (size.w * 0.35), bh / (size.h * 0.28)),
+        Math.max(sheet.w / size.w, sheet.h / size.h),
+      );
       return { s, x: (x0 + x1) / 2 - (size.w * s) / 2, y: (y0 + y1) / 2 - (size.h * s) / 2 };
     },
     [size.w, size.h, sheet.w, sheet.h],
   );
 
+  // High-performance smooth camera animation
   const animateTo = useCallback(
-    (target: View, ms = 480) => {
-      if (anim.current) cancelAnimationFrame(anim.current);
+    (target: View, ms = 420) => {
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
+
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-      if (reduce) {
+      if (reduce || ms <= 0) {
+        viewRef.current = target;
         setView(target);
         return;
       }
-      let from: View | null = null;
+
+      const from = { ...viewRef.current };
       const t0 = performance.now();
-      const tick = (t: number) => {
-        setView((cur) => {
-          from ??= cur;
-          const k = Math.min(1, (t - t0) / ms);
-          // Apple cubic-bezier easing (0.16, 1, 0.3, 1) approximation
-          const e = 1 - Math.pow(1 - k, 3.2);
-          const ls = Math.log(from.s) + (Math.log(target.s) - Math.log(from.s)) * e;
-          const s = Math.exp(ls);
-          const cx0 = from.x + (size.w * from.s) / 2;
-          const cy0 = from.y + (size.h * from.s) / 2;
-          const cx1 = target.x + (size.w * target.s) / 2;
-          const cy1 = target.y + (size.h * target.s) / 2;
-          const cx = cx0 + (cx1 - cx0) * e;
-          const cy = cy0 + (cy1 - cy0) * e;
-          return { s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
-        });
-        if (t - t0 < ms) anim.current = requestAnimationFrame(tick);
+
+      const tick = (now: number) => {
+        const elapsed = now - t0;
+        const progress = Math.min(1, elapsed / ms);
+        // Smooth Apple quintic ease-out: 1 - (1 - t)^3.5
+        const ease = 1 - Math.pow(1 - progress, 3.5);
+
+        const ls = Math.log(from.s) + (Math.log(target.s) - Math.log(from.s)) * ease;
+        const s = Math.exp(ls);
+
+        const cx0 = from.x + (size.w * from.s) / 2;
+        const cy0 = from.y + (size.h * from.s) / 2;
+        const cx1 = target.x + (size.w * target.s) / 2;
+        const cy1 = target.y + (size.h * target.s) / 2;
+        const cx = cx0 + (cx1 - cx0) * ease;
+        const cy = cy0 + (cy1 - cy0) * ease;
+
+        const nextView: View = {
+          s,
+          x: cx - (size.w * s) / 2,
+          y: cy - (size.h * s) / 2,
+        };
+
+        viewRef.current = nextView;
+        setView(nextView);
+
+        if (progress < 1) {
+          animRef.current = requestAnimationFrame(tick);
+        } else {
+          animRef.current = null;
+        }
       };
-      anim.current = requestAnimationFrame(tick);
+
+      animRef.current = requestAnimationFrame(tick);
     },
     [size.w, size.h],
   );
 
-  useImperativeHandle(ref, () => ({ flyTo: (b) => animateTo(boxView(b)), fit: () => animateTo(fitView()) }), [animateTo, boxView, fitView]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      flyTo: (b) => animateTo(boxView(b), 420),
+      fit: () => animateTo(fitView(), 360),
+    }),
+    [animateTo, boxView, fitView],
+  );
 
+  // Reliable native image preloader
   useEffect(() => {
-    setLoaded(false);
+    let active = true;
+    const url = sheetImage(sheet.id);
+    const img = new Image();
+    img.src = url;
+    if (img.complete) {
+      setLoaded(true);
+    } else {
+      img.onload = () => {
+        if (active) setLoaded(true);
+      };
+      img.onerror = () => {
+        if (active) setLoaded(true);
+      };
+    }
+    return () => {
+      active = false;
+    };
   }, [sheet.id]);
 
+  // Clean viewport initialization and focus management
   useEffect(() => {
     if (size.w < 10) return;
-    if (focus) {
-      setView(fitView());
-      const id = window.setTimeout(() => animateTo(boxView(focus), 560), 100);
-      return () => window.clearTimeout(id);
-    }
-    setView(fitView());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sheet.id, size.w, size.h, focus?.join(",")]);
 
+    const focusKey = focus ? focus.join(",") : null;
+    const isNewSheet = prevSheetRef.current !== sheet.id;
+
+    if (isNewSheet) {
+      prevSheetRef.current = sheet.id;
+      prevFocusRef.current = focusKey;
+      if (focus) {
+        const target = boxView(focus);
+        viewRef.current = target;
+        setView(target);
+      } else {
+        const target = fitView();
+        viewRef.current = target;
+        setView(target);
+      }
+      return;
+    }
+
+    // Same sheet: smooth fly if focused item changed
+    if (focus && focusKey !== prevFocusRef.current) {
+      prevFocusRef.current = focusKey;
+      animateTo(boxView(focus), 420);
+    } else if (!focusKey && prevFocusRef.current) {
+      prevFocusRef.current = null;
+    }
+  }, [sheet.id, size.w, size.h, focus, boxView, fitView, animateTo]);
+
+  // Mouse wheel zoom
   useEffect(() => {
     const el = host.current;
     if (!el) return;
     const onWheel = (e: WheelEvent) => {
       e.preventDefault();
-      if (anim.current) cancelAnimationFrame(anim.current);
+      if (animRef.current) {
+        cancelAnimationFrame(animRef.current);
+        animRef.current = null;
+      }
       const rect = el.getBoundingClientRect();
       const mx = e.clientX - rect.left;
       const my = e.clientY - rect.top;
       const factor = Math.exp(e.deltaY * (e.ctrlKey ? 0.01 : 0.0016));
       setView((v) => {
-        const maxS = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.8;
-        const s = Math.min(maxS, Math.max(0.04, v.s * factor));
+        const maxS = Math.max(sheet.w / size.w, sheet.h / size.h) * 2.2;
+        const s = Math.min(maxS, Math.max(0.02, v.s * factor));
         const px = v.x + mx * v.s;
         const py = v.y + my * v.s;
-        return { s, x: px - mx * s, y: py - my * s };
+        const next = { s, x: px - mx * s, y: py - my * s };
+        viewRef.current = next;
+        return next;
       });
     };
     el.addEventListener("wheel", onWheel, { passive: false });
     return () => el.removeEventListener("wheel", onWheel);
   }, [sheet.w, sheet.h, size.w, size.h]);
 
-  const zoomBy = (f: number) =>
-    animateTo(
-      (() => {
-        const s = view.s * f;
-        const cx = view.x + (size.w * view.s) / 2;
-        const cy = view.y + (size.h * view.s) / 2;
-        return { s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 };
-      })(),
-      220,
+  // Clean unmount
+  useEffect(() => {
+    return () => {
+      if (animRef.current) cancelAnimationFrame(animRef.current);
+    };
+  }, []);
+
+  const zoomBy = (f: number) => {
+    const cur = viewRef.current;
+    const s = Math.min(
+      Math.max(sheet.w / size.w, sheet.h / size.h) * 2.2,
+      Math.max(0.02, cur.s * f),
     );
+    const cx = cur.x + (size.w * cur.s) / 2;
+    const cy = cur.y + (size.h * cur.s) / 2;
+    animateTo({ s, x: cx - (size.w * s) / 2, y: cy - (size.h * s) / 2 }, 260);
+  };
 
   const vb = `${view.x} ${view.y} ${size.w * view.s} ${size.h * view.s}`;
   const zoomPct = Math.round((1 / view.s) * 100 / 2) * 2;
@@ -146,30 +245,41 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   return (
     <div
       ref={host}
-      className={`viewer modern-viewer${drag.current?.moved ? " dragging" : ""}`}
+      className={`viewer modern-viewer${dragRef.current?.moved ? " dragging" : ""}`}
       onPointerDown={(e) => {
         if ((e.target as Element).closest(".viewer-tools")) return;
         (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-        if (anim.current) cancelAnimationFrame(anim.current);
-        drag.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
+        if (animRef.current) {
+          cancelAnimationFrame(animRef.current);
+          animRef.current = null;
+        }
+        dragRef.current = { x: e.clientX, y: e.clientY, vx: view.x, vy: view.y, moved: false };
+        didPanRef.current = false;
       }}
       onPointerMove={(e) => {
-        const d = drag.current;
+        const d = dragRef.current;
         if (!d) return;
         const dx = e.clientX - d.x;
         const dy = e.clientY - d.y;
-        if (Math.abs(dx) + Math.abs(dy) > 3) d.moved = true;
-        setView((v) => ({ ...v, x: d.vx - dx * v.s, y: d.vy - dy * v.s }));
+        if (Math.abs(dx) + Math.abs(dy) > 3) {
+          d.moved = true;
+          didPanRef.current = true;
+        }
+        const next = { ...viewRef.current, x: d.vx - dx * viewRef.current.s, y: d.vy - dy * viewRef.current.s };
+        viewRef.current = next;
+        setView(next);
       }}
       onPointerUp={() => {
-        drag.current = null;
+        dragRef.current = null;
       }}
       onDoubleClick={(e) => {
+        if ((e.target as Element).closest(".viewer-tools")) return;
         const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
         const mx = e.clientX - rect.left;
         const my = e.clientY - rect.top;
-        const s = view.s / 2.0;
-        animateTo({ s, x: view.x + mx * view.s - mx * s, y: view.y + my * view.s - my * s }, 240);
+        const cur = viewRef.current;
+        const s = Math.max(0.02, cur.s * 0.55);
+        animateTo({ s, x: cur.x + mx * cur.s - mx * s, y: cur.y + my * cur.s - my * s }, 260);
       }}
     >
       <svg className="viewer-svg" viewBox={vb} preserveAspectRatio="none">
@@ -177,22 +287,30 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
         <rect className="paper-shadow" x={5} y={8} width={sheet.w} height={sheet.h} rx={2} />
         <rect x={0} y={0} width={sheet.w} height={sheet.h} fill="#ffffff" rx={2} />
 
+        {/* Blueprint Vector Drawing Sheet */}
         <image
           key={sheet.id}
           href={sheetImage(sheet.id)}
+          xlinkHref={sheetImage(sheet.id)}
           width={sheet.w}
           height={sheet.h}
           preserveAspectRatio="none"
-          className={loaded ? "sheet-img ready" : "sheet-img"}
+          className="sheet-img ready"
           onLoad={() => setLoaded(true)}
         />
 
         {/* Interactive Element Tags & Evidence Highlights */}
         {marks.map((m) => {
-          const bw = m.box[2] - m.box[0];
-          const bh = m.box[3] - m.box[1];
-          const tagY = m.box[1] - 4;
+          const bw = Math.max(m.box[2] - m.box[0], 10);
+          const bh = Math.max(m.box[3] - m.box[1], 10);
           const pillText = m.tag ? `${m.tag}${m.label ? ` • ${m.label}` : ""}` : m.label;
+          const pillW = pillText ? Math.max(48, pillText.length * 6.2 + 14) : 0;
+
+          // Clamp badge vertically: if box is near top edge, place badge below the box
+          const pinBelow = m.box[1] < 22;
+          const pinY = pinBelow ? m.box[3] + 16 : m.box[1] - 4;
+          // Clamp badge horizontally: ensure it never renders outside the sheet width
+          const pinX = Math.max(4, Math.min(sheet.w - pillW - 4, m.box[0]));
 
           return (
             <g
@@ -200,6 +318,7 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
               className={`vmark vmark-${m.tone}${m.active ? " active" : ""}${m.approved ? " approved" : ""}`}
               onClick={(e) => {
                 e.stopPropagation();
+                if (didPanRef.current) return;
                 onMark?.(m.key);
               }}
             >
@@ -217,16 +336,16 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
 
               {/* Tag Pin Badge for discovered items */}
               {pillText ? (
-                <g className="vmark-pin" transform={`translate(${m.box[0]}, ${tagY})`}>
+                <g className="vmark-pin" transform={`translate(${pinX}, ${pinY})`}>
                   <rect
                     x={0}
                     y={-14}
-                    width={Math.max(48, pillText.length * 6.2 + 14)}
+                    width={pillW}
                     height={14}
                     rx={3}
                     className="vmark-pin-bg"
                   />
-                  <text x={7} y={-4} className="vmark-pin-text">
+                  <text x={7} y={-3.5} className="vmark-pin-text">
                     {pillText}
                   </text>
                 </g>
@@ -253,7 +372,7 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
           <Minus size={15} />
         </button>
         <div className="viewer-tool-sep" />
-        <button type="button" onClick={() => animateTo(fitView())} aria-label="Fit sheet" title="Fit to Viewport (Space)">
+        <button type="button" onClick={() => animateTo(fitView(), 360)} aria-label="Fit sheet" title="Fit to Viewport (Space)">
           <Maximize2 size={14} />
         </button>
       </div>
