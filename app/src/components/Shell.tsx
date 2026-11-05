@@ -9,10 +9,10 @@ import { useApp } from "../lib/store";
 import { Logo } from "./ui";
 
 const NAV = [
-  { to: `${P}/bill`, label: "Bill of quantities", icon: Table2 },
-  { to: `${P}/drawings`, label: "Drawings", icon: Layers },
-  { to: `${P}/checks`, label: "Checks", icon: ClipboardCheck },
   { to: `${P}/overview`, label: "Overview", icon: Gauge },
+  { to: `${P}/drawings`, label: "Drawings", icon: Layers },
+  { to: `${P}/bill`, label: "Bill of quantities", icon: Table2 },
+  { to: `${P}/checks`, label: "Checks", icon: ClipboardCheck },
   { to: `${P}/rates`, label: "Rates and mark-ups", icon: ReceiptText },
   { to: `${P}/export`, label: "Export", icon: FileSpreadsheet },
 ];

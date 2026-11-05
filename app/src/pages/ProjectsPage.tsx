@@ -80,7 +80,7 @@ export function ProjectsPage() {
             <div className="project-actions">
               {generated ? (
                 <>
-                  <button type="button" className="btn btn-primary" onClick={() => open("bill")}>
+                  <button type="button" className="btn btn-primary" onClick={() => open("overview")}>
                     {t("Open project")}
                   </button>
                   <button type="button" className="btn btn-ghost" onClick={() => open("drawings")}>

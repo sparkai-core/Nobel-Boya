@@ -55,7 +55,7 @@ export function App() {
       >
         <Route path="/projects" element={<ProjectsPage />} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path={P} element={<Navigate to={`${P}/bill`} replace />} />
+        <Route path={P} element={<Navigate to={`${P}/overview`} replace />} />
         <Route path={`${P}/bill`} element={<RequireBill><BillPage /></RequireBill>} />
         <Route path={`${P}/drawings`} element={<RequireBill><DrawingsPage /></RequireBill>} />
         <Route path={`${P}/drawings/:sheetId`} element={<RequireBill><DrawingsPage /></RequireBill>} />

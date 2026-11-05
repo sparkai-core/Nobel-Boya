@@ -88,7 +88,7 @@ export function SettingsPage() {
           </button>
         </div>
         <div className="settings-row">
-          <p className="muted small">{t("Plays the generation sequence and opens the bill.")}</p>
+          <p className="muted small">{t("Plays the generation sequence and opens the project.")}</p>
           <button type="button" className="btn btn-ghost" onClick={() => navigate(`${P}/generate`)}>
             {t("Run the generation again")}
           </button>

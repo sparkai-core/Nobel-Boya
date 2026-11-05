@@ -141,8 +141,8 @@ export function GeneratePage() {
               <span className="muted">{tr("Total including VAT")}</span>
               <strong className="num">{fmtMoney(boq.total)} AZN</strong>
             </div>
-            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`${P}/bill`)} disabled={!done}>
-              {tr("Open the bill")}
+            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`${P}/overview`)} disabled={!done}>
+              {tr("Open project")}
             </button>
           </div>
         </section>

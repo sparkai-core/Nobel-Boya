@@ -267,6 +267,7 @@ const AZ: Record<string, string> = {
   "Edits were reset.": "Dəyişikliklər sıfırlandı.",
   "Run the generation again": "Hazırlamanı yenidən işə sal",
   "Plays the generation sequence and opens the bill.": "Hazırlama ardıcıllığını göstərir və cədvəli açır.",
+  "Plays the generation sequence and opens the project.": "Hazırlama ardıcıllığını göstərir və layihəni açır.",
   About: "Haqqında",
   "Quantities come from the four PDF files of the Qobu package. Rates are a sample AZN library, not part of the package.":
     "Miqdarlar Qobu paketinin dörd PDF faylından götürülüb. Qiymətlər nümunə AZN siyahısıdır, paketə daxil deyil.",
