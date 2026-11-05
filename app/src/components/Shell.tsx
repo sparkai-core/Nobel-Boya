@@ -1,14 +1,16 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import {
   ClipboardCheck,
   FileDown,
   Gauge,
+  HelpCircle,
   Layers,
   LogOut,
   Pin,
   PinOff,
   ReceiptText,
+  Settings,
   Table2,
   UserCheck,
 } from "lucide-react";
@@ -18,6 +20,7 @@ import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
 import { t } from "../lib/i18n";
 import { Logo } from "./ui";
+import { Modals } from "./Modals";
 
 export function Shell() {
   const boq = useBoq();
@@ -25,6 +28,8 @@ export function Shell() {
   const setLang = useApp((s) => s.setLang);
   const user = useApp((s) => s.user);
   const logout = useApp((s) => s.logout);
+  const setShowSettings = useApp((s) => s.setShowSettings);
+  const setShowShortcuts = useApp((s) => s.setShowShortcuts);
   const navigate = useNavigate();
 
   const [isHovered, setIsHovered] = useState(false);
@@ -40,6 +45,29 @@ export function Shell() {
     { to: "/rates", label: t("navRates", lang), icon: ReceiptText, hint: t("navRatesHint", lang) },
     { to: "/export", label: t("navExport", lang), icon: FileDown, hint: t("navExportHint", lang) },
   ];
+
+  // Global Keyboard Shortcuts
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLElement && e.target.matches("input, textarea, select")) return;
+      if (e.key === "?" || (e.shiftKey && e.key === "/")) {
+        e.preventDefault();
+        setShowShortcuts(true);
+      } else if (e.key === "Escape") {
+        setShowSettings(false);
+        setShowShortcuts(false);
+      } else if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (e.key === "1") navigate("/overview");
+        else if (e.key === "2") navigate("/drawings");
+        else if (e.key === "3") navigate("/bill");
+        else if (e.key === "4") navigate("/checks");
+        else if (e.key === "5") navigate("/rates");
+        else if (e.key === "6") navigate("/export");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [navigate, setShowSettings, setShowShortcuts]);
 
   const togglePinned = () => {
     const next = !isPinned;
@@ -145,7 +173,7 @@ export function Shell() {
             <span className="dock-total-meta">{t("contractValuationSub", lang)}</span>
           </div>
 
-          {/* User Session & Language Switcher */}
+          {/* User Session, Quick Tools & Language Switcher */}
           <div className="dock-foot">
             {user ? (
               <div className="dock-user-card">
@@ -179,6 +207,28 @@ export function Shell() {
               </button>
             )}
 
+            {/* Quick Utility Tools: Settings & Keyboard Cheatsheet */}
+            <div className="dock-util-bar">
+              <button
+                type="button"
+                className="dock-util-btn"
+                onClick={() => setShowSettings(true)}
+                title={t("platformSettings", lang)}
+              >
+                <Settings size={14} />
+                <span className="dock-util-text">{lang === "az" ? "Tənzimləmələr" : "Settings"}</span>
+              </button>
+              <button
+                type="button"
+                className="dock-util-btn"
+                onClick={() => setShowShortcuts(true)}
+                title={t("shortcutsTitle", lang)}
+              >
+                <HelpCircle size={14} />
+                <span className="dock-util-text">{lang === "az" ? "Bələdçi (?)" : "Shortcuts (?)"}</span>
+              </button>
+            </div>
+
             {/* Language Switcher */}
             <div className="dock-lang-bar">
               <span className="dock-lang-label">{t("norms", lang)}</span>
@@ -209,6 +259,9 @@ export function Shell() {
       <main className="main">
         <Outlet />
       </main>
+
+      {/* Global Modals (Settings & Shortcuts) */}
+      <Modals />
     </div>
   );
 }

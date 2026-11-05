@@ -40,6 +40,8 @@ type State = {
   fixes: Record<string, boolean>;
   approved: Record<string, boolean>;
   dimensions: Record<string, DimensionSpec>;
+  showSettings: boolean;
+  showShortcuts: boolean;
 
   login: (user?: User) => void;
   logout: () => void;
@@ -52,6 +54,8 @@ type State = {
   toggleApprove: (itemId: string) => void;
   setDimensions: (itemId: string, spec: DimensionSpec | null) => void;
   resetPricing: () => void;
+  setShowSettings: (v: boolean) => void;
+  setShowShortcuts: (v: boolean) => void;
 };
 
 export const useApp = create<State>()(
@@ -66,6 +70,8 @@ export const useApp = create<State>()(
       fixes: {},
       approved: {},
       dimensions: {},
+      showSettings: false,
+      showShortcuts: false,
 
       login: (u) => set({ user: u ?? DEMO_USER, generated: true }),
       logout: () => set({ user: null }),
@@ -99,6 +105,8 @@ export const useApp = create<State>()(
           return { dimensions };
         }),
       resetPricing: () => set({ rates: {}, markups: DEFAULT_MARKUPS }),
+      setShowSettings: (showSettings) => set({ showSettings }),
+      setShowShortcuts: (showShortcuts) => set({ showShortcuts }),
     }),
     { name: "storm.boq.v1" },
   ),

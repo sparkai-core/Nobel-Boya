@@ -186,6 +186,29 @@ export const I18N = {
   preparedBy: { en: "Prepared & Audited By", az: "Tərtib və Audit Etdi" },
   surveyorStamp: { en: "Surveyor Seal & Signature", az: "Mühəndis Möhürü və İmza" },
   executiveAcceptance: { en: "Executive Acceptance", az: "Sifarişçi Qəbulu" },
+
+  // Rates & Mark-ups
+  ratesTitle: { en: "Commercial Rates & Statutory Mark-ups", az: "Kommersiya Qiymətləri və Dövlət Əlavələri" },
+  ratesLead: {
+    en: "Working design packages do not contain commercial pricing. These verified AZN unit rates establish the contract baseline. Edit any rate or mark-up tier and the entire valuation recalculates in real-time.",
+    az: "İşçi layihə paketlərində smeta qiymətləri qeyd olunmur. Bu təsdiqlənmiş AZN vahid qiymətləri müqavilə bazasını təşkil edir. İstənilən qiyməti və ya əlavə pilləsini dəyişdikdə bütün smeta canlı yenilənir.",
+  },
+  resetPricingBtn: { en: "Reset to Base Rates", az: "İlkin Qiymətlərə Qaytar" },
+  statutoryTiersHead: { en: "Statutory Mark-up Hierarchy (AZ Law)", az: "Dövlət Tikinti Əlavələri İyerarxiyası" },
+  statutoryTiersSub: {
+    en: "Sequential commercial tiers applied cumulatively to the direct works baseline",
+    az: "Birbaşa tikinti işlərinə ardıcıl və mərhələli tətbiq olunan kommersiya pillələri",
+  },
+  rateGroup: { en: "Commercial Work Discipline", az: "Tikinti İş Sahəsi" },
+  colRateDesc: { en: "Work Description / Unit Rate Specification", az: "İşin Təsviri və Vahid Qiymət Spesifikasiyası" },
+  colUnit: { en: "Unit", az: "Ölçü Vahidi" },
+  colLinesCount: { en: "Lines", az: "Sətir Sayı" },
+  colTotalQty: { en: "Total Quantity", az: "Ümumi Həcm" },
+  colBaseRate: { en: "Base Rate (AZN)", az: "Baza Qiyməti (AZN)" },
+  colActiveRate: { en: "Active Rate (AZN)", az: "Tətbiq Edilən Qiymət (AZN)" },
+  colSubtotal: { en: "Total Subtotal (AZN)", az: "Cəmi Məbləğ (AZN)" },
+  customRateActive: { en: "Custom Rate Applied", az: "Fərdi Qiymət Tətbiq Olundu" },
+  standardLibraryRate: { en: "Standard Rate Library", az: "Standart Qiymət Bazası" },
 } as const;
 
 export function t(key: keyof typeof I18N, lang: Language): string {
