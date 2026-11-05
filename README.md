@@ -58,9 +58,13 @@ The app is a static site. `render.yaml` holds the settings below.
 | Service type | Static Site |
 | Root directory | empty (repository root) |
 | Build command | `cd app && npm ci --include=dev && npm run build` |
-
-The root `npm run build` installs the app dependencies first, including the TypeScript and Vite packages. A dashboard command of `yarn install; yarn build` uses that script.
 | Publish directory | `app/dist` |
 | Environment variable | `NODE_VERSION` = `22` |
 
-Routes use the URL hash (`/#/bill`), so no rewrite rules are needed.
+The root `npm run build` installs the app dependencies first, including the TypeScript and Vite packages. A dashboard command of `yarn install; yarn build` uses that script. For a Web Service, set the start command to `npm start`. A Static Site does not need a start command.
+
+## Deploy on Vercel
+
+`vercel.json` deploys the Vite app in `app/` as the only service. Import the repository and leave the root directory as the repository root. No environment variables are required.
+
+Routes use the URL hash (`/#/projects`), so the page address stays on `/`.

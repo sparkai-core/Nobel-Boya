@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "npm --prefix app run dev",
     "build": "npm ci --prefix app --include=dev && npm run build --prefix app",
+    "start": "node serve.mjs",
     "preview": "npm --prefix app run preview",
     "pipeline:build": "py -3 tools/build_data.py",
     "pipeline:verify": "py -3 tools/verify_boxes.py",
