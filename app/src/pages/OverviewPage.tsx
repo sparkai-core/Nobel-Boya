@@ -24,6 +24,7 @@ import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, pct } from "../lib/format";
 import { DEFAULT_MARKUPS, useApp } from "../lib/store";
+import { t } from "../lib/i18n";
 import { Logo } from "../components/ui";
 
 export function OverviewPage() {
@@ -86,34 +87,34 @@ export function OverviewPage() {
     return [
       {
         id: "WH",
-        name: "Warehouse Hall (48×24m)",
+        name: lang === "az" ? "Anbar Binası (48×24m)" : "Warehouse Hall (48×24m)",
         color: "#B45309", // Architectural Bronze
         total: whTotal,
         share: whTotal / works,
       },
       {
         id: "AD",
-        name: "Admin Office (2-Storey)",
+        name: lang === "az" ? "İnzibati Ofis (2-Mərtəbəli)" : "Admin Office (2-Storey)",
         color: "#18181B", // Obsidian
         total: adTotal,
         share: adTotal / works,
       },
       {
         id: "SITE",
-        name: "Site Works & Landscaping",
+        name: lang === "az" ? "Sahə İşi və Abadlaşdırma" : "Site Works & Landscaping",
         color: "#D97706", // Amber Bronze
         total: siteTotal,
         share: siteTotal / works,
       },
       {
         id: "PS_TK",
-        name: "Pump Station & Reservoirs",
+        name: lang === "az" ? "Nasosxana və Su Çənləri" : "Pump Station & Reservoirs",
         color: "#71717A", // Warm Slate
         total: pstkTotal,
         share: pstkTotal / works,
       },
     ];
-  }, [boq.buildings, works]);
+  }, [boq.buildings, works, lang]);
 
   // Dual curve milestones for Commercial Valuation Progression
   const milestones = [
@@ -224,7 +225,7 @@ export function OverviewPage() {
               </div>
               <div className="dash-user-text">
                 <span className="dash-user-name truncate">{user?.name || "Elmir Məmmədov"}</span>
-                <span className="dash-user-role truncate">{user?.role || "Lead QS"}</span>
+                <span className="dash-user-role truncate">{lang === "az" ? "Baş Smetaçı" : (user?.role || "Lead QS")}</span>
               </div>
             </div>
           </div>
@@ -234,9 +235,9 @@ export function OverviewPage() {
         <div className="dash-banner">
           <div className="dash-title-group">
             <span className="dash-kicker">
-              {data.project.nameEn} • {data.project.placeEn}
+              {lang === "az" ? `${data.project.name} • ${data.project.place}` : `${data.project.nameEn} • ${data.project.placeEn}`}
             </span>
-            <h1 className="dash-title">Project Dashboard</h1>
+            <h1 className="dash-title">{t("projectDashboard", lang)}</h1>
           </div>
 
           <div className="dash-search-container">
@@ -245,7 +246,7 @@ export function OverviewPage() {
               ref={searchInputRef}
               type="text"
               className="dash-search-input"
-              placeholder="Search bill lines, drawing sheets, specifications..."
+              placeholder={t("searchPlaceholder", lang)}
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               onKeyDown={(e) => {
@@ -265,14 +266,19 @@ export function OverviewPage() {
             <div className="dash-card dash-card-tasks">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Action Queue</h2>
-                  <span className="dash-pill-counter">4 Items</span>
+                  <h2 className="dash-card-title">{t("actionQueue", lang)}</h2>
+                  <span className="dash-pill-counter">
+                    {taskTab === "pending"
+                      ? (isBracingFixed && isFootingSigned ? "2" : isBracingFixed || isFootingSigned ? "3" : "4")
+                      : (isBracingFixed && isFootingSigned ? "18" : "16")}{" "}
+                    {t("itemsCount", lang)}
+                  </span>
                 </div>
                 <button
                   type="button"
                   className="dash-mini-btn"
                   onClick={() => navigate("/checks")}
-                  title="Inspect all checks"
+                  title={lang === "az" ? "Bütün yoxlamalara bax" : "Inspect all checks"}
                 >
                   <ArrowUpRight size={13} />
                 </button>
@@ -285,20 +291,20 @@ export function OverviewPage() {
                   className={`dash-pill-tab${taskTab === "pending" ? " active" : ""}`}
                   onClick={() => setTaskTab("pending")}
                 >
-                  Pending ({isBracingFixed && isFootingSigned ? "2" : isBracingFixed || isFootingSigned ? "3" : "4"})
+                  {t("pending", lang)} ({isBracingFixed && isFootingSigned ? "2" : isBracingFixed || isFootingSigned ? "3" : "4"})
                 </button>
                 <button
                   type="button"
                   className={`dash-pill-tab${taskTab === "approved" ? " active" : ""}`}
                   onClick={() => setTaskTab("approved")}
                 >
-                  Approved ({isBracingFixed && isFootingSigned ? "18" : "16"})
+                  {t("approved", lang)} ({isBracingFixed && isFootingSigned ? "18" : "16"})
                 </button>
               </div>
 
               <div className="dash-status-subhead">
                 <span>
-                  {taskTab === "pending" ? "4 Required Reconciliations" : "18 Verified Approvals"}
+                  {taskTab === "pending" ? t("requiredReconciliations", lang) : t("verifiedApprovals", lang)}
                 </span>
                 <ChevronDown size={13} />
               </div>
@@ -410,7 +416,7 @@ export function OverviewPage() {
               {/* Card A: Projects Overview (Donut Chart) */}
               <div className="dash-card dash-card-donut">
                 <div className="dash-card-header">
-                  <h2 className="dash-card-title">Projects Overview</h2>
+                  <h2 className="dash-card-title">{t("projectsOverview", lang)}</h2>
                   <button
                     type="button"
                     className="dash-mini-btn"
@@ -499,12 +505,12 @@ export function OverviewPage() {
               <div className="dash-card dash-card-curve">
                 <div className="dash-card-header">
                   <div className="dash-header-title-wrap">
-                    <h2 className="dash-card-title">Income VS Expense</h2>
+                    <h2 className="dash-card-title">{t("incomeVsExpense", lang)}</h2>
                     <div className="dash-curve-legend-inline">
                       <span className="curve-dot dot-bronze" />
-                      <span className="curve-legend-label">Direct</span>
+                      <span className="curve-legend-label">{t("directBaseline", lang)}</span>
                       <span className="curve-dot dot-obsidian" />
-                      <span className="curve-legend-label">Gross</span>
+                      <span className="curve-legend-label">{t("grossTotal", lang)}</span>
                     </div>
                   </div>
                   <button
@@ -623,8 +629,8 @@ export function OverviewPage() {
             <div className="dash-card dash-card-markups">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Invoice Overview</h2>
-                  <span className="dash-subtext-muted">Statutory Markups Sequence</span>
+                  <h2 className="dash-card-title">{t("invoiceOverview", lang)}</h2>
+                  <span className="dash-subtext-muted">{t("statutoryMarkupsSequence", lang)}</span>
                 </div>
                 <button
                   type="button"
@@ -640,7 +646,7 @@ export function OverviewPage() {
               <div className="dash-meter-bars">
                 {/* 1. Direct Works Scope */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Direct Works Scope</span>
+                  <span className="dash-meter-name">{t("directWorksScope", lang)}</span>
                   <div className="dash-meter-bar-track">
                     <div className="dash-meter-bar-fill bar-bronze" style={{ width: "100%" }} />
                   </div>
@@ -651,7 +657,7 @@ export function OverviewPage() {
 
                 {/* 2. Overheads */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Overheads ({pct(markups.overheads, 0)})</span>
+                  <span className="dash-meter-name">{t("overheadsName", lang)} ({pct(markups.overheads, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-obsidian"
@@ -665,7 +671,7 @@ export function OverviewPage() {
 
                 {/* 3. Contractor Profit */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Profit ({pct(markups.profit, 0)})</span>
+                  <span className="dash-meter-name">{t("profitName", lang)} ({pct(markups.profit, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-amber"
@@ -679,7 +685,7 @@ export function OverviewPage() {
 
                 {/* 4. Contingency */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Contingency ({pct(markups.contingency, 0)})</span>
+                  <span className="dash-meter-name">{t("contingencyName", lang)} ({pct(markups.contingency, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-slate"
@@ -693,7 +699,7 @@ export function OverviewPage() {
 
                 {/* 5. Statutory VAT */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">VAT ({pct(markups.vat, 0)})</span>
+                  <span className="dash-meter-name">{t("vatName", lang)} ({pct(markups.vat, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-emerald"
@@ -710,12 +716,12 @@ export function OverviewPage() {
 
           {/* Column 3: Package Registry & Discipline Audits (Right Column) */}
           <div className="dash-col dash-col-right">
-            {/* Top Card: My Meetings (Drawing Packages Registry) */}
+            {/* Top Card: Drawing Packages (Drawing Packages Registry) */}
             <div className="dash-card dash-card-packages">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">My Meetings</h2>
-                  <span className="dash-pill-counter">4 Packages</span>
+                  <h2 className="dash-card-title">{t("drawingPackages", lang)}</h2>
+                  <span className="dash-pill-counter">{t("packagesCount", lang)}</span>
                 </div>
                 <button
                   type="button"
@@ -737,8 +743,8 @@ export function OverviewPage() {
                 >
                   <div className="dash-pkg-code-badge-compact badge-bp">BP</div>
                   <div className="dash-pkg-content truncate">
-                    <h3 className="dash-pkg-title truncate">Qobu Baş plan</h3>
-                    <span className="dash-pkg-meta">8 Sheets • 0.9998 ha Site</span>
+                    <h3 className="dash-pkg-title truncate">{lang === "az" ? "Qobu Baş plan" : "Qobu Master Plan"}</h3>
+                    <span className="dash-pkg-meta">8 {t("sheetsCount", lang)} • 0.9998 ha Site</span>
                   </div>
                   <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
@@ -752,8 +758,8 @@ export function OverviewPage() {
                 >
                   <div className="dash-pkg-code-badge-compact badge-ar">AR</div>
                   <div className="dash-pkg-content truncate">
-                    <h3 className="dash-pkg-title truncate">Memarlıq hissəsi</h3>
-                    <span className="dash-pkg-meta">36 Sheets • Architecture</span>
+                    <h3 className="dash-pkg-title truncate">{lang === "az" ? "Memarlıq hissəsi" : "Architecture"}</h3>
+                    <span className="dash-pkg-meta">36 {t("sheetsCount", lang)} • Architecture</span>
                   </div>
                   <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
@@ -767,8 +773,8 @@ export function OverviewPage() {
                 >
                   <div className="dash-pkg-code-badge-compact badge-ks">KS</div>
                   <div className="dash-pkg-content truncate">
-                    <h3 className="dash-pkg-title truncate">Konstruksiya hissəsi</h3>
-                    <span className="dash-pkg-meta">61 Sheets • Structure</span>
+                    <h3 className="dash-pkg-title truncate">{lang === "az" ? "Konstruksiya hissəsi" : "Structure"}</h3>
+                    <span className="dash-pkg-meta">61 {t("sheetsCount", lang)} • Structure</span>
                   </div>
                   <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
@@ -782,8 +788,8 @@ export function OverviewPage() {
                 >
                   <div className="dash-pkg-code-badge-compact badge-mep">MEP</div>
                   <div className="dash-pkg-content truncate">
-                    <h3 className="dash-pkg-title truncate">Mühəndis sistemləri</h3>
-                    <span className="dash-pkg-meta">100 Sheets • Utilities</span>
+                    <h3 className="dash-pkg-title truncate">{lang === "az" ? "Mühəndis sistemləri" : "Building Utilities"}</h3>
+                    <span className="dash-pkg-meta">100 {t("sheetsCount", lang)} • Utilities</span>
                   </div>
                   <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
@@ -791,7 +797,7 @@ export function OverviewPage() {
 
               <div className="dash-packages-footer">
                 <Link to="/drawings" className="dash-see-all-link">
-                  See All 205 Sheets &gt;
+                  {t("seeAllSheets", lang)}
                 </Link>
               </div>
             </div>
@@ -800,8 +806,8 @@ export function OverviewPage() {
             <div className="dash-card dash-card-audits">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Open Tickets</h2>
-                  <span className="dash-pill-counter">{openAuditCount} Active</span>
+                  <h2 className="dash-card-title">{t("disciplineAudits", lang)}</h2>
+                  <span className="dash-pill-counter">{openAuditCount} {t("activeFindings", lang)}</span>
                 </div>
                 <button
                   type="button"
@@ -827,7 +833,7 @@ export function OverviewPage() {
                     className="dash-ticket-btn-compact"
                     onClick={() => navigate("/checks/C-01")}
                   >
-                    Check &gt;
+                    {t("checkBtn", lang)}
                   </button>
                 </div>
 
@@ -843,7 +849,7 @@ export function OverviewPage() {
                     className="dash-ticket-btn-compact"
                     onClick={() => navigate("/checks/C-03")}
                   >
-                    Check &gt;
+                    {t("checkBtn", lang)}
                   </button>
                 </div>
 
@@ -859,14 +865,14 @@ export function OverviewPage() {
                     className="dash-ticket-btn-compact"
                     onClick={() => navigate("/checks/C-05")}
                   >
-                    Check &gt;
+                    {t("checkBtn", lang)}
                   </button>
                 </div>
               </div>
 
               <div className="dash-audits-footer">
                 <span className="dash-audits-foot-text">
-                  4 more notes, and 7 cross-checks verified.
+                  {lang === "az" ? "Daha 4 qeyd və 7 təsdiqlənmiş çarpaz yoxlama." : "4 more notes, and 7 cross-checks verified."}
                 </span>
               </div>
             </div>
@@ -886,8 +892,8 @@ export function OverviewPage() {
                   <Settings size={18} />
                 </div>
                 <div>
-                  <h2 className="modal-title">Platform Settings</h2>
-                  <span className="modal-sub">Commercial Mark-up Tiers &amp; Working Design Parameters</span>
+                  <h2 className="modal-title">{t("platformSettings", lang)}</h2>
+                  <span className="modal-sub">{t("settingsSub", lang)}</span>
                 </div>
               </div>
               <button
@@ -917,7 +923,7 @@ export function OverviewPage() {
               <div className="settings-section">
                 <div className="section-head">
                   <Percent size={15} className="section-icon" />
-                  <h3 className="section-title">Commercial Mark-up Structure</h3>
+                  <h3 className="section-title">{t("commercialStructure", lang)}</h3>
                   <button
                     type="button"
                     className="section-reset-btn"
@@ -930,7 +936,7 @@ export function OverviewPage() {
                     title="Reset to default tender baseline"
                   >
                     <RotateCcw size={12} />
-                    <span>Reset Defaults</span>
+                    <span>{t("resetDefaults", lang)}</span>
                   </button>
                 </div>
 
@@ -1029,7 +1035,7 @@ export function OverviewPage() {
               <div className="settings-section">
                 <div className="section-head">
                   <Globe size={15} className="section-icon" />
-                  <h3 className="section-title">Language &amp; Nomenclature Norms</h3>
+                  <h3 className="section-title">{t("languageNorms", lang)}</h3>
                 </div>
 
                 <div className="settings-lang-row">
@@ -1069,7 +1075,7 @@ export function OverviewPage() {
               <div className="settings-section">
                 <div className="section-head">
                   <ShieldCheck size={15} className="section-icon" />
-                  <h3 className="section-title">Surveyor Profile &amp; Designer Organization</h3>
+                  <h3 className="section-title">{t("surveyorProfile", lang)}</h3>
                 </div>
 
                 <div className="settings-profile-grid">
@@ -1119,8 +1125,8 @@ export function OverviewPage() {
                   <Keyboard size={18} />
                 </div>
                 <div>
-                  <h2 className="modal-title">Keyboard Shortcuts &amp; Surveyor Guide</h2>
-                  <span className="modal-sub">Storm Takeoff Productivity Cheatsheet</span>
+                  <h2 className="modal-title">{t("shortcutsTitle", lang)}</h2>
+                  <span className="modal-sub">{t("shortcutsSub", lang)}</span>
                 </div>
               </div>
               <button
@@ -1139,7 +1145,7 @@ export function OverviewPage() {
                 <div className="hero-box-left">
                   <Command size={18} className="hero-cmd-icon" />
                   <div>
-                    <strong>Global Search &amp; Omnibox</strong>
+                    <strong>{t("globalSearch", lang)}</strong>
                     <span>Instantly jump to any bill line, drawing sheet, or specification</span>
                   </div>
                 </div>
@@ -1153,7 +1159,7 @@ export function OverviewPage() {
               <div className="shortcuts-grid">
                 {/* 1. Navigation */}
                 <div className="shortcut-category-card">
-                  <h3 className="category-title">Quick Navigation</h3>
+                  <h3 className="category-title">{t("quickNav", lang)}</h3>
                   <div className="shortcut-rows-list">
                     <div className="shortcut-item">
                       <span className="shortcut-desc">Project Overview Dashboard</span>
@@ -1302,7 +1308,7 @@ export function OverviewPage() {
                 className="btn btn-primary"
                 onClick={() => setShowShortcuts(false)}
               >
-                Got It
+                {t("gotIt", lang)}
               </button>
             </div>
           </div>

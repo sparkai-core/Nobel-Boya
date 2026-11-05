@@ -15,22 +15,26 @@ import type { Check } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
+import { t } from "../lib/i18n";
 import { SourceCard } from "../components/LineInspector";
 import { SeverityTag } from "../components/ui";
 
-const GROUPS: { title: string; match: (c: Check) => boolean; icon: typeof AlertTriangle }[] = [
-  { title: "Cross-Discipline Conflicts & Errors", match: (c) => c.severity === "error" || c.severity === "warn", icon: AlertTriangle },
-  { title: "Engineering Notes & Tolerances", match: (c) => c.severity === "info", icon: Layers },
-  { title: "Verified Cross-Document Agreements", match: (c) => c.severity === "ok", icon: CheckCircle2 },
-];
-
-const KIND: Record<Check["kind"], string> = {
+const KIND_EN: Record<Check["kind"], string> = {
   arithmetic: "Schedule Arithmetic Discrepancy",
   conflict: "Cross-Discipline Conflict (Structure vs Arch)",
   missing: "Pending Specification Quantity",
   identity: "Drawing Sheet Numbering & Identity",
   review: "Engineering Review Required",
   agree: "Cross-Document Alignment (Verified Match)",
+};
+
+const KIND_AZ: Record<Check["kind"], string> = {
+  arithmetic: "Cədvəl Hesablama Uyğunsuzluğu",
+  conflict: "Sahələrarası Ziddiyyət (Konstruksiya vs Memarlıq)",
+  missing: "Gözləmədə Olan Spesifikasiya Həcmi",
+  identity: "Çertyoj Nömrələnməsi və İdentifikasiyası",
+  review: "Mühəndis Baxışı Tələb Olunur",
+  agree: "Sənədlərarası Tam Uyğunluq (Təsdiqlənmiş)",
 };
 
 export function ChecksPage() {
@@ -50,14 +54,22 @@ export function ChecksPage() {
   const applied = Boolean(fixes[check.id]);
   const isAgreement = check.severity === "ok";
 
+  const GROUPS = [
+    { title: t("auditGroupErrors", lang), match: (c: Check) => c.severity === "error" || c.severity === "warn", icon: AlertTriangle },
+    { title: t("auditGroupNotes", lang), match: (c: Check) => c.severity === "info", icon: Layers },
+    { title: t("auditGroupAgreements", lang), match: (c: Check) => c.severity === "ok", icon: CheckCircle2 },
+  ];
+
+  const kindLabel = lang === "az" ? KIND_AZ[check.kind] : KIND_EN[check.kind];
+
   return (
     <div className="checks modern-checks">
       {/* Left Navigation Sidebar */}
       <aside className="check-list scroll">
         <div className="check-list-header">
-          <h1>Discipline Audits</h1>
+          <h1>{t("auditsTitle", lang)}</h1>
           <p className="check-lead">
-            Automated cross-check engine compares schedules, plans, and cross-discipline quantities across all 205 sheets.
+            {t("auditsLead", lang)}
           </p>
         </div>
 
@@ -86,8 +98,8 @@ export function ChecksPage() {
                       <span className="check-row-title">{c.title}</span>
                       <div className="check-row-meta">
                         <span className="check-row-id">{c.id}</span>
-                        {fixes[c.id] ? <span className="check-applied-tag">Fixed</span> : null}
-                        <span className="check-source-count">{c.sources.length} citations</span>
+                        {fixes[c.id] ? <span className="check-applied-tag">{t("fixed", lang)}</span> : null}
+                        <span className="check-source-count">{c.sources.length} {t("citations", lang)}</span>
                       </div>
                     </button>
                   </li>
@@ -105,7 +117,7 @@ export function ChecksPage() {
           <div className="check-kicker">
             <SeverityTag severity={check.severity} kind={check.kind} />
             <span className="kicker-type">
-              {KIND[check.kind]} • {buildingById.get(check.building)?.en}
+              {kindLabel} • {lang === "az" ? buildingById.get(check.building)?.short : buildingById.get(check.building)?.en}
             </span>
             <span className="kicker-id font-mono">{check.id}</span>
           </div>
@@ -120,14 +132,14 @@ export function ChecksPage() {
                 {isAgreement ? (
                   <>
                     <ShieldCheck size={18} className="text-emerald" />
-                    <strong>Verified Cross-Document Alignment</strong>
-                    <span className="comp-pill comp-pill-emerald">100% Match Confirmed</span>
+                    <strong>{lang === "az" ? "Təsdiqlənmiş Çarpaz Sənəd Uyğunluğu" : "Verified Cross-Document Alignment"}</strong>
+                    <span className="comp-pill comp-pill-emerald">{lang === "az" ? "100% Dəqiq Uyğunluq" : "100% Match Confirmed"}</span>
                   </>
                 ) : (
                   <>
                     <ShieldAlert size={18} className="text-amber" />
-                    <strong>Discrepancy / Variance Analysis</strong>
-                    <span className="comp-pill comp-pill-amber">Variance Identified</span>
+                    <strong>{lang === "az" ? "Ziddiyyət / Fərq Təhlili" : "Discrepancy / Variance Analysis"}</strong>
+                    <span className="comp-pill comp-pill-amber">{lang === "az" ? "Uyğunsuzluq Aşkarlanıb" : "Variance Identified"}</span>
                   </>
                 )}
               </div>
@@ -136,21 +148,21 @@ export function ChecksPage() {
             <div className="comp-body-grid">
               {/* Document 1 Box */}
               <div className="comp-side-box">
-                <span className="comp-side-label">Source Document 1</span>
+                <span className="comp-side-label">{lang === "az" ? "Mənbə Sənəd 1" : "Source Document 1"}</span>
                 {check.sources[0] ? (
                   <div className="comp-doc-meta">
-                    <strong>Sheet {check.sources[0].sheet}</strong>
+                    <strong>{lang === "az" ? `Vərəq ${check.sources[0].sheet}` : `Sheet ${check.sources[0].sheet}`}</strong>
                     <span className="text-muted small">
-                      {sheetById.get(check.sources[0].sheet)?.titleEn ?? "Design Sheet"}
+                      {lang === "az" ? sheetById.get(check.sources[0].sheet)?.title : (sheetById.get(check.sources[0].sheet)?.titleEn ?? "Design Sheet")}
                     </span>
                     <blockquote className="comp-quote">"{check.sources[0].quote}"</blockquote>
                   </div>
                 ) : null}
                 <div className="comp-figure-display">
-                  <span className="fig-caption">{isAgreement ? "Verified Value" : "Printed in Drawing"}</span>
+                  <span className="fig-caption">{isAgreement ? (lang === "az" ? "Təsdiqlənmiş Dəyər" : "Verified Value") : (lang === "az" ? "Çertyojda Yazılan" : "Printed in Drawing")}</span>
                   <span className={`fig-num num ${!isAgreement && check.expected != null ? "strike" : ""}`}>
                     {check.printed != null ? fmtNum(check.printed) : check.sources[0]?.value ?? "—"}{" "}
-                    <small>{unitLabel(check.unit ?? "", "en")}</small>
+                    <small>{unitLabel(check.unit ?? "", lang)}</small>
                   </span>
                 </div>
               </div>
@@ -160,12 +172,12 @@ export function ChecksPage() {
                 {isAgreement ? (
                   <div className="comp-match-glyph" title="Exact match confirmed between drawings">
                     <CheckCircle2 size={24} className="text-emerald" />
-                    <span>MATCH</span>
+                    <span>{lang === "az" ? "UYĞUN" : "MATCH"}</span>
                   </div>
                 ) : (
                   <div className="comp-variance-glyph" title="Variance between documents">
                     <Scale size={24} className="text-amber" />
-                    <span>Δ VARIANCE</span>
+                    <span>Δ {lang === "az" ? "FƏRQ" : "VARIANCE"}</span>
                   </div>
                 )}
               </div>
@@ -173,28 +185,30 @@ export function ChecksPage() {
               {/* Document 2 Box */}
               <div className="comp-side-box">
                 <span className="comp-side-label">
-                  {check.sources.length > 1 ? "Cross-Check Document 2" : "Re-Calculated Specification"}
+                  {check.sources.length > 1
+                    ? (lang === "az" ? "Çarpaz Sənəd 2" : "Cross-Check Document 2")
+                    : (lang === "az" ? "Yenidən Hesablanmış Spesifikasiya" : "Re-Calculated Specification")}
                 </span>
                 {check.sources[1] ? (
                   <div className="comp-doc-meta">
-                    <strong>Sheet {check.sources[1].sheet}</strong>
+                    <strong>{lang === "az" ? `Vərəq ${check.sources[1].sheet}` : `Sheet ${check.sources[1].sheet}`}</strong>
                     <span className="text-muted small">
-                      {sheetById.get(check.sources[1].sheet)?.titleEn ?? "Referenced Sheet"}
+                      {lang === "az" ? sheetById.get(check.sources[1].sheet)?.title : (sheetById.get(check.sources[1].sheet)?.titleEn ?? "Referenced Sheet")}
                     </span>
                     <blockquote className="comp-quote">"{check.sources[1].quote}"</blockquote>
                   </div>
                 ) : (
                   <div className="comp-doc-meta">
-                    <strong>Independent Re-Calculation</strong>
-                    <span className="text-muted small">Sum of member schedules &amp; structural counts</span>
-                    <blockquote className="comp-quote">Verified sum of individual component rows</blockquote>
+                    <strong>{lang === "az" ? "Müstəqil Yenidən Hesablama" : "Independent Re-Calculation"}</strong>
+                    <span className="text-muted small">{lang === "az" ? "Cədvəl sətirlərinin və element saylarının cəmi" : "Sum of member schedules & structural counts"}</span>
+                    <blockquote className="comp-quote">{lang === "az" ? "Fərdi sətirlərin riyazi cəmi yoxlanıldı" : "Verified sum of individual component rows"}</blockquote>
                   </div>
                 )}
                 <div className="comp-figure-display">
-                  <span className="fig-caption">{isAgreement ? "Cross-Checked Value" : "Expected / Audited"}</span>
+                  <span className="fig-caption">{isAgreement ? (lang === "az" ? "Yoxlanılmış Dəyər" : "Cross-Checked Value") : (lang === "az" ? "Gözlənilən / Audit Həcmi" : "Expected / Audited")}</span>
                   <span className="fig-num num font-bold text-blue">
                     {check.expected != null ? fmtNum(check.expected) : check.sources[1]?.value ?? check.printed ?? "—"}{" "}
-                    <small>{unitLabel(check.unit ?? "", "en")}</small>
+                    <small>{unitLabel(check.unit ?? "", lang)}</small>
                   </span>
                 </div>
               </div>
@@ -204,9 +218,9 @@ export function ChecksPage() {
             {check.expected != null && check.printed != null && !isAgreement ? (
               <div className="comp-delta-bar">
                 <div className="delta-stat">
-                  <span className="delta-label">Arithmetic Difference:</span>
+                  <span className="delta-label">{lang === "az" ? "Riyazi Fərq:" : "Arithmetic Difference:"}</span>
                   <strong className="delta-val num">
-                    {fmtNum(check.printed - check.expected)} {unitLabel(check.unit ?? "", "en")}
+                    {fmtNum(check.printed - check.expected)} {unitLabel(check.unit ?? "", lang)}
                   </strong>
                 </div>
                 {check.fix ? (
@@ -219,12 +233,16 @@ export function ChecksPage() {
                       {applied ? (
                         <>
                           <Undo2 size={13} />
-                          <span>Revert to Printed Value</span>
+                          <span>{t("revertCorrection", lang)}</span>
                         </>
                       ) : (
                         <>
                           <CheckIcon size={13} strokeWidth={2.5} />
-                          <span>Apply Correction to BOQ ({fmtMoney(Math.abs(delta))} AZN impact)</span>
+                          <span>
+                            {lang === "az"
+                              ? `Smeta Cədvəlinə Düzəliş Tətbiq Et (${fmtMoney(Math.abs(delta))} AZN təsir)`
+                              : `Apply Correction to BOQ (${fmtMoney(Math.abs(delta))} AZN impact)`}
+                          </span>
                         </>
                       )}
                     </button>
@@ -235,18 +253,18 @@ export function ChecksPage() {
           </div>
 
           {/* Interactive Evidence Drawing Crops */}
-          <h3 className="check-sub">Drawing Evidence Crops</h3>
+          <h3 className="check-sub">{lang === "az" ? "Çertyoj Əsasları və Kəsikləri" : "Drawing Evidence Crops"}</h3>
           <div className="check-sources-grid">
             {check.sources.map((s, i) => (
               <div key={i} className="check-source-card">
                 <div className="source-card-top">
-                  <span className="source-doc-tag">Document {i + 1}</span>
+                  <span className="source-doc-tag">{lang === "az" ? `Sənəd ${i + 1}` : `Document ${i + 1}`}</span>
                   <Link
                     to={`/drawings/${s.sheet}?check=${check.id}&src=${i}`}
                     className="btn btn-outline btn-xs"
                     title="View high-resolution drawing sheet"
                   >
-                    <span>Inspect Sheet {s.sheet}</span>
+                    <span>{lang === "az" ? `Vərəq ${s.sheet}-i İncələ` : `Inspect Sheet ${s.sheet}`}</span>
                     <ExternalLink size={11} />
                   </Link>
                 </div>
@@ -258,37 +276,19 @@ export function ChecksPage() {
           {/* Affected Bill Lines */}
           {lines.length ? (
             <div className="affected-bill-lines-section">
-              <h3 className="check-sub">Affected Bill of Quantities Lines</h3>
-              <table className="mini-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: "80px" }}>Code</th>
-                    <th>Item Description</th>
-                    <th className="num" style={{ width: "120px" }}>
-                      Direct Works (AZN)
-                    </th>
-                    <th style={{ width: "90px" }}>Action</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {lines.map((l) => (
-                    <tr key={l!.id}>
-                      <td className="num code font-mono">{l!.code}</td>
-                      <td>
-                        <Link to={`/bill?line=${encodeURIComponent(l!.id)}`} className="text-link font-medium">
-                          {lang === "az" ? l!.az : l!.en}
-                        </Link>
-                      </td>
-                      <td className="num font-semibold">{fmtMoney(l!.amount)}</td>
-                      <td>
-                        <Link to={`/bill?line=${encodeURIComponent(l!.id)}`} className="btn btn-outline btn-xs">
-                          Inspect in Bill
-                        </Link>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <h3 className="check-sub">{lang === "az" ? "Təsir Edilən Smeta Bəndləri" : "Affected Bill Lines"}</h3>
+              <ul className="affected-lines-list">
+                {lines.map((l) => (
+                  <li key={l!.id}>
+                    <Link to={`/bill?line=${l!.id}`} className="affected-line-row">
+                      <span className="affected-code font-mono">{l!.code}</span>
+                      <span className="affected-desc truncate">{lang === "az" ? l!.az : l!.en}</span>
+                      <span className="affected-amount num font-semibold">{fmtMoney(l!.amount)} AZN</span>
+                      <ExternalLink size={12} className="text-muted" />
+                    </Link>
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
         </div>

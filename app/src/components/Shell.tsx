@@ -16,16 +16,8 @@ import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
+import { t } from "../lib/i18n";
 import { Logo } from "./ui";
-
-const NAV = [
-  { to: "/overview", label: "Overview", icon: Gauge, hint: "Executive project dashboard" },
-  { to: "/bill", label: "Bill of Quantities", icon: Table2, hint: "Tree hierarchy takeoff & rates" },
-  { to: "/drawings", label: "Drawing Register", icon: Layers, hint: "205 sheets with detected tags" },
-  { to: "/checks", label: "Discipline Audits", icon: ClipboardCheck, hint: "Cross-checks & conflicts" },
-  { to: "/rates", label: "Rates & Mark-ups", icon: ReceiptText, hint: "Unit rates & commercial chain" },
-  { to: "/export", label: "PDF & Excel Reports", icon: FileDown, hint: "Executive report & workbook" },
-];
 
 export function Shell() {
   const boq = useBoq();
@@ -39,6 +31,15 @@ export function Shell() {
   const [isPinned, setIsPinned] = useState(() => localStorage.getItem("storm.dock.pinned") === "1");
 
   const openIssues = data.checks.filter((c) => c.severity === "error" || c.severity === "warn").length;
+
+  const NAV = [
+    { to: "/overview", label: t("navOverview", lang), icon: Gauge, hint: t("navOverviewHint", lang) },
+    { to: "/drawings", label: t("navDrawings", lang), icon: Layers, hint: t("navDrawingsHint", lang) },
+    { to: "/bill", label: t("navBill", lang), icon: Table2, hint: t("navBillHint", lang) },
+    { to: "/checks", label: t("navChecks", lang), icon: ClipboardCheck, hint: t("navChecksHint", lang) },
+    { to: "/rates", label: t("navRates", lang), icon: ReceiptText, hint: t("navRatesHint", lang) },
+    { to: "/export", label: t("navExport", lang), icon: FileDown, hint: t("navExportHint", lang) },
+  ];
 
   const togglePinned = () => {
     const next = !isPinned;
@@ -89,15 +90,23 @@ export function Shell() {
           </div>
 
           {/* Project Active Pill */}
-          <div className="dock-project-chip" title={`${data.project.nameEn} • ${data.project.placeEn}`}>
+          <div
+            className="dock-project-chip clickable"
+            onClick={() => navigate("/drawings")}
+            title={`${lang === "az" ? data.project.name : data.project.nameEn} • ${lang === "az" ? data.project.place : data.project.placeEn}`}
+          >
             <span className="project-status-dot" />
             <div className="dock-project-info">
-              <span className="project-title truncate">{data.project.nameEn}</span>
-              <span className="project-sub truncate">Absheron, Baku • 2026</span>
+              <span className="project-title truncate">
+                {lang === "az" ? data.project.name : data.project.nameEn}
+              </span>
+              <span className="project-sub truncate">
+                {lang === "az" ? data.project.place : "Absheron, Baku • 2026"}
+              </span>
             </div>
           </div>
 
-          {/* Navigation Items */}
+          {/* Navigation Items (Drawing Register before BOQ) */}
           <nav className="dock-nav">
             {NAV.map(({ to, label, icon: Icon, hint }) => (
               <NavLink
@@ -131,9 +140,9 @@ export function Shell() {
 
           {/* Commercial valuation quick tile */}
           <div className="dock-total-tile">
-            <span className="dock-total-label">Contract Valuation</span>
+            <span className="dock-total-label">{t("contractValuation", lang)}</span>
             <strong className="dock-total-amount num">{fmtMoney(boq.total)} ₼</strong>
-            <span className="dock-total-meta">18% VAT &amp; 4 mark-up tiers</span>
+            <span className="dock-total-meta">{t("contractValuationSub", lang)}</span>
           </div>
 
           {/* User Session & Language Switcher */}
@@ -166,19 +175,19 @@ export function Shell() {
                 onClick={() => navigate("/login")}
               >
                 <UserCheck size={14} />
-                <span>Sign In</span>
+                <span>{t("signIn", lang)}</span>
               </button>
             )}
 
             {/* Language Switcher */}
             <div className="dock-lang-bar">
-              <span className="dock-lang-label">Norms</span>
+              <span className="dock-lang-label">{t("norms", lang)}</span>
               <div className="lang" role="group" aria-label="Nomenclature language">
                 <button
                   type="button"
                   aria-pressed={lang === "en"}
                   onClick={() => setLang("en")}
-                  title="English engineering nomenclature (Default)"
+                  title="English engineering nomenclature"
                 >
                   EN
                 </button>

@@ -12,6 +12,7 @@ import "./styles/base.css";
 import "./styles/components.css";
 import "./styles/pages.css";
 import "./styles/modal.css";
+import "./styles/folders_and_export.css";
 import { App } from "./App";
 
 createRoot(document.getElementById("root")!).render(
@@ -21,3 +22,4 @@ createRoot(document.getElementById("root")!).render(
     </HashRouter>
   </StrictMode>,
 );
+

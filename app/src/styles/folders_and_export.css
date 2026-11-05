@@ -1,0 +1,596 @@
+/* =========================================================================
+   STORM TAKEOFF: PROJECT FOLDERS DIRECTORY, WHOLE BILL PDF, & LUXURY HOVERS
+   ========================================================================= */
+
+/* 1. Global Card Ambient Shadows & Smooth Lift Physics */
+.dash-card {
+  background: #ffffff !important;
+  border: 1px solid rgba(24, 24, 27, 0.08) !important;
+  border-radius: 16px !important;
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.03), 0 6px 18px -3px rgba(24, 24, 27, 0.04) !important;
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease !important;
+}
+
+.dash-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 32px -4px rgba(24, 24, 27, 0.08), 0 4px 12px -2px rgba(24, 24, 27, 0.03) !important;
+  border-color: rgba(180, 83, 9, 0.28) !important;
+}
+
+.dash-task-item {
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.02);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background 0.2s ease !important;
+}
+
+.dash-task-item:hover {
+  background: #ffffff !important;
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
+  border-color: rgba(180, 83, 9, 0.28) !important;
+}
+
+.dash-pkg-item-compact {
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.02);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background 0.2s ease !important;
+}
+
+.dash-pkg-item-compact:hover {
+  background: #ffffff !important;
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
+  border-color: rgba(180, 83, 9, 0.28) !important;
+}
+
+.dash-audit-ticket-compact {
+  box-shadow: 0 1px 2px rgba(24, 24, 27, 0.02);
+  transition: transform 0.2s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.2s ease, background 0.2s ease !important;
+}
+
+.dash-audit-ticket-compact:hover {
+  background: #ffffff !important;
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
+  border-color: rgba(180, 83, 9, 0.28) !important;
+}
+
+/* 2. Project Folders Hub Page (DrawingsPage.tsx) */
+.project-folders-page {
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 24px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+}
+
+.folders-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  border-bottom: 1px solid var(--line);
+  padding-bottom: 16px;
+}
+
+.folders-kicker {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--stamp);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.folders-page-title {
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--graphite);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.02em;
+}
+
+.folders-page-sub {
+  font-size: 13.5px;
+  color: var(--muted);
+  margin: 0;
+  max-width: 720px;
+  line-height: 1.45;
+}
+
+/* Project Hub Hero Card */
+.project-hub-hero {
+  background: #ffffff;
+  border: 1px solid rgba(24, 24, 27, 0.09);
+  border-radius: 18px;
+  padding: 24px 28px;
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.02), 0 8px 24px -4px rgba(24, 24, 27, 0.04);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  transition: box-shadow 0.22s var(--ease), border-color 0.22s ease;
+}
+
+.project-hub-hero:hover {
+  box-shadow: 0 12px 32px -4px rgba(24, 24, 27, 0.07);
+  border-color: rgba(180, 83, 9, 0.26);
+}
+
+.hub-hero-badge-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.hub-status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border-radius: 9999px;
+  background: #ecfdf5;
+  color: #059669;
+  font-size: 11px;
+  font-weight: 600;
+  border: 1px solid #a7f3d0;
+}
+
+.hub-status-pill .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #059669;
+}
+
+.hub-code-pill {
+  font-size: 11px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: var(--sheet-3);
+  color: var(--muted);
+}
+
+.hub-project-title {
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--graphite);
+  margin: 0 0 6px 0;
+  letter-spacing: -0.015em;
+}
+
+.hub-project-location {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--muted);
+}
+
+.hub-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+  padding: 16px 20px;
+  background: var(--stage);
+  border-radius: 12px;
+  border: 1px solid var(--line);
+}
+
+.hub-meta-item {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hub-meta-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.hub-meta-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--graphite);
+}
+
+/* Hub Action Launchers Bar */
+.hub-actions-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+  flex-wrap: wrap;
+}
+
+.hub-actions-desc {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.hub-actions-desc strong {
+  font-size: 13px;
+  color: var(--graphite);
+}
+
+.hub-action-buttons {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.hub-btn-boq {
+  padding: 10px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.25);
+  transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
+}
+
+.hub-btn-boq:hover {
+  transform: translateY(-1.5px);
+  box-shadow: 0 6px 16px rgba(180, 83, 9, 0.35);
+}
+
+.hub-btn-audit {
+  padding: 10px 16px;
+  font-size: 13.5px;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.18s var(--ease), border-color 0.18s ease;
+}
+
+.hub-btn-audit:hover {
+  transform: translateY(-1.5px);
+  border-color: rgba(220, 38, 38, 0.4);
+}
+
+.hub-btn-tag {
+  font-size: 11px;
+  padding: 1px 7px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.hub-tag-alert {
+  background: #fee2e2;
+  color: #dc2626;
+  font-weight: 700;
+}
+
+/* 4 Drawing Volumes Grid */
+.folders-grid-section {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.section-head-row {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.section-heading {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--graphite);
+  margin: 0 0 2px 0;
+}
+
+.section-subheading {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+
+.folders-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+@media (max-width: 900px) {
+  .folders-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.folder-card {
+  background: #ffffff;
+  border: 1px solid rgba(24, 24, 27, 0.08);
+  border-radius: 16px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  cursor: pointer;
+  box-shadow: 0 1px 3px rgba(24, 24, 27, 0.02), 0 4px 14px -2px rgba(24, 24, 27, 0.03);
+  transition: transform 0.22s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.22s cubic-bezier(0.16, 1, 0.3, 1), border-color 0.22s ease;
+}
+
+.folder-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 14px 30px -4px rgba(24, 24, 27, 0.08), 0 4px 10px -2px rgba(24, 24, 27, 0.03);
+  border-color: rgba(180, 83, 9, 0.3);
+}
+
+.folder-card-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.folder-code-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 10px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.folder-code-badge.badge-bp {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.folder-code-badge.badge-ar {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.folder-code-badge.badge-ks {
+  background: #f1f5f9;
+  color: #18181b;
+}
+
+.folder-code-badge.badge-mep {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.folder-sheet-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  background: var(--sheet-3);
+  color: var(--ink-2);
+}
+
+.folder-card-body {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.folder-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--graphite);
+  margin: 0;
+}
+
+.folder-filename {
+  font-size: 11px;
+  color: var(--muted);
+  max-width: 100%;
+}
+
+.folder-scope {
+  font-size: 12.5px;
+  color: var(--ink-2);
+  margin: 6px 0 0 0;
+  line-height: 1.4;
+}
+
+.folder-samples-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--line);
+}
+
+.folder-samples-label {
+  font-size: 11px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.folder-pills {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex-wrap: wrap;
+}
+
+.sample-sheet-pill {
+  font-size: 10.5px;
+  font-family: var(--font-num);
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: var(--sheet-3);
+  color: var(--graphite);
+  border: 1px solid var(--line);
+  transition: all 0.15s ease;
+}
+
+.sample-sheet-pill:hover {
+  background: var(--stamp);
+  color: #ffffff;
+  border-color: var(--stamp);
+}
+
+.sample-more-pill {
+  font-size: 10px;
+  color: var(--muted);
+  font-weight: 600;
+}
+
+.folder-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-top: 6px;
+}
+
+.folder-open-action {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--stamp);
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: transform 0.15s ease;
+}
+
+.folder-card:hover .folder-open-action {
+  transform: translateX(3px);
+}
+
+/* Back to folders button in sheet viewer */
+.back-to-folders-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--stamp);
+  background: var(--sheet-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 5px 10px;
+  margin-bottom: 10px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.back-to-folders-btn:hover {
+  background: #ffffff;
+  border-color: var(--stamp);
+  transform: translateX(-1px);
+}
+
+/* 3. Full 117-Line Bill PDF Print Styles */
+.pdf-full-boq-container {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin: 16px 0 24px 0;
+}
+
+.pdf-building-block {
+  border: 1px solid #d4d4d8;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #ffffff;
+  page-break-inside: avoid;
+}
+
+.pdf-bldg-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 14px;
+  background: #18181b;
+  color: #ffffff;
+}
+
+.pdf-bldg-badge {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: #b45309;
+  color: #ffffff;
+}
+
+.pdf-bldg-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  margin: 0;
+  flex: 1;
+  color: #ffffff;
+}
+
+.pdf-bldg-total {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #fbbf24;
+}
+
+.pdf-section-block {
+  padding: 10px 14px;
+  border-bottom: 1px solid #e4e4e7;
+}
+
+.pdf-section-block:last-child {
+  border-bottom: none;
+}
+
+.pdf-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 6px;
+  font-size: 12px;
+  color: #3f3f46;
+}
+
+.pdf-items-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.pdf-items-table th,
+.pdf-items-table td {
+  padding: 5px 8px;
+  font-size: 11px;
+  border-bottom: 1px solid #f4f4f5;
+}
+
+.pdf-items-table th {
+  background: #f8fafc;
+  color: #64748b;
+  font-weight: 600;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.pdf-items-table tr:hover {
+  background: #fafaf9;
+}
+
+@media print {
+  .pdf-full-boq-container,
+  .pdf-building-block,
+  .pdf-section-block {
+    page-break-inside: avoid;
+  }
+
+  .pdf-data-table tr {
+    page-break-inside: avoid;
+  }
+
+  .page-break-before {
+    page-break-before: always;
+  }
+}

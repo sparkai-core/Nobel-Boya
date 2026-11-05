@@ -1,21 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
-  Check,
+  ArrowRight,
   ChevronLeft,
   ChevronRight,
+  ClipboardCheck,
+  Folder,
   Layers,
-  Ruler,
+  MapPin,
   Search,
+  Table2,
 } from "lucide-react";
 import { buildingById, data, DISCIPLINES, docByCode, evidenceBySheet, itemById, sheetById, sheetImage } from "../data";
 import type { Box } from "../data/types";
 import { useBoq } from "../lib/boq";
-import { fmtQty, unitLabel } from "../lib/format";
+import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
+import { t } from "../lib/i18n";
 import { SheetViewer, type ViewerHandle, type ViewerMark } from "../components/SheetViewer";
 import { LineInspector } from "../components/LineInspector";
-import { Drawer, MethodTag, SeverityTag } from "../components/ui";
+import { Drawer } from "../components/ui";
 
 export function DrawingsPage() {
   const { sheetId } = useParams();
@@ -24,7 +28,9 @@ export function DrawingsPage() {
   const boq = useBoq();
   const lang = useApp((s) => s.lang);
   const approvedMap = useApp((s) => s.approved);
-  const toggleApprove = useApp((s) => s.toggleApprove);
+
+  // If no sheetId is specified in URL, show the Project Folders View
+  const isFoldersView = !sheetId;
 
   const [query, setQuery] = useState("");
   const [onlyEvidence, setOnlyEvidence] = useState(false);
@@ -32,13 +38,13 @@ export function DrawingsPage() {
   const viewer = useRef<ViewerHandle>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
+  // If viewing a sheet, resolve sheet; default to KS-9 if opened directly
   const sheet = sheetById.get(sheetId ?? "") ?? sheetById.get("KS-9")!;
   const activeItem = params.get("item");
   const activeSrc = Number(params.get("src") ?? 0);
   const activeCheck = params.get("check");
 
   const evidence = evidenceBySheet.get(sheet.id) ?? [];
-  const checkHere = data.checks.filter((c) => c.sources.some((s) => s.sheet === sheet.id));
 
   // Compute rich marks with tags, values, and verification states for SheetViewer
   const marks: ViewerMark[] = useMemo(() => {
@@ -106,14 +112,17 @@ export function DrawingsPage() {
       ),
     }));
   }, [query, onlyEvidence]);
+
   const flat = groups.flatMap((g) => g.sheets);
   const idx = flat.findIndex((s) => s.id === sheet.id);
 
   useEffect(() => {
-    listRef.current?.querySelector(`[data-sheet="${sheet.id}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [sheet.id]);
+    if (!isFoldersView) {
+      listRef.current?.querySelector(`[data-sheet="${sheet.id}"]`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [sheet.id, isFoldersView]);
 
-  const open = (id: string) => navigate(`/drawings/${id}`);
+  const openSheet = (id: string) => navigate(`/drawings/${id}`);
 
   const focusItem = (itemId: string, srcIndex: number) => {
     const next = new URLSearchParams();
@@ -127,13 +136,268 @@ export function DrawingsPage() {
   const doc = docByCode.get(sheet.doc)!;
   const activeLine = activeItem ? boq.lineByItem.get(activeItem) : null;
 
+  // Folder summaries data
+  const folderData = [
+    {
+      code: "BP",
+      nameEn: "Master Plan",
+      nameAz: "Baş Plan",
+      file: "Qobu Bas plan28.09.2026.pdf",
+      sheetCount: 8,
+      leadSheet: "BP-1",
+      scopeEn: "Civil Setting-Out Plans, Topography, Earthworks & Site Zoning (0.9998 ha)",
+      scopeAz: "Baş plan, relyef qazma işləri, abadlıq və sahə zonalaşdırılması (0.9998 ha)",
+      sampleSheets: ["BP-1", "BP-2", "BP-3", "BP-4"],
+      badgeClass: "badge-bp",
+    },
+    {
+      code: "AR",
+      nameEn: "Architecture",
+      nameAz: "Memarlıq Hissəsi",
+      file: "Qobu inzibati bina ve anbar 28.09.2026.pdf",
+      sheetCount: 36,
+      leadSheet: "AR-1",
+      scopeEn: "Warehouse Hall & 2-Storey Office Plans, Elevations, Sections & Finishes",
+      scopeAz: "Anbar və 2-mərtəbəli inzibati ofis planları, fasadlar, kəsiklər və otaq tərtibatı",
+      sampleSheets: ["AR-1", "AR-2", "AR-3", "AR-14"],
+      badgeClass: "badge-ar",
+    },
+    {
+      code: "KS",
+      nameEn: "Structure",
+      nameAz: "Konstruksiya Hissəsi",
+      file: "Qobu konstruksiya.pdf",
+      sheetCount: 61,
+      leadSheet: "KS-9",
+      scopeEn: "Monolithic Foundations, Columns, Steel Trusses, Rebar & Material Schedules",
+      scopeAz: "Monolit bünövrələr, dəmir-beton karkas, polad fermalar və armatur spesifikasiyası",
+      sampleSheets: ["KS-1", "KS-3", "KS-9", "KS-33"],
+      badgeClass: "badge-ks",
+    },
+    {
+      code: "MEP",
+      nameEn: "Building Services (MEP)",
+      nameAz: "Mühəndis Sistemləri (MEP)",
+      file: "Qobu kommunikasiya ümumi.pdf",
+      sheetCount: 100,
+      leadSheet: "MEP-1",
+      scopeEn: "Water Supply, Sewage Drainage, HVAC Ventilation, Power & Fire Alarms",
+      scopeAz: "Su təchizatı, kanalizasiya, havalandırma, elektrik paylanması və yanğın siqnalizasiyası",
+      sampleSheets: ["MEP-1", "MEP-10", "MEP-25", "MEP-50"],
+      badgeClass: "badge-mep",
+    },
+  ];
+
+  // -------------------------------------------------------------
+  // VIEW A: Project Folders Hub (When user clicks Drawing Register)
+  // -------------------------------------------------------------
+  if (isFoldersView) {
+    return (
+      <div className="page project-folders-page">
+        {/* Page Header */}
+        <header className="folders-header">
+          <div className="folders-header-left">
+            <span className="folders-kicker">
+              {lang === "az" ? "Layihə Çertyoj Qovluqları" : "Tender Drawing Register & Project Directory"}
+            </span>
+            <h1 className="folders-page-title">
+              {lang === "az" ? t("projectFoldersTitle", "az") : t("projectFoldersTitle", "en")}
+            </h1>
+            <p className="folders-page-sub">
+              {lang === "az" ? t("projectFoldersSub", "az") : t("projectFoldersSub", "en")}
+            </p>
+          </div>
+
+          <div className="folders-header-actions">
+            <button
+              type="button"
+              className="btn btn-outline"
+              onClick={() => navigate("/drawings/KS-9")}
+              title="Open full interactive drawing sheet viewer"
+            >
+              <Layers size={14} />
+              <span>{t("openViewerBtn", lang)}</span>
+            </button>
+          </div>
+        </header>
+
+        {/* Master Project Card ("the sheets we are working with are just of one project") */}
+        <section className="project-hub-hero">
+          <div className="hub-hero-top">
+            <div className="hub-hero-badge-row">
+              <span className="hub-status-pill">
+                <span className="dot pulse" />
+                {lang === "az" ? "Aktiv Layihə • İşçi Layihə (2026)" : "Active Project • Working Design (2026)"}
+              </span>
+              <span className="hub-code-pill font-mono">PRJ-AZ-2026-QOBU</span>
+            </div>
+            <h2 className="hub-project-title">
+              {lang === "az" ? data.project.name : data.project.nameEn}
+            </h2>
+            <div className="hub-project-location">
+              <MapPin size={14} className="text-amber" />
+              <span>{lang === "az" ? data.project.place : data.project.placeEn}</span>
+            </div>
+          </div>
+
+          {/* Project Details Grid */}
+          <div className="hub-meta-grid">
+            <div className="hub-meta-item">
+              <span className="hub-meta-label">{t("client", lang)}</span>
+              <strong className="hub-meta-val">{data.project.client}</strong>
+            </div>
+            <div className="hub-meta-item">
+              <span className="hub-meta-label">{t("designer", lang)}</span>
+              <strong className="hub-meta-val">{data.project.designer}</strong>
+            </div>
+            <div className="hub-meta-item">
+              <span className="hub-meta-label">{lang === "az" ? "Çertyoj Həcmi" : "Drawing Package"}</span>
+              <strong className="hub-meta-val num">4 {lang === "az" ? "Qovluq" : "Folders"} • 205 {t("sheetsCount", lang)}</strong>
+            </div>
+            <div className="hub-meta-item">
+              <span className="hub-meta-label">{t("contractValuation", lang)}</span>
+              <strong className="hub-meta-val num text-emerald">{fmtMoney(boq.total)} AZN</strong>
+            </div>
+          </div>
+
+          {/* Core Action Launchers ("when opening a project it should then open the boq decipline audit") */}
+          <div className="hub-actions-bar">
+            <div className="hub-actions-desc">
+              <strong>{lang === "az" ? "Layihə İdarəetmə Keçidləri:" : "Project Takeoff Actions:"}</strong>
+              <span>
+                {lang === "az"
+                  ? "Smeta cədvəlinə, çarpaz audit yoxlamalarına və ya çertyoj vərəqlərinə birbaşa keçid edin."
+                  : "Launch directly into the verified Bill of Quantities or inspect cross-discipline drawing checks."}
+              </span>
+            </div>
+
+            <div className="hub-action-buttons">
+              <button
+                type="button"
+                className="btn btn-primary hub-btn-boq"
+                onClick={() => navigate("/bill")}
+              >
+                <Table2 size={16} />
+                <span>{t("openBoqBtn", lang)}</span>
+                <span className="hub-btn-tag font-mono">117 {t("linesCount", lang)}</span>
+              </button>
+
+              <button
+                type="button"
+                className="btn btn-outline hub-btn-audit"
+                onClick={() => navigate("/checks")}
+              >
+                <ClipboardCheck size={16} />
+                <span>{t("openAuditsBtn", lang)}</span>
+                <span className="hub-btn-tag hub-tag-alert">4 {t("activeFindings", lang)}</span>
+              </button>
+            </div>
+          </div>
+        </section>
+
+        {/* 4 Project Drawing Folders / Volumes Grid */}
+        <section className="folders-grid-section">
+          <div className="section-head-row">
+            <div>
+              <h3 className="section-heading">
+                {lang === "az" ? "Layihə Çertyoj Qovluqları (4 Cild)" : "Tender Drawing Folders (4 Volumes)"}
+              </h3>
+              <span className="section-subheading">
+                {lang === "az"
+                  ? "Qovluq üzrə bütün vərəqləri açmaq və aşkarlanan smeta işarələrini təhlil etmək üçün qovluğu seçin."
+                  : "Select any volume to open its drawing sheets and review vector takeoff coordinates."}
+              </span>
+            </div>
+            <span className="muted small num-inline">205 {t("sheetsCount", lang)}</span>
+          </div>
+
+          <div className="folders-grid">
+            {folderData.map((folder) => (
+              <div
+                key={folder.code}
+                className="folder-card"
+                onClick={() => navigate(`/drawings/${folder.leadSheet}`)}
+                role="button"
+                tabIndex={0}
+              >
+                <div className="folder-card-top">
+                  <div className={`folder-code-badge ${folder.badgeClass}`}>
+                    <Folder size={16} />
+                    <span>{folder.code}</span>
+                  </div>
+                  <span className="folder-sheet-badge num-inline">
+                    {folder.sheetCount} {t("sheetsCount", lang)}
+                  </span>
+                </div>
+
+                <div className="folder-card-body">
+                  <h4 className="folder-title">
+                    {lang === "az" ? folder.nameAz : folder.nameEn}
+                  </h4>
+                  <span className="folder-filename font-mono truncate" title={folder.file}>
+                    {folder.file}
+                  </span>
+                  <p className="folder-scope">
+                    {lang === "az" ? folder.scopeAz : folder.scopeEn}
+                  </p>
+                </div>
+
+                {/* Sample Sheet Pills */}
+                <div className="folder-samples-row">
+                  <span className="folder-samples-label">{lang === "az" ? "Vərəqlər:" : "Key Sheets:"}</span>
+                  <div className="folder-pills">
+                    {folder.sampleSheets.map((sh) => (
+                      <span
+                        key={sh}
+                        className="sample-sheet-pill"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/drawings/${sh}`);
+                        }}
+                      >
+                        {sh}
+                      </span>
+                    ))}
+                    <span className="sample-more-pill">+{folder.sheetCount - folder.sampleSheets.length}</span>
+                  </div>
+                </div>
+
+                {/* Card Action Footer */}
+                <div className="folder-card-footer">
+                  <span className="folder-open-action">
+                    <span>{t("exploreFolder", lang)} ({folder.sheetCount})</span>
+                    <ArrowRight size={14} />
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // VIEW B: Interactive Drawing Sheet Viewer (When viewing a sheet)
+  // -------------------------------------------------------------
   return (
     <div className="drawings modern-drawings">
       {/* Left Sheet Register Sidebar */}
       <aside className="register">
         <div className="register-head">
+          {/* Breadcrumb Back to Project Folders */}
+          <button
+            type="button"
+            className="back-to-folders-btn"
+            onClick={() => navigate("/drawings")}
+            title="Return to Project Folders Directory"
+          >
+            <ChevronLeft size={14} />
+            <span>{t("backToFolders", lang)}</span>
+          </button>
+
           <div className="register-title-row">
-            <h1>Drawing Sheets</h1>
+            <h1>{t("drawingSheets", lang)}</h1>
             <span className="register-badge">{flat.length} / 205</span>
           </div>
 
@@ -141,7 +405,7 @@ export function DrawingsPage() {
             <Search size={14} aria-hidden="true" />
             <input
               className="input"
-              placeholder="Search by code, title, building..."
+              placeholder={t("searchSheetsPlaceholder", lang)}
               value={query}
               onChange={(e) => setQuery(e.target.value)}
               aria-label="Search sheets"
@@ -150,7 +414,7 @@ export function DrawingsPage() {
 
           <label className="check-toggle">
             <input type="checkbox" checked={onlyEvidence} onChange={(e) => setOnlyEvidence(e.target.checked)} />
-            <span>Only sheets with takeoff quantities</span>
+            <span>{t("onlyWithTakeoff", lang)}</span>
           </label>
         </div>
 
@@ -159,7 +423,7 @@ export function DrawingsPage() {
             sheets.length ? (
               <section key={d.code} className="reg-group">
                 <h2 className="reg-doc">
-                  <span>{d.en}</span>
+                  <span>{lang === "az" ? d.az : d.en}</span>
                   <span className="muted num-inline">{sheets.length}</span>
                 </h2>
                 <ul>
@@ -171,11 +435,11 @@ export function DrawingsPage() {
                           type="button"
                           data-sheet={s.id}
                           className={`reg-sheet${s.id === sheet.id ? " active" : ""}`}
-                          onClick={() => open(s.id)}
+                          onClick={() => openSheet(s.id)}
                         >
                           <img src={sheetImage(s.id, true)} alt="" loading="lazy" />
                           <span className="reg-text">
-                            <span className="reg-title">{s.titleEn}</span>
+                            <span className="reg-title">{lang === "az" ? s.title : s.titleEn}</span>
                             <span className="reg-meta">
                               {s.id} • {buildingById.get(s.building)?.short}
                             </span>
@@ -200,7 +464,7 @@ export function DrawingsPage() {
               <strong>{sheet.id}</strong>
               <span className="sheet-sep">•</span>
               <span className="sheet-file-meta">
-                {doc.file}, Sheet {sheet.page} of {data.sheets.filter((s) => s.doc === doc.code).length}
+                {doc.file}, {lang === "az" ? `Vərəq ${sheet.page}` : `Sheet ${sheet.page}`} / {data.sheets.filter((s) => s.doc === doc.code).length}
               </span>
               <span className="discipline-tag">{DISCIPLINES[sheet.discipline]}</span>
             </div>
@@ -208,16 +472,27 @@ export function DrawingsPage() {
               {sheet.title}
             </div>
             <div className="sheet-sub muted">
-              {sheet.titleEn} • {buildingById.get(sheet.building)?.en}
+              {sheet.titleEn} • {lang === "az" ? buildingById.get(sheet.building)?.short : buildingById.get(sheet.building)?.en}
             </div>
           </div>
 
           <div className="sheet-nav-controls">
+            {/* Quick Link to Folders */}
+            <button
+              type="button"
+              className="btn btn-outline btn-xs mr-2"
+              onClick={() => navigate("/drawings")}
+              title="Return to Project Folders Directory"
+            >
+              <Folder size={13} />
+              <span>{t("viewFolders", lang)}</span>
+            </button>
+
             <button
               type="button"
               className="icon-btn"
               disabled={idx <= 0}
-              onClick={() => idx > 0 && open(flat[idx - 1]!.id)}
+              onClick={() => idx > 0 && openSheet(flat[idx - 1]!.id)}
               aria-label="Previous sheet"
               title="Previous sheet"
             >
@@ -230,7 +505,7 @@ export function DrawingsPage() {
               type="button"
               className="icon-btn"
               disabled={idx >= flat.length - 1}
-              onClick={() => idx < flat.length - 1 && open(flat[idx + 1]!.id)}
+              onClick={() => idx < flat.length - 1 && openSheet(flat[idx + 1]!.id)}
               aria-label="Next sheet"
               title="Next sheet"
             >
@@ -251,129 +526,27 @@ export function DrawingsPage() {
         />
       </section>
 
-      {/* Right Schedule Takeoff Sidebar */}
-      <aside className="read-pane scroll">
-        <div className="read-pane-head">
-          <div>
-            <h2>Verified Takeoff Items</h2>
-            <span className="text-muted small">
-              {evidence.length} {evidence.length === 1 ? "quantity" : "quantities"} on this sheet
-            </span>
-          </div>
-        </div>
-
-        {!evidence.length ? (
-          <div className="read-empty-card">
-            <Layers size={24} className="text-muted" />
-            <p className="empty-title">General Reference Sheet</p>
-            <p className="text-muted small">
-              {sheet.discipline === "general"
-                ? "This sheet establishes drawing legends, general notes, and setting-out coordinates."
-                : "Elements shown on this plan are itemized in the master schedules on adjacent sheets."}
-            </p>
-          </div>
-        ) : (
-          <ul className="read-list">
-            {evidence.map(({ itemId, srcIndex }) => {
-              const it = itemById.get(itemId)!;
-              const src = it.src[srcIndex]!;
-              const line = boq.lineByItem.get(itemId);
-              const active = itemId === activeItem && srcIndex === activeSrc;
-              const isApproved = Boolean(approvedMap[itemId]);
-
-              return (
-                <li key={`${itemId}-${srcIndex}`}>
-                  <div className={`read-item-card${active ? " active" : ""}${isApproved ? " approved" : ""}`}>
-                    <div className="read-item-top" onClick={() => focusItem(itemId, srcIndex)}>
-                      <div className="read-tags">
-                        <MethodTag method={it.method} compact />
-                        {line ? <span className="read-code num-inline">{line.code}</span> : null}
-                      </div>
-
-                      <div className="read-actions-inline">
-                        <button
-                          type="button"
-                          className={`btn-approve-mini ${isApproved ? "approved" : ""}`}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleApprove(itemId);
-                          }}
-                          title={isApproved ? "Approved by surveyor" : "Click to approve"}
-                        >
-                          <Check size={12} />
-                          <span>{isApproved ? "Approved" : "Approve"}</span>
-                        </button>
-                      </div>
-                    </div>
-
-                    <div className="read-item-body" onClick={() => focusItem(itemId, srcIndex)}>
-                      <h4 className="read-desc">{lang === "az" ? it.az : it.en}</h4>
-                      <div className="read-qty-row">
-                        <span className="text-muted small">Takeoff Quantity:</span>
-                        <strong className="num-inline">
-                          {fmtQty(it.qty, it.unit)} {unitLabel(it.unit, lang)}
-                        </strong>
-                      </div>
-
-                      <blockquote className="read-quote" lang="az">
-                        "{src.quote}"
-                      </blockquote>
-                    </div>
-
-                    <div className="read-item-footer">
-                      <button
-                        type="button"
-                        className="btn btn-outline btn-xs"
-                        onClick={() => focusItem(itemId, srcIndex)}
-                      >
-                        <Ruler size={11} />
-                        <span>Inspect & Edit Dimensions</span>
-                      </button>
-
-                      {line ? (
-                        <Link to={`/bill?line=${encodeURIComponent(line.id)}`} className="text-link small">
-                          Line {line.code} in BOQ
-                        </Link>
-                      ) : null}
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-
-        {checkHere.length ? (
-          <div className="sheet-audit-card">
-            <h3 className="sheet-audit-title">Discipline Checks on this Sheet</h3>
-            <ul className="sheet-audit-list">
-              {checkHere.map((c) => (
-                <li key={c.id}>
-                  <Link to={`/checks/${c.id}`} className="sheet-audit-link">
-                    <SeverityTag severity={c.severity} kind={c.kind} compact />
-                    <span className="audit-link-title">{c.title}</span>
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ) : null}
-      </aside>
-
-      {/* Slide-out Constech-style Inspector Drawer */}
+      {/* Slide-out Inspector Drawer */}
       <Drawer
-        open={inspectorOpen && Boolean(activeLine)}
-        onClose={() => setInspectorOpen(false)}
-        title={activeLine ? `Line ${activeLine.code} • ${activeLine.section}` : "Takeoff Inspector"}
-        kicker="Item Dimension & Provenance Inspector"
-        width={460}
+        open={inspectorOpen}
+        onClose={() => {
+          setInspectorOpen(false);
+          const next = new URLSearchParams(params);
+          next.delete("item");
+          next.delete("src");
+          setParams(next, { replace: true });
+        }}
+        title={activeLine ? `${activeLine.code} • ${activeLine.en}` : "Element Details"}
       >
         {activeLine ? (
           <LineInspector
             line={activeLine}
-            onFocusSheet={(sId, box) => {
-              if (sId !== sheet.id) open(sId);
-              setTimeout(() => viewer.current?.flyTo(box), 120);
+            onFocusSheet={(sh, box) => {
+              if (sh !== sheet.id) {
+                openSheet(sh);
+              } else {
+                viewer.current?.flyTo(box);
+              }
             }}
           />
         ) : null}

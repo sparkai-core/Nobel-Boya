@@ -17,6 +17,7 @@ import type { Method } from "../data/types";
 import { useBoq, type Line } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
+import { t } from "../lib/i18n";
 import { useMedia } from "../lib/useMedia";
 import { PageHead } from "../components/Shell";
 import { LineInspector } from "../components/LineInspector";
@@ -128,12 +129,22 @@ export function BillPage() {
   return (
     <div className={`page page-bill${selected ? " with-drawer" : ""}`}>
       <PageHead
-        title="Bill of Quantities"
+        title={t("billTitle", lang)}
         lead={
           <>
-            Hierarchical Work Breakdown Structure (WBS) for <strong>{data.project.nameEn}</strong> • Measured works{" "}
-            <span className="num-inline font-bold">{fmtMoney(shownTotal)} AZN</span> before mark-ups. Click any line to
-            inspect pixel-level drawing coordinates, adjust dimensions, or sign off.
+            {lang === "az" ? (
+              <>
+                <strong>{data.project.name}</strong> üçün iyerarxik smeta strukturu (WBS) • Əlavələrdən əvvəl birbaşa işlər{" "}
+                <span className="num-inline font-bold">{fmtMoney(shownTotal)} AZN</span>. Hər hansı sətrə klikləyərək çertyoj
+                koordinatlarını yoxlayın, həcmləri dəqiqləşdirin və ya təsdiqləyin.
+              </>
+            ) : (
+              <>
+                Hierarchical Work Breakdown Structure (WBS) for <strong>{data.project.nameEn}</strong> • Measured works{" "}
+                <span className="num-inline font-bold">{fmtMoney(shownTotal)} AZN</span> before mark-ups. Click any line to
+                inspect pixel-level drawing coordinates, adjust dimensions, or sign off.
+              </>
+            )}
           </>
         }
       />
@@ -144,7 +155,7 @@ export function BillPage() {
           <Search size={15} aria-hidden="true" />
           <input
             className="input"
-            placeholder="Search item description, element mark, or drawing sheet..."
+            placeholder={t("searchBillPlaceholder", lang)}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             aria-label="Search the bill"
@@ -157,7 +168,7 @@ export function BillPage() {
           onChange={(e) => setParam("b", e.target.value === "all" ? null : e.target.value)}
           aria-label="Structure Filter"
         >
-          <option value="all">All Structures (Warehouse, Admin, Pump)</option>
+          <option value="all">{t("allStructures", lang)}</option>
           {data.buildings.map((b) => (
             <option key={b.id} value={b.id}>
               {b.short}
@@ -174,7 +185,7 @@ export function BillPage() {
             title="Expand all levels of the tree"
           >
             <ChevronsUpDown size={13} />
-            <span>Expand All</span>
+            <span>{t("expandAll", lang)}</span>
           </button>
           <button
             type="button"
@@ -183,7 +194,7 @@ export function BillPage() {
             title="Collapse down to trade sections"
           >
             <ChevronsDownUp size={13} />
-            <span>Collapse Trades</span>
+            <span>{t("collapseTrades", lang)}</span>
           </button>
           <button
             type="button"
@@ -192,7 +203,7 @@ export function BillPage() {
             title="Collapse all structures"
           >
             <ChevronsDownUp size={13} />
-            <span>Collapse All</span>
+            <span>{t("collapseAll", lang)}</span>
           </button>
         </div>
 
@@ -201,12 +212,12 @@ export function BillPage() {
           value={filter}
           onChange={setFilter}
           options={[
-            { value: "all", label: "All Items", count: counts.all },
-            { value: "schedule", label: "Schedules", count: counts.schedule },
-            { value: "derived", label: "Parametric", count: counts.derived },
-            { value: "image", label: "Plan Takeoff", count: counts.image },
-            { value: "findings", label: "Audit Issues", count: counts.findings },
-            ...(counts.adjusted ? [{ value: "adjusted" as Filter, label: "Adjusted", count: counts.adjusted }] : []),
+            { value: "all", label: t("filterAll", lang), count: counts.all },
+            { value: "schedule", label: t("filterSchedule", lang), count: counts.schedule },
+            { value: "derived", label: t("filterDerived", lang), count: counts.derived },
+            { value: "image", label: t("filterImage", lang), count: counts.image },
+            { value: "findings", label: t("filterFindings", lang), count: counts.findings },
+            ...(counts.adjusted ? [{ value: "adjusted" as Filter, label: t("filterAdjusted", lang), count: counts.adjusted }] : []),
           ]}
         />
       </div>
@@ -214,29 +225,29 @@ export function BillPage() {
       {/* Tree Hierarchy Data Grid */}
       <div className="bill-table scroll tree-table-wrap" ref={tableRef}>
         {!visible.length ? (
-          <Empty title="No takeoff items match your search filters">
-            Try adjusting your search query, or select another building asset from the dropdown.
+          <Empty title={t("noMatchingItems", lang)}>
+            {t("noMatchingLead", lang)}
           </Empty>
         ) : (
           <table className={`boq tree-table${compact ? " compact" : ""}`}>
             <thead>
               <tr className="tree-header-row">
-                <th style={{ width: "90px" }}>WBS Code</th>
-                <th>Work Breakdown / Item Description</th>
-                {compact ? null : <th style={{ width: "70px" }}>Unit</th>}
+                <th style={{ width: "90px" }}>{t("wbsCode", lang)}</th>
+                <th>{t("itemDescription", lang)}</th>
+                {compact ? null : <th style={{ width: "70px" }}>{t("unit", lang)}</th>}
                 <th className="num" style={{ width: "110px" }}>
-                  Quantity
+                  {t("quantity", lang)}
                 </th>
                 {compact ? null : (
                   <th className="num" style={{ width: "110px" }}>
-                    Rate (AZN)
+                    {t("rate", lang)}
                   </th>
                 )}
                 <th className="num" style={{ width: "140px" }}>
-                  Amount (AZN)
+                  {t("amount", lang)}
                 </th>
-                {compact ? null : <th style={{ width: "170px" }}>Drawing Evidence</th>}
-                <th style={{ width: "60px" }}>Action</th>
+                {compact ? null : <th style={{ width: "170px" }}>{t("evidence", lang)}</th>}
+                <th style={{ width: "60px" }}>{t("action", lang)}</th>
               </tr>
             </thead>
             <tbody>
