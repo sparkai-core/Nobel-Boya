@@ -4,7 +4,7 @@ import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
 import { DEFAULT_MARKUPS, useApp, type Markups } from "../lib/store";
-import { t } from "../lib/i18n";
+import { getRateGroup, t } from "../lib/i18n";
 import { PageHead } from "../components/Shell";
 
 export function RatesPage() {
@@ -111,9 +111,9 @@ export function RatesPage() {
           <span className="rates-kpi-sub">{lang === "az" ? "117 yoxlanılmış iş bəndi üzrə cəm" : "Calculated across 117 verified lines"}</span>
         </div>
 
-        <div className="rates-kpi-card highlight-bronze">
+        <div className="rates-kpi-card highlight-cobalt">
           <span className="rates-kpi-label">{lang === "az" ? "Dövlət Əlavələri Cəmi" : "Statutory Mark-up Uplift"}</span>
-          <div className="rates-kpi-val num amount-bronze">+{fmtMoney(markupUplift)} <span className="rates-kpi-cur">AZN</span></div>
+          <div className="rates-kpi-val num text-cobalt">+{fmtMoney(markupUplift)} <span className="rates-kpi-cur">AZN</span></div>
           <span className="rates-kpi-sub">{lang === "az" ? "4 ardıcıl pillə (+41.8% məcmu)" : "4 sequential tiers (+41.8% cumulative)"}</span>
         </div>
 
@@ -221,8 +221,8 @@ export function RatesPage() {
                     <tr className="rates-group-row">
                       <td colSpan={6}>
                         <div className="group-title-cell">
-                          <Tag size={13} className="text-bronze" />
-                          <strong>{group}</strong>
+                          <Tag size={13} className="text-cobalt" />
+                          <strong>{getRateGroup(group, lang)}</strong>
                           <span className="group-count-badge">{list.length}</span>
                         </div>
                       </td>

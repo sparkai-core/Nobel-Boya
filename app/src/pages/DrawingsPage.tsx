@@ -129,7 +129,6 @@ export function DrawingsPage() {
     next.set("item", itemId);
     next.set("src", String(srcIndex));
     setParams(next, { replace: true });
-    viewer.current?.flyTo(itemById.get(itemId)!.src[srcIndex]!.box);
     setInspectorOpen(true);
   };
 

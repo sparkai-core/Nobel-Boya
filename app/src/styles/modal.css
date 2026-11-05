@@ -75,10 +75,11 @@
   flex-shrink: 0;
 }
 
-.badge-bronze {
-  background: var(--stamp-soft);
-  color: var(--stamp);
-  border: 1px solid var(--stamp-line);
+.badge-bronze,
+.badge-cobalt {
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
+  border: 1px solid rgba(37, 99, 235, 0.2);
 }
 
 .badge-obsidian {

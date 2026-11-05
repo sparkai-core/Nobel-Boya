@@ -279,7 +279,9 @@ export function BillPage() {
                         <div className="tree-asset-title-group">
                           <Building2 size={16} className="text-muted" />
                           <strong className="tree-node-name">{lang === "az" ? b.az : b.en}</strong>
-                          <span className="tree-count-badge">{bLines.length} takeoff items</span>
+                          <span className="tree-count-badge">
+                            {bLines.length} {lang === "az" ? "smeta bəndi" : "takeoff items"}
+                          </span>
                         </div>
                       </td>
                       <td className="num tree-node-total">
@@ -287,7 +289,9 @@ export function BillPage() {
                       </td>
                       {compact ? null : (
                         <td className="tree-node-meta">
-                          <span className="pill-badge-subtle">Asset Level</span>
+                          <span className="pill-badge-subtle">
+                            {lang === "az" ? "Obyekt Səviyyəsi" : "Asset Level"}
+                          </span>
                         </td>
                       )}
                       <td />
@@ -324,7 +328,9 @@ export function BillPage() {
                                 <div className="tree-trade-title-group">
                                   <Layers size={14} className="text-muted" />
                                   <span className="font-semibold">{lang === "az" ? s.az : s.en}</span>
-                                  <span className="tree-count-badge subtle">{sLines.length} lines</span>
+                                  <span className="tree-count-badge subtle">
+                                    {sLines.length} {lang === "az" ? "sətir" : "lines"}
+                                  </span>
                                 </div>
                               </td>
                               <td className="num tree-node-subtotal">
@@ -332,7 +338,9 @@ export function BillPage() {
                               </td>
                               {compact ? null : (
                                 <td className="tree-node-meta">
-                                  <span className="muted small">Trade Roll-up</span>
+                                  <span className="muted small">
+                                    {lang === "az" ? "Bölmə Cəmi" : "Trade Roll-up"}
+                                  </span>
                                 </td>
                               )}
                               <td />
@@ -438,17 +446,17 @@ function TreeLineRow({
           <span className="desc-text">{lang === "az" ? line.az : line.en}</span>
           {approved ? (
             <span className="flag flag-approved" title="Surveyor sign-off approved">
-              <Check size={11} strokeWidth={2.5} /> Approved
+              <Check size={11} strokeWidth={2.5} /> {lang === "az" ? "Təsdiqləndi" : "Approved"}
             </span>
           ) : null}
           {finding ? (
             <span className={`flag flag-${finding.severity}`} title={finding.title}>
-              {finding.severity === "error" ? "Variance" : "Review"}
+              {finding.severity === "error" ? (lang === "az" ? "Fərq" : "Variance") : (lang === "az" ? "Baxış" : "Review")}
             </span>
           ) : null}
           {line.adjusted ? (
             <span className="flag flag-adjusted" title="Dimensions or rate modified by surveyor">
-              <Edit3 size={10} /> {line.adjusted === "fix" ? "Audit Resolved" : "Modified"}
+              <Edit3 size={10} /> {line.adjusted === "fix" ? (lang === "az" ? "Audit Həll Olundu" : "Audit Resolved") : (lang === "az" ? "Düzəliş Edildi" : "Modified")}
             </span>
           ) : null}
         </div>

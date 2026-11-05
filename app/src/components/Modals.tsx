@@ -25,7 +25,7 @@ export function Modals() {
           <div className="modal-dialog settings-dialog" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
               <div className="modal-title-group">
-                <div className="modal-icon-badge badge-bronze">
+                <div className="modal-icon-badge badge-cobalt">
                   <Settings size={18} />
                 </div>
                 <div>

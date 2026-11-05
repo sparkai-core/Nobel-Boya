@@ -14,7 +14,7 @@
 .dash-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 32px -4px rgba(24, 24, 27, 0.08), 0 4px 12px -2px rgba(24, 24, 27, 0.03) !important;
-  border-color: rgba(180, 83, 9, 0.28) !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
 }
 
 .dash-task-item {
@@ -26,7 +26,7 @@
   background: #ffffff !important;
   transform: translateY(-1.5px);
   box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
-  border-color: rgba(180, 83, 9, 0.28) !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
 }
 
 .dash-pkg-item-compact {
@@ -38,7 +38,7 @@
   background: #ffffff !important;
   transform: translateY(-1.5px);
   box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
-  border-color: rgba(180, 83, 9, 0.28) !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
 }
 
 .dash-audit-ticket-compact {
@@ -50,7 +50,7 @@
   background: #ffffff !important;
   transform: translateY(-1.5px);
   box-shadow: 0 6px 18px -2px rgba(24, 24, 27, 0.07), 0 2px 4px rgba(24, 24, 27, 0.02) !important;
-  border-color: rgba(180, 83, 9, 0.28) !important;
+  border-color: rgba(37, 99, 235, 0.25) !important;
 }
 
 /* 2. Project Folders Hub Page (DrawingsPage.tsx) */
@@ -113,7 +113,7 @@
 
 .project-hub-hero:hover {
   box-shadow: 0 12px 32px -4px rgba(24, 24, 27, 0.07);
-  border-color: rgba(180, 83, 9, 0.26);
+  border-color: rgba(37, 99, 235, 0.22);
 }
 
 .hub-hero-badge-row {
@@ -234,13 +234,13 @@
   display: inline-flex;
   align-items: center;
   gap: 9px;
-  box-shadow: 0 2px 8px rgba(180, 83, 9, 0.25);
+  box-shadow: 0 2px 8px rgba(37, 99, 235, 0.2);
   transition: transform 0.18s var(--ease), box-shadow 0.18s var(--ease);
 }
 
 .hub-btn-boq:hover {
   transform: translateY(-1.5px);
-  box-shadow: 0 6px 16px rgba(180, 83, 9, 0.35);
+  box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3);
 }
 
 .hub-btn-audit {
@@ -325,7 +325,7 @@
 .folder-card:hover {
   transform: translateY(-2px);
   box-shadow: 0 14px 30px -4px rgba(24, 24, 27, 0.08), 0 4px 10px -2px rgba(24, 24, 27, 0.03);
-  border-color: rgba(180, 83, 9, 0.3);
+  border-color: rgba(37, 99, 235, 0.25);
 }
 
 .folder-card-top {
@@ -345,8 +345,8 @@
 }
 
 .folder-code-badge.badge-bp {
-  background: #fef3c7;
-  color: #b45309;
+  background: rgba(37, 99, 235, 0.08);
+  color: #2563eb;
 }
 
 .folder-code-badge.badge-ar {
@@ -518,7 +518,7 @@
   font-weight: 700;
   padding: 2px 7px;
   border-radius: 5px;
-  background: #b45309;
+  background: #2563eb;
   color: #ffffff;
 }
 
@@ -694,7 +694,7 @@
   align-items: center;
   gap: 6px;
   color: var(--stamp);
-  border-color: rgba(180, 83, 9, 0.3);
+  border-color: rgba(37, 99, 235, 0.25);
   background: var(--sheet);
   font-weight: 600;
   transition: all 0.15s ease;
@@ -722,17 +722,19 @@
   background: var(--sheet);
   border: 1px solid var(--line);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03), 0 4px 12px rgba(0, 0, 0, 0.02);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), border-color 0.22s ease;
 }
 
 .rates-kpi-card:hover {
-  transform: translateY(-1px);
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.06), 0 1px 3px rgba(0, 0, 0, 0.04);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.03);
+  border-color: rgba(37, 99, 235, 0.25);
 }
 
-.rates-kpi-card.highlight-bronze {
-  border-left: 4px solid var(--stamp);
-  background: linear-gradient(135deg, var(--sheet) 0%, rgba(180, 83, 9, 0.03) 100%);
+.rates-kpi-card.highlight-bronze,
+.rates-kpi-card.highlight-cobalt {
+  border-left: 4px solid #2563eb;
+  background: linear-gradient(135deg, var(--sheet) 0%, rgba(37, 99, 235, 0.04) 100%);
 }
 
 .rates-kpi-card.highlight-obsidian {
@@ -768,8 +770,9 @@
   opacity: 0.75;
 }
 
-.amount-bronze {
-  color: var(--stamp);
+.amount-bronze,
+.amount-cobalt {
+  color: #2563eb;
 }
 
 .rates-kpi-sub {
@@ -833,21 +836,22 @@
   flex-direction: column;
   gap: 10px;
   padding: 16px;
-  border-radius: 10px;
+  border-radius: 12px;
   background: var(--stage);
   border: 1px solid var(--line);
-  transition: all 0.2s ease;
+  transition: transform 0.22s var(--ease), box-shadow 0.22s var(--ease), border-color 0.22s ease, background 0.22s ease;
 }
 
 .rates-tier-card:hover {
-  background: var(--sheet);
-  border-color: var(--line-strong);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
+  background: #ffffff;
+  border-color: rgba(37, 99, 235, 0.3);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px -2px rgba(15, 23, 42, 0.08), 0 2px 6px rgba(15, 23, 42, 0.03);
 }
 
 .rates-tier-card.custom-tier {
-  border-color: var(--stamp);
-  background: var(--stamp-soft);
+  border-color: #2563eb;
+  background: rgba(37, 99, 235, 0.04);
 }
 
 .tier-top-row {
@@ -1034,8 +1038,9 @@
   color: var(--graphite);
 }
 
-.text-bronze {
-  color: var(--stamp);
+.text-bronze,
+.text-cobalt {
+  color: #2563eb;
 }
 
 .group-count-badge {
@@ -1065,7 +1070,7 @@
 }
 
 .rates-data-row.row-edited td {
-  background: rgba(180, 83, 9, 0.03);
+  background: rgba(37, 99, 235, 0.03);
 }
 
 .rate-desc-cell {

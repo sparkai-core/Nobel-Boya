@@ -378,7 +378,7 @@ export function Building3D({ className = "", showCaption = true }: Props) {
         // Styling based on element kind & filter state in Obsidian & Bronze palette
         let baseR = 180;
         let baseG = 83;
-        let baseB = 9; // Architectural Bronze (#B45309)
+        let baseB = 9; // Architectural Bronze (#2563eb)
         let alpha = isMatch ? 0.88 : 0.12;
 
         if (b.kind === "footing") {

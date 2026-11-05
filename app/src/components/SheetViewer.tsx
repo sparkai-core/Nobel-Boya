@@ -47,9 +47,33 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   useLayoutEffect(() => {
     const el = host.current;
     if (!el) return;
+    let prevW = el.clientWidth || 800;
+    let prevH = el.clientHeight || 600;
+
     const ro = new ResizeObserver(([e]) => {
       if (e?.contentRect) {
-        setSize({ w: Math.max(300, e.contentRect.width), h: Math.max(200, e.contentRect.height) });
+        const nextW = Math.max(300, e.contentRect.width);
+        const nextH = Math.max(200, e.contentRect.height);
+
+        // Adjust camera view so center point does not jump when inspector drawer opens
+        if (Math.abs(nextW - prevW) > 2 || Math.abs(nextH - prevH) > 2) {
+          const cur = viewRef.current;
+          if (cur && isFinite(cur.s) && cur.s > 0 && isFinite(cur.x) && isFinite(cur.y)) {
+            const cx = cur.x + (prevW * cur.s) / 2;
+            const cy = cur.y + (prevH * cur.s) / 2;
+            const adjView: View = {
+              s: cur.s,
+              x: cx - (nextW * cur.s) / 2,
+              y: cy - (nextH * cur.s) / 2,
+            };
+            viewRef.current = adjView;
+            setView(adjView);
+          }
+          prevW = nextW;
+          prevH = nextH;
+        }
+
+        setSize({ w: nextW, h: nextH });
       }
     });
     ro.observe(el);
@@ -65,14 +89,20 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   // Compute focused box view
   const boxView = useCallback(
     (box: Box): View => {
-      const [x0, y0, x1, y1] = box;
-      const bw = Math.max(x1 - x0, 50);
-      const bh = Math.max(y1 - y0, 30);
-      const s = Math.min(
-        Math.max(bw / (size.w * 0.35), bh / (size.h * 0.28)),
-        Math.max(sheet.w / size.w, sheet.h / size.h),
-      );
-      return { s, x: (x0 + x1) / 2 - (size.w * s) / 2, y: (y0 + y1) / 2 - (size.h * s) / 2 };
+      const x0 = isFinite(box[0]) ? box[0] : 0;
+      const y0 = isFinite(box[1]) ? box[1] : 0;
+      const x1 = isFinite(box[2]) ? box[2] : 50;
+      const y1 = isFinite(box[3]) ? box[3] : 30;
+      const bw = Math.max(x1 - x0, 60);
+      const bh = Math.max(y1 - y0, 36);
+      const sTarget = Math.max(bw / (size.w * 0.45), bh / (size.h * 0.40));
+      const sMax = Math.max(sheet.w / size.w, sheet.h / size.h) * 1.05;
+      const s = Math.min(Math.max(0.08, sTarget), sMax);
+      return {
+        s,
+        x: (x0 + x1) / 2 - (size.w * s) / 2,
+        y: (y0 + y1) / 2 - (size.h * s) / 2,
+      };
     },
     [size.w, size.h, sheet.w, sheet.h],
   );
@@ -85,6 +115,10 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
         animRef.current = null;
       }
 
+      if (!isFinite(target.s) || target.s <= 0 || !isFinite(target.x) || !isFinite(target.y)) {
+        return;
+      }
+
       const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
       if (reduce || ms <= 0) {
         viewRef.current = target;
@@ -93,6 +127,10 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
       }
 
       const from = { ...viewRef.current };
+      if (!isFinite(from.s) || from.s <= 0) from.s = 1;
+      if (!isFinite(from.x)) from.x = 0;
+      if (!isFinite(from.y)) from.y = 0;
+
       const t0 = performance.now();
 
       const tick = (now: number) => {
@@ -112,9 +150,9 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
         const cy = cy0 + (cy1 - cy0) * ease;
 
         const nextView: View = {
-          s,
-          x: cx - (size.w * s) / 2,
-          y: cy - (size.h * s) / 2,
+          s: isFinite(s) && s > 0 ? s : target.s,
+          x: isFinite(cx) ? cx - (size.w * s) / 2 : target.x,
+          y: isFinite(cy) ? cy - (size.h * s) / 2 : target.y,
         };
 
         viewRef.current = nextView;
@@ -301,16 +339,20 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
 
         {/* Interactive Element Tags & Evidence Highlights */}
         {marks.map((m) => {
-          const bw = Math.max(m.box[2] - m.box[0], 10);
-          const bh = Math.max(m.box[3] - m.box[1], 10);
+          const x0 = isFinite(m.box[0]) ? m.box[0] : 0;
+          const y0 = isFinite(m.box[1]) ? m.box[1] : 0;
+          const x1 = isFinite(m.box[2]) ? m.box[2] : 50;
+          const y1 = isFinite(m.box[3]) ? m.box[3] : 30;
+          const bw = Math.max(x1 - x0, 10);
+          const bh = Math.max(y1 - y0, 10);
           const pillText = m.tag ? `${m.tag}${m.label ? ` • ${m.label}` : ""}` : m.label;
           const pillW = pillText ? Math.max(48, pillText.length * 6.2 + 14) : 0;
 
           // Clamp badge vertically: if box is near top edge, place badge below the box
-          const pinBelow = m.box[1] < 22;
-          const pinY = pinBelow ? m.box[3] + 16 : m.box[1] - 4;
+          const pinBelow = y0 < 22;
+          const pinY = pinBelow ? y1 + 16 : y0 - 4;
           // Clamp badge horizontally: ensure it never renders outside the sheet width
-          const pinX = Math.max(4, Math.min(sheet.w - pillW - 4, m.box[0]));
+          const pinX = Math.max(4, Math.min(sheet.w - pillW - 4, x0));
 
           return (
             <g
@@ -324,8 +366,8 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
             >
               {/* Highlight bounding box */}
               <rect
-                x={m.box[0]}
-                y={m.box[1]}
+                x={x0}
+                y={y0}
                 width={bw}
                 height={bh}
                 rx={2}

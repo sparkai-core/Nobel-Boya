@@ -15,7 +15,7 @@ import type { Check } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
-import { t } from "../lib/i18n";
+import { getCheckDetail, getCheckTitle, t } from "../lib/i18n";
 import { SourceCard } from "../components/LineInspector";
 import { SeverityTag } from "../components/ui";
 
@@ -95,7 +95,7 @@ export function ChecksPage() {
                         <SeverityTag severity={c.severity} kind={c.kind} compact />
                         <span className="check-row-bldg">{buildingById.get(c.building)?.short}</span>
                       </div>
-                      <span className="check-row-title">{c.title}</span>
+                      <span className="check-row-title">{getCheckTitle(c.id, c.title, lang)}</span>
                       <div className="check-row-meta">
                         <span className="check-row-id">{c.id}</span>
                         {fixes[c.id] ? <span className="check-applied-tag">{t("fixed", lang)}</span> : null}
@@ -122,8 +122,8 @@ export function ChecksPage() {
             <span className="kicker-id font-mono">{check.id}</span>
           </div>
 
-          <h2 className="check-title">{check.title}</h2>
-          <p className="check-text">{check.detail}</p>
+          <h2 className="check-title">{getCheckTitle(check.id, check.title, lang)}</h2>
+          <p className="check-text">{getCheckDetail(check.id, check.detail, lang)}</p>
 
           {/* DUAL COMPARISON CARD (For BOTH Conflicts AND Matching checks) */}
           <div className={`audit-comparison-card ${isAgreement ? "card-matching" : "card-conflict"}`}>

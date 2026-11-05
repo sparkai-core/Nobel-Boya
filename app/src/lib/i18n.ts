@@ -211,6 +211,101 @@ export const I18N = {
   standardLibraryRate: { en: "Standard Rate Library", az: "Standart Qiymət Bazası" },
 } as const;
 
+export const CHECK_AZ: Record<string, { title: string; detail: string }> = {
+  "C-01": {
+    title: "Şr-2 bağlarında 400 kq artıq hesablama",
+    detail: "Şr-2 spesifikasiyasının hər sətrində cəmi 404.40 kq çap olunub, lakin 4 × 51.10 kq və 8 × 25.55 kq hər ikisi 204.40 kq verir. Spesifikasiyanın 808.80 kq cəmi 408.80 kq olmalıdır. Əvvəlki vərəqdə Şr-1 eyni tərtibatdan istifadə edir və düzgün toplanır.",
+  },
+  "C-02": {
+    title: "Konstruksiya və memarlıq arasında anbar döşəmə sahəsi fərqi",
+    detail: "Konstruksiya spesifikasiyası döşəmə tavasını 1,109.10 m² (150 mm-də 166.37 m³) ölçür. Memarlıq döşəmə tərtibatı isə 1,122 m² otaq sahəsindən istifadə edir ki, bu da 168.3 m³ tava və 561 m³ karbonat verir. Smeta betonu konstruksiya vərəqindən, döşəmə örtüyünü isə memarlıq vərəqindən götürür.",
+  },
+  "C-03": {
+    title: "İnzibati bina döşəmə tavası konstruksiyada 100 mm, memarlıqda 150 mm",
+    detail: "KS-49 konstruksiya vərəqində 18.1 m³ B15 betonu ilə 100 mm qalınlıqlı tava göstərilir. Memarlıq otaq tərtibatı cədvəlində isə hər növ döşəmə altında 150 mm dəmir-beton tava qeyd olunub: 10.84 + 12.43 + 2.23 = 25.50 m³. Layihəçi təsdiq edənə qədər smetada konstruktiv dəyər əsas götürülür.",
+  },
+  "C-04": {
+    title: "MR-2 tirinin həcmi yuxarı yuvarlaqlaşdırılıb",
+    detail: "Bir MR-2 tiri 0.84 m³-dir və cəmi 6 ədəddir, bu da 5.04 m³ edir. Spesifikasiyada isə 5.1 m³ çap edilib.",
+  },
+  "C-05": {
+    title: "Elektrik sayğacının sayı göstərilməyib",
+    detail: "Anbarın elektrik spesifikasiyasının 4-cü sətrində 380 V, 3 × 25 A sayğac qeyd olunub, lakin say xanası boş buraxılıb. Dəqiq say təqdim edilənə qədər smetaya daxil edilmir.",
+  },
+  "C-06": {
+    title: "Torpaqlama materiallarının çəkiləri uzunluqlarına uyğun gəlmir",
+    detail: "40 × 4 mm zolağın xüsusi çəkisi 1.256 kq/m təşkil edir. Sətir 14 (25 m, 32 kq) uyğundur, lakin sətir 16-da 20 m və 15 kq yazılıb (halbuki 20 m = 25.1 kq olmalıdır). Sətir 15-də Ø16 dairəvi polad üçün 3 m-ə 36 kq yazılıb (1.58 kq/m ilə 4.7 kq olmalıdır). Smeta torpaqlamanı uzunluq üzrə ölçür.",
+  },
+  "C-07": {
+    title: "İnzibati binanın üç elektrik vərəqində başlıq səhvi",
+    detail: "MEP-42 üzrə çertyoj siyahısında 2, 4 və 5-ci vərəqlər ümumi qeydlər, işıqlandırma planı və güc/torpaqlama planı kimi göstərilib. Əsas başlıqlarında isə CCTV və rabitə planı yazılıb. Reyestrdə siyahıdakı düzgün adlar istifadə olunur.",
+  },
+  "C-08": {
+    title: "Anbar havalandırma vərəqləri inzibati bina kimi adlandırılıb",
+    detail: "10-dan 14-dək olan vərəqlər anbar dəstinə aiddir (MEP-8 üzlüyü 'ANBAR BİNASININ İŞÇİ LAYİHƏSİ' adlanır) və 48 m-lik anbarı əks etdirir, lakin başlıqlarında 'İnzibati bina' yazılıb. Reyestr onları anbar bölməsində təsnif edir.",
+  },
+  "C-09": {
+    title: "Fasad örtüyü sahəsi divar hörgüsündən böyükdür",
+    detail: "Dörd fasad üzrə 1,245.0 m² suvaq və boya göstərilib. Ümumi qeydlərdə isə 400 mm mişar daşı divarları 787.4 m² ölçülür. Fasad sahəsinin frontonları və +7.00 səviyyəsindən yuxarı zolağı əhatə edib-etmədiyi dəqiqləşdirilməlidir.",
+  },
+  "A-01": {
+    title: "Sütunların sayı bünövrə başmaqlarının sayına tam uyğundur",
+    detail: "Ms-1-dən Ms-4-dək sütunların cəmi 21 + 4 + 4 + 2 = 31 ədəddir ki, bu da 31 ədəd MB-1 bünövrə başmağına tam bərabərdir.",
+  },
+  "A-02": {
+    title: "Planda pəncərələrin sayı spesifikasiya ilə tam uyğundur",
+    detail: "Tərtibat planında 21 ədəd P-1 pəncərəsi (uzun tərəflərdə 8 + 5, frontonlarda 4 + 4) və 3 ədəd Q-1 qapısı göstərilir. Qapı və pəncərə cədvəlində də eynilə 21 və 3 qeyd edilib.",
+  },
+  "A-03": {
+    title: "F-1 fermasının spesifikasiya cəmi tam düzgündür",
+    detail: "On altı profil sətri cəmi 828.26 kq və səkkiz lövhə sətri cəmi 253.36 kq təşkil edir, spesifikasiyada yazıldığı kimidir.",
+  },
+  "A-04": {
+    title: "Otaq sahələri, döşəmə tərtibatı və yekun cəm tam uyğundur",
+    detail: "Yeddi otağın sahələri cəmi 170.1 m² təşkil edir, bu da otaq cədvəlindəki və ümumi qeydlərdəki cəmlə tam eynidir. Otaqlar 1 + 5 = 72.32 m², otaqlar 2 + 3 + 4 = 82.88 m² və otaqlar 6 + 7 = 14.9 m² olmaqla döşəmə tərtibatı ilə üst-üstə düşür.",
+  },
+  "A-05": {
+    title: "Suaxıdan borular memarlıq və konstruksiya arasında tam uyğundur",
+    detail: "Həm dam planında, həm də taxta dam spesifikasiyasında 21.8 m Ø100 suaxıdan boru və 6 ədəd suqəbuledici qıf göstərilib.",
+  },
+  "A-06": {
+    title: "Sahə layları öz sahələri və qalınlıqları ilə tam mütənasibdir",
+    detail: "Qırmadaş sahəsi 8,485.3 m² = qazon 2,532.3 + asfalt 5,549.0 + tamet 404.0. Bütün həcmlər sahə × lay qalınlığı düsturuna bərabərdir: qırmadaş 200 mm, iri dənəli asfalt 60 mm, xırda dənəli asfalt 40 mm, karbonat 100 mm, bitki torpağı 300 mm, sement-qum qatı 100 mm.",
+  },
+  "A-07": {
+    title: "Mişar daşı hörgüsü ümumi qeydlər və divar planı arasında tam eynidir",
+    detail: "Xarici mişar daşı 187.73 m², 200 mm arakəsmələr 149.27 m² və 50 mm arakəsmələr 13.7 m² həm ümumi qeydlərdə, həm də divar növləri cədvəlində tam eyni göstərilib.",
+  },
+};
+
+export const RATE_GROUP_AZ: Record<string, string> = {
+  Concrete: "Beton və Dəmir-Beton İşləri",
+  Rebar: "Armatur və Polad Təchizatı",
+  Formwork: "Qəlib və Dayaq İşləri",
+  Earthworks: "Torpaq və Qazıntı İşləri",
+  Masonry: "Mişar Daşı və Hörgü İşləri",
+  Finishes: "Daxili və Xarici Tərtibat",
+  Roofing: "Dam və İzolyasiya İşləri",
+  Metals: "Metal Konstruksiyalar və Fermalar",
+  Services: "Mühəndis Kommunikasiya Sistemləri",
+  Site: "Abadlıq və Sahə Yolları",
+};
+
+export function getCheckTitle(checkId: string, defaultTitle: string, lang: Language): string {
+  if (lang === "az" && CHECK_AZ[checkId]) return CHECK_AZ[checkId].title;
+  return defaultTitle;
+}
+
+export function getCheckDetail(checkId: string, defaultDetail: string, lang: Language): string {
+  if (lang === "az" && CHECK_AZ[checkId]) return CHECK_AZ[checkId].detail;
+  return defaultDetail;
+}
+
+export function getRateGroup(group: string, lang: Language): string {
+  if (lang === "az" && RATE_GROUP_AZ[group]) return RATE_GROUP_AZ[group];
+  return group;
+}
+
 export function t(key: keyof typeof I18N, lang: Language): string {
   const entry = I18N[key];
   if (!entry) return key;

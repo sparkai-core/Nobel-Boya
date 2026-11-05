@@ -140,16 +140,16 @@ export function Logo({ size = 28 }: { size?: number }) {
       className="logo"
       aria-label="Storm Takeoff Logo"
     >
-      <rect x="2" y="2" width="28" height="28" rx="8" fill="#18181B" stroke="#27272A" strokeWidth="1" />
-      <path d="M6 16H26M16 6V26" stroke="#3F3F46" strokeWidth="0.8" strokeDasharray="2 2" />
+      <rect x="2" y="2" width="28" height="28" rx="8" fill="#0F172A" stroke="#1E293B" strokeWidth="1" />
+      <path d="M6 16H26M16 6V26" stroke="#334155" strokeWidth="0.8" strokeDasharray="2 2" />
       <path
         d="M18 5L9 17H16L13 27L23 15H16L20 5H18Z"
-        fill="#B45309"
-        stroke="#F59E0B"
+        fill="#2563EB"
+        stroke="#60A5FA"
         strokeWidth="1.2"
         strokeLinejoin="round"
       />
-      <circle cx="16" cy="16" r="1.5" fill="#FAF9F6" />
+      <circle cx="16" cy="16" r="1.5" fill="#FFFFFF" />
     </svg>
   );
 }
