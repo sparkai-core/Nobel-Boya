@@ -58,6 +58,8 @@ The app is a static site. `render.yaml` holds the settings below.
 | Service type | Static Site |
 | Root directory | empty (repository root) |
 | Build command | `cd app && npm ci --include=dev && npm run build` |
+
+The root `npm run build` installs the app dependencies first, including the TypeScript and Vite packages. A dashboard command of `yarn install; yarn build` uses that script.
 | Publish directory | `app/dist` |
 | Environment variable | `NODE_VERSION` = `22` |
 
