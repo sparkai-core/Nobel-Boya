@@ -1,15 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { ChevronLeft, ChevronRight, Search } from "lucide-react";
-import { buildingById, data, DISCIPLINES, docByCode, evidenceBySheet, itemById, sheetById, sheetImage, sheetKind, type SheetKind } from "../data";
+import { buildingById, data, docByCode, evidenceBySheet, itemById, sheetById, sheetImage, sheetKind, type SheetKind, P } from "../data";
 import type { Box } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtQty, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
+import { buildingName, buildingShort, checkTitle, disciplineName, projectName, sheetTitle } from "../lib/loc";
 import { SheetViewer, type ViewerHandle, type ViewerMark } from "../components/SheetViewer";
 import { MethodTag, SeverityTag } from "../components/ui";
+import { useT } from "../lib/i18n";
 
 export function DrawingsPage() {
+  const t = useT();
   const { sheetId } = useParams();
   const [params, setParams] = useSearchParams();
   const navigate = useNavigate();
@@ -37,7 +40,7 @@ export function DrawingsPage() {
         box: src.box,
         tone: "blue" as const,
         active: itemId === activeItem && srcIndex === activeSrc,
-        label: src.role ? `${roleLabel(src.role)} ${src.value ?? ""}`.trim() : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`,
+        label: src.role ? `${t(roleLabel(src.role))} ${src.value ?? ""}`.trim() : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`,
       };
     });
     if (activeCheck) {
@@ -47,7 +50,7 @@ export function DrawingsPage() {
       });
     }
     return list.map((m) => (m.active ? { ...m, tone: "red" as const } : m));
-  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang]);
+  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang, t]);
 
   const focus: Box | null = useMemo(() => marks.find((m) => m.active)?.box ?? null, [marks]);
 
@@ -76,7 +79,7 @@ export function DrawingsPage() {
     listRef.current?.querySelector(`[data-sheet="${sheet.id}"]`)?.scrollIntoView({ block: "nearest" });
   }, [sheet.id]);
 
-  const open = (id: string) => navigate(`/drawings/${id}`);
+  const open = (id: string) => navigate(`${P}/drawings/${id}`);
   const focusItem = (itemId: string, srcIndex: number) => {
     const next = new URLSearchParams();
     next.set("item", itemId);
@@ -92,18 +95,18 @@ export function DrawingsPage() {
     <div className="drawings">
       <aside className="register">
         <div className="register-head">
-          <h1>Drawings</h1>
+          <h1>{t("Drawings")}</h1>
           <div className="reg-project">
-            <strong>{data.project.nameEn}</strong>
-            <span>4 PDF files, 205 sheets, issue {data.project.issued}</span>
+            <strong>{projectName(lang)}</strong>
+            <span>{t("4 PDF files, 205 sheets, issue {d}", { d: data.project.issued })}</span>
           </div>
           <div className="search">
             <Search size={15} aria-hidden="true" />
-            <input className="input" placeholder="Search sheets" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search sheets" />
+            <input className="input" placeholder={t("Search sheets")} value={query} onChange={(e) => setQuery(e.target.value)} aria-label={t("Search sheets")} />
           </div>
           <label className="check-toggle">
             <input type="checkbox" checked={onlyEvidence} onChange={(e) => setOnlyEvidence(e.target.checked)} />
-            Only sheets with quantities
+            {t("Only sheets with quantities")}
           </label>
         </div>
         <div className="register-list scroll" ref={listRef}>
@@ -111,7 +114,7 @@ export function DrawingsPage() {
             sec.groups.length ? (
               <section key={sec.kind} className="reg-section">
                 <h2 className="reg-section-title">
-                  <span>{sec.title}</span>
+                  <span>{t(sec.title)}</span>
                   <small className="num-inline">{sec.groups.reduce((a, g) => a + g.sheets.length, 0)}</small>
                 </h2>
                 <ul>
@@ -122,9 +125,9 @@ export function DrawingsPage() {
                         <button type="button" data-sheet={s.id} className={`reg-sheet${s.id === sheet.id ? " active" : ""}`} onClick={() => open(s.id)}>
                           <img src={sheetImage(s.id, true)} alt="" loading="lazy" />
                           <span className="reg-text">
-                            <span className="reg-title">{s.titleEn}</span>
+                            <span className="reg-title">{sheetTitle(s, lang)}</span>
                             <span className="reg-meta">
-                              {s.id}, {buildingById.get(s.building)?.short}, {DISCIPLINES[s.discipline]?.toLowerCase()}
+                              {s.id}, {buildingShort(s.building, lang)}, {disciplineName(s.discipline, lang).toLowerCase()}
                             </span>
                           </span>
                           {n ? <span className="reg-count num-inline">{n}</span> : null}
@@ -145,25 +148,25 @@ export function DrawingsPage() {
             <div className="sheet-id">
               <strong>{sheet.id}</strong>
               <span className="muted">
-                {doc.file}, page {sheet.page}
+                {t("{f}, page {p}", { f: doc.file, p: sheet.page })}
               </span>
             </div>
             <div className="sheet-name" lang="az">
               {sheet.title}
             </div>
             <div className="sheet-sub muted">
-              {sheet.titleEn}. {buildingById.get(sheet.building)?.en}, {DISCIPLINES[sheet.discipline]?.toLowerCase()}.{" "}
-              <span className={`layer ${hasText ? "layer-true" : "layer-false"}`}>{hasText ? "Text layer" : "Image only"}</span>
+              {lang === "en" ? `${sheet.titleEn}. ` : ""}{buildingName(sheet.building, lang)}, {disciplineName(sheet.discipline, lang).toLowerCase()}.{" "}
+              <span className={`layer ${hasText ? "layer-true" : "layer-false"}`}>{hasText ? t("Text layer") : t("Image only")}</span>
             </div>
           </div>
           <div className="sheet-nav">
-            <button type="button" className="icon-btn" disabled={idx <= 0} onClick={() => idx > 0 && open(flat[idx - 1]!.id)} aria-label="Previous sheet">
+            <button type="button" className="icon-btn" disabled={idx <= 0} onClick={() => idx > 0 && open(flat[idx - 1]!.id)} aria-label={t("Previous sheet")}>
               <ChevronLeft size={18} />
             </button>
             <span className="num-inline muted">
               {idx + 1} / {flat.length}
             </span>
-            <button type="button" className="icon-btn" disabled={idx >= flat.length - 1} onClick={() => idx < flat.length - 1 && open(flat[idx + 1]!.id)} aria-label="Next sheet">
+            <button type="button" className="icon-btn" disabled={idx >= flat.length - 1} onClick={() => idx < flat.length - 1 && open(flat[idx + 1]!.id)} aria-label={t("Next sheet")}>
               <ChevronRight size={18} />
             </button>
           </div>
@@ -181,10 +184,10 @@ export function DrawingsPage() {
       </section>
 
       <aside className="read-pane scroll">
-        <h2>Read from this sheet</h2>
+        <h2>{t("Read from this sheet")}</h2>
         {!evidence.length ? (
           <p className="muted small read-empty">
-            No quantities are taken from this sheet. {sheet.discipline === "general" ? "It is a cover, title or general sheet." : "Its content is covered by the schedules on other sheets."}
+            {t("No quantities are taken from this sheet.")} {sheet.discipline === "general" ? t("It is a cover, title or general sheet.") : t("Its content is covered by the schedules on other sheets.")}
           </p>
         ) : (
           <ul className="read-list">
@@ -200,22 +203,22 @@ export function DrawingsPage() {
                       <MethodTag method={it.method} compact />
                       <span className="read-code num-inline">{line?.code}</span>
                       <span className="read-qty num-inline">
-                        {src.role ? <span className="muted">{roleLabel(src.role)} </span> : null}
+                        {src.role ? <span className="muted">{t(roleLabel(src.role))} </span> : null}
                         {src.value ?? ""}
                       </span>
                     </span>
                     <span className="read-desc">{lang === "az" ? it.az : it.en}</span>
                     <span className="read-bill muted small">
-                      Bill quantity <span className="num-inline">{fmtQty(it.qty, it.unit)}</span> {unitLabel(it.unit, lang)}
-                      {it.method === "derived" ? ", derived" : ""}
+                      {t("Bill quantity")} <span className="num-inline">{fmtQty(it.qty, it.unit)}</span> {unitLabel(it.unit, lang)}
+                      {it.method === "derived" ? t(", derived") : ""}
                     </span>
                     <span className="read-quote" lang="az">
                       {src.quote}
                     </span>
                   </button>
                   {line ? (
-                    <Link to={`/bill?line=${encodeURIComponent(line.id)}`} className="text-link small read-link">
-                      Line {line.code} in the bill
+                    <Link to={`${P}/bill?line=${encodeURIComponent(line.id)}`} className="text-link small read-link">
+                      {t("Line {c} in the bill", { c: line.code })}
                     </Link>
                   ) : null}
                 </li>
@@ -225,13 +228,13 @@ export function DrawingsPage() {
         )}
         {checkHere.length ? (
           <>
-            <h2 className="read-checks-title">Checks on this sheet</h2>
+            <h2 className="read-checks-title">{t("Checks on this sheet")}</h2>
             <ul className="read-checks">
               {checkHere.map((c) => (
                 <li key={c.id}>
-                  <Link to={`/checks/${c.id}`}>
+                  <Link to={`${P}/checks/${c.id}`}>
                     <SeverityTag severity={c.severity} kind={c.kind} />
-                    <span>{c.title}</span>
+                    <span>{checkTitle(c, lang)}</span>
                   </Link>
                 </li>
               ))}

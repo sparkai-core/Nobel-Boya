@@ -113,12 +113,12 @@ export function Building3D({ className = "", caption = true }: { className?: str
     ro.observe(canvas);
 
     const draw = (now: number) => {
-      let t = reduced ? buildMs : now - start;
+      let t = reduced ? buildMs : Math.max(0, now - start);
       if (t > cycle) {
         start = now;
         t = 0;
       }
-      const placing = Math.min(parts.length - 1, Math.floor(t / step));
+      const placing = Math.max(0, Math.min(parts.length - 1, Math.floor(t / step)));
       const isDone = t >= buildMs;
       const s = parts[placing]!.stage;
       if (s !== lastStage) {
@@ -165,7 +165,7 @@ export function Building3D({ className = "", caption = true }: { className?: str
           if (f.cull && dot(n, view) > 0.02) continue;
           const lit = Math.abs(dot(n, light));
           const shade = Math.min(1.1, (0.62 + 0.38 * lit) * part.tone + glow);
-          const base: [number, number, number] = part.stage === 5 ? [196, 186, 232] : part.stage === 4 ? [120, 96, 190] : [222, 216, 242];
+          const base: [number, number, number] = part.stage === 5 ? [214, 214, 219] : part.stage === 4 ? [128, 128, 136] : [232, 232, 236];
           const [r, g, b] = base.map((c) => Math.min(255, Math.round(c * shade)));
           const proj = pts.map(project);
           polys.push({
@@ -179,7 +179,7 @@ export function Building3D({ className = "", caption = true }: { className?: str
       ctx.clearRect(0, 0, w, h);
       ctx.lineJoin = "round";
       ctx.lineWidth = 0.6;
-      ctx.strokeStyle = `rgba(43,2,102,${(0.22 * fade).toFixed(3)})`;
+      ctx.strokeStyle = `rgba(17,17,20,${(0.2 * fade).toFixed(3)})`;
       for (const poly of polys) {
         ctx.beginPath();
         ctx.moveTo(poly.pts[0]![0], poly.pts[0]![1]);

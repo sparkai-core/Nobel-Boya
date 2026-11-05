@@ -1,6 +1,8 @@
 import { data } from "../data";
 import type { Boq } from "./boq";
 import { fmtMoney, fmtQty, pct, unitLabel } from "./format";
+import { translate } from "./i18n";
+import { buildingName, chainLabel, projectName, projectPlace } from "./loc";
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
@@ -10,6 +12,7 @@ export function printBill(boq: Boq, lang: "az" | "en") {
   if (!win) return false;
   const logo = new URL("./brand/nobel-logo.png", window.location.href).href;
   const p = data.project;
+  const tr = (s: string) => translate(lang, s);
   const rows = boq.buildings
     .map((b) => {
       const sections = b.sections
@@ -24,13 +27,13 @@ export function printBill(boq: Boq, lang: "az" | "en") {
               .join(""),
         )
         .join("");
-      return `<tr class="bld"><td>${b.code}</td><td colspan="4">${esc(lang === "az" ? b.az : b.en)}</td><td class="n">${fmtMoney(b.total)}</td></tr>${sections}`;
+      return `<tr class="bld"><td>${b.code}</td><td colspan="4">${esc(buildingName(b.id, lang))}</td><td class="n">${fmtMoney(b.total)}</td></tr>${sections}`;
     })
     .join("");
   const chain = boq.chain
-    .map((c) => `<tr><td>${esc(c.label)}${c.rate != null ? ` ${pct(c.rate, 0)}` : ""}</td><td class="n">${fmtMoney(c.amount)}</td></tr>`)
+    .map((c) => `<tr><td>${esc(chainLabel(c.key, c.label, lang))}${c.rate != null ? ` ${pct(c.rate, 0)}` : ""}</td><td class="n">${fmtMoney(c.amount)}</td></tr>`)
     .join("");
-  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Qobu bill of quantities, Nobel BOQ</title>
+  win.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>${esc(tr("Bill of quantities"))}, Nobel BOQ</title>
 <style>
 @page{size:A4;margin:14mm}
 body{font-family:"Segoe UI",Arial,sans-serif;color:#111114;font-size:10px;margin:0}
@@ -50,10 +53,10 @@ thead{display:table-header-group}
 tr{page-break-inside:avoid}
 .note{color:#6e6e78;margin-top:12px}
 </style></head><body>
-<header><div><h1>${esc(p.nameEn)}</h1><div class="meta">${esc(p.name)}<br>${esc(p.placeEn)}<br>Client: ${esc(p.client)}. Designer: ${esc(p.designer)}. Issue ${esc(p.issued)}.</div></div><img src="${logo}" alt="Nobel"></header>
-<table class="summary"><tbody>${chain}<tr><td>Total including VAT, AZN</td><td class="n">${fmtMoney(boq.total)}</td></tr></tbody></table>
-<table><thead><tr><th>Code</th><th>Description</th><th>Unit</th><th class="n">Quantity</th><th class="n">Rate</th><th class="n">Amount</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="note">Quantities read from the drawing package; every line keeps its sheet reference in the Excel export. Rates are a sample AZN library, not part of the package. Prepared with Nobel BOQ.</p>
+<header><div><h1>${esc(projectName(lang))}</h1><div class="meta">${esc(tr("Bill of quantities"))}<br>${esc(projectPlace(lang))}<br>${esc(tr("Client"))}: ${esc(p.client)}. ${esc(tr("Designer"))}: ${esc(p.designer)}. ${esc(tr("Issue"))}: ${esc(p.issued)}.</div></div><img src="${logo}" alt="Nobel"></header>
+<table class="summary"><tbody>${chain}<tr><td>${esc(tr("Total including VAT, AZN"))}</td><td class="n">${fmtMoney(boq.total)}</td></tr></tbody></table>
+<table><thead><tr><th>${tr("Code")}</th><th>${tr("Description")}</th><th>${tr("Unit")}</th><th class="n">${tr("Quantity")}</th><th class="n">${tr("Rate")}</th><th class="n">${tr("Amount")}</th></tr></thead><tbody>${rows}</tbody></table>
+<p class="note">${esc(tr("Quantities come from the four PDF files of the Qobu package. Rates are a sample AZN library, not part of the package."))} Nobel BOQ.</p>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
 </body></html>`);
   win.document.close();

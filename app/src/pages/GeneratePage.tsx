@@ -1,11 +1,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check } from "lucide-react";
-import { data, evidenceBySheet, itemById, sheetImage } from "../data";
+import { data, evidenceBySheet, itemById, sheetImage, P } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
+import { docName, projectName } from "../lib/loc";
 import { Logo } from "../components/ui";
+import { useT } from "../lib/i18n";
 
 const STAGES = [
   { key: "read", label: "Reading the package", end: 1100 },
@@ -19,8 +21,10 @@ const STAGES = [
 const TOTAL_MS = STAGES[STAGES.length - 1]!.end;
 
 export function GeneratePage() {
+  const tr = useT();
   const navigate = useNavigate();
   const setGenerated = useApp((s) => s.setGenerated);
+  const lang = useApp((s) => s.lang);
   const boq = useBoq();
   const reduce = useMemo(() => window.matchMedia("(prefers-reduced-motion: reduce)").matches, []);
   const [t, setT] = useState(reduce ? TOTAL_MS : 0);
@@ -51,6 +55,7 @@ export function GeneratePage() {
   };
 
   const done = t >= TOTAL_MS;
+  const percent = Math.round((t / TOTAL_MS) * 100);
   const stageIndex = STAGES.findIndex((s) => t < s.end);
   const current = stageIndex === -1 ? STAGES.length : stageIndex;
 
@@ -68,14 +73,16 @@ export function GeneratePage() {
 
   const sev = data.checks.reduce<Record<string, number>>((a, c) => ({ ...a, [c.severity]: (a[c.severity] ?? 0) + 1 }), {});
   const details = [
-    `${Math.round(ease(progress(0)) * 205)} of 205 sheets in 4 files`,
-    `${data.buildings.length} structures, ${new Set(data.sheets.map((s) => s.discipline)).size - 1} disciplines`,
-    `${Math.round(ease(progress(2)) * data.items.length)} quantities from ${Math.round(ease(progress(2)) * scheduleSheets)} sheets`,
+    tr("{n} of 205 sheets in 4 files", { n: Math.round(ease(progress(0)) * 205) }),
+    tr("{b} structures, {d} disciplines", { b: data.buildings.length, d: new Set(data.sheets.map((s) => s.discipline)).size - 1 }),
+    tr("{q} quantities from {s} sheets", { q: Math.round(ease(progress(2)) * data.items.length), s: Math.round(ease(progress(2)) * scheduleSheets) }),
     progress(3) < 1
-      ? `${Math.round(ease(progress(3)) * sourceCount)} of ${sourceCount} values marked`
-      : `${sourceCount} values marked, ${textSources} on the text layer, ${sourceCount - textSources} by hand`,
-    progress(4) > 0 ? `${sev.error ?? 0} error, ${sev.warn ?? 0} conflicts, ${sev.info ?? 0} notes, ${Math.round(ease(progress(4)) * (sev.ok ?? 0))} agreements` : "Arithmetic, counts and cross-discipline values",
-    `${boq.lines.length} bill lines, ${fmtMoney(ease(progress(5)) * boq.total)} AZN`,
+      ? tr("{n} of {t} values marked", { n: Math.round(ease(progress(3)) * sourceCount), t: sourceCount })
+      : tr("{t} values marked, {x} on the text layer, {h} by hand", { t: sourceCount, x: textSources, h: sourceCount - textSources }),
+    progress(4) > 0
+      ? tr("{e} error, {w} conflicts, {i} notes, {o} agreements", { e: sev.error ?? 0, w: sev.warn ?? 0, i: sev.info ?? 0, o: Math.round(ease(progress(4)) * (sev.ok ?? 0)) })
+      : tr("Arithmetic, counts and cross-discipline values"),
+    tr("{l} bill lines, {a} AZN", { l: boq.lines.length, a: fmtMoney(ease(progress(5)) * boq.total) }),
   ];
 
   let tileIndex = 0;
@@ -87,20 +94,32 @@ export function GeneratePage() {
     <div className="generate">
       <header className="gen-top">
         <span className="brand-inline">
-          <Logo />
-          <strong>Nobel BOQ</strong>
+          <Logo size={30} />
+          <span className="brand-words">
+            <strong>Nobel BOQ</strong>
+            <small>{tr("Quantity takeoff platform")}</small>
+          </span>
         </span>
         {!done ? (
           <button type="button" className="btn btn-ghost" onClick={skip}>
-            Skip
+            {tr("Skip")}
           </button>
         ) : null}
       </header>
 
       <div className="gen-body">
         <section className="gen-side">
-          <h1>{done ? "The bill is ready" : "Generating the bill"}</h1>
-          <p className="lead">{data.project.nameEn}</p>
+          <p className="gen-project">{projectName(lang)}</p>
+          <h1>{done ? tr("The bill is ready") : tr("Generating the bill")}</h1>
+          <div className="gen-progress" aria-label={tr("{n}% complete", { n: percent })}>
+            <div className="gen-progress-row">
+              <span className="gen-percent num-inline">{percent}%</span>
+              <span className="muted small">{done ? tr("All stages complete") : tr(STAGES[Math.min(current, STAGES.length - 1)]!.label)}</span>
+            </div>
+            <div className="gen-bar" aria-hidden="true">
+              <span style={{ width: `${percent}%` }} />
+            </div>
+          </div>
           <ol className="gen-stages">
             {STAGES.map((s, i) => {
               const state = i < current ? "done" : i === current ? "running" : "pending";
@@ -110,7 +129,7 @@ export function GeneratePage() {
                     {state === "done" ? <Check size={13} strokeWidth={3} /> : state === "running" ? <span className="spinner" /> : null}
                   </span>
                   <div>
-                    <div className="gen-label">{s.label}</div>
+                    <div className="gen-label">{tr(s.label)}</div>
                     <div className="gen-detail num-inline">{state === "pending" ? "" : details[i]}</div>
                   </div>
                 </li>
@@ -119,23 +138,24 @@ export function GeneratePage() {
           </ol>
           <div className={`gen-result${done ? " show" : ""}`}>
             <div className="gen-total">
-              <span className="muted">Total including VAT</span>
+              <span className="muted">{tr("Total including VAT")}</span>
               <strong className="num">{fmtMoney(boq.total)} AZN</strong>
             </div>
-            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate("/overview")} disabled={!done}>
-              Open the bill
+            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`${P}/bill`)} disabled={!done}>
+              {tr("Open the bill")}
             </button>
           </div>
         </section>
 
-        <section className={`mosaic${t >= STAGES[0].end ? " classified" : ""}`} aria-label="Sheets in the package">
+        <div className="gen-main">
+        <section className={`mosaic card${t >= STAGES[0].end ? " classified" : ""}`} aria-label={tr("Sheets in the package")}>
           {data.documents.map((d) => {
             const sheets = data.sheets.filter((s) => s.doc === d.code);
             return (
               <div key={d.code} className="mosaic-doc">
                 <div className="mosaic-head">
-                  <strong>{d.en}</strong>
-                  <span className="muted num-inline">{sheets.length} sheets</span>
+                  <strong>{docName(d.code, lang)}</strong>
+                  <span className="muted num-inline">{tr("{n} sheets", { n: sheets.length })}</span>
                 </div>
                 <div className="mosaic-grid">
                   {sheets.map((s) => {
@@ -164,6 +184,7 @@ export function GeneratePage() {
             );
           })}
         </section>
+        </div>
       </div>
     </div>
   );

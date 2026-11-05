@@ -7,13 +7,16 @@ import { useBoq, type Line } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
 import { useMedia } from "../lib/useMedia";
+import { buildingName, buildingShort } from "../lib/loc";
 import { PageHead } from "../components/Shell";
 import { LineInspector } from "../components/LineInspector";
 import { Drawer, Empty, MethodTag, Segmented } from "../components/ui";
+import { useT } from "../lib/i18n";
 
 type Filter = "all" | Method | "findings" | "adjusted";
 
 export function BillPage() {
+  const t = useT();
   const boq = useBoq();
   const lang = useApp((s) => s.lang);
   const [params, setParams] = useSearchParams();
@@ -82,11 +85,11 @@ export function BillPage() {
   return (
     <div className={`page page-bill${selected ? " with-drawer" : ""}`}>
       <PageHead
-        title="Bill of quantities"
+        title={t("Bill of quantities")}
         lead={
           <>
-            {visible.length === boq.lines.length ? `${boq.lines.length} lines` : `${visible.length} of ${boq.lines.length} lines`}, measured works{" "}
-            <span className="num-inline">{fmtMoney(shownTotal)}</span> AZN before mark-ups. Select a line to see the sheet it was read from.
+            {visible.length === boq.lines.length ? t("{n} lines", { n: boq.lines.length }) : t("{v} of {n} lines", { v: visible.length, n: boq.lines.length })}, {t("measured works")}{" "}
+            <span className="num-inline">{fmtMoney(shownTotal)}</span> {t("AZN before mark-ups. Select a line to see the sheet it was read from.")}
           </>
         }
       />
@@ -96,38 +99,38 @@ export function BillPage() {
           <Search size={15} aria-hidden="true" />
           <input
             className="input"
-            placeholder="Search description, sheet or printed text"
+            placeholder={t("Search description, sheet or printed text")}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            aria-label="Search the bill"
+            aria-label={t("Search the bill")}
           />
         </div>
-        <select className="input select" value={building} onChange={(e) => setParam("b", e.target.value === "all" ? null : e.target.value)} aria-label="Structure">
-          <option value="all">All structures</option>
+        <select className="input select" value={building} onChange={(e) => setParam("b", e.target.value === "all" ? null : e.target.value)} aria-label={t("Structure")}>
+          <option value="all">{t("All structures")}</option>
           {data.buildings.map((b) => (
             <option key={b.id} value={b.id}>
-              {b.short}
+              {buildingShort(b.id, lang)}
             </option>
           ))}
         </select>
         <Segmented<Filter>
-          label="Filter lines"
+          label={t("Filter lines")}
           value={filter}
           onChange={setFilter}
           options={[
-            { value: "all", label: "All", count: counts.all },
-            { value: "schedule", label: "Printed", count: counts.schedule },
-            { value: "derived", label: "Derived", count: counts.derived },
-            { value: "image", label: "From image", count: counts.image },
-            { value: "findings", label: "With findings", count: counts.findings },
-            ...(counts.adjusted ? [{ value: "adjusted" as Filter, label: "Adjusted", count: counts.adjusted }] : []),
+            { value: "all", label: t("All"), count: counts.all },
+            { value: "schedule", label: t("Printed"), count: counts.schedule },
+            { value: "derived", label: t("Derived"), count: counts.derived },
+            { value: "image", label: t("From image"), count: counts.image },
+            { value: "findings", label: t("With findings"), count: counts.findings },
+            ...(counts.adjusted ? [{ value: "adjusted" as Filter, label: t("Adjusted"), count: counts.adjusted }] : []),
           ]}
         />
       </div>
 
       <div className="bill-table scroll" ref={tableRef}>
         {!visible.length ? (
-          <Empty title="No lines match">Clear the search or choose another filter.</Empty>
+          <Empty title={t("No lines match")}>{t("Clear the search or choose another filter.")}</Empty>
         ) : (
           <table className={`boq${compact ? " compact" : ""}`}>
             <colgroup>
@@ -141,21 +144,21 @@ export function BillPage() {
             </colgroup>
             <thead>
               <tr>
-                <th scope="col">Code</th>
-                <th scope="col">Description</th>
-                {compact ? null : <th scope="col">Unit</th>}
+                <th scope="col">{t("Code")}</th>
+                <th scope="col">{t("Description")}</th>
+                {compact ? null : <th scope="col">{t("Unit")}</th>}
                 <th scope="col" className="num">
-                  Quantity
+                  {t("Quantity")}
                 </th>
                 {compact ? null : (
                   <th scope="col" className="num">
-                    Rate
+                    {t("Rate")}
                   </th>
                 )}
                 <th scope="col" className="num">
-                  Amount
+                  {t("Amount")}
                 </th>
-                {compact ? null : <th scope="col">Source</th>}
+                {compact ? null : <th scope="col">{t("Source")}</th>}
               </tr>
             </thead>
             <tbody>
@@ -166,7 +169,7 @@ export function BillPage() {
                   <Fragment key={b.id}>
                     <tr className="row-building">
                       <td className="num">{b.code}</td>
-                      <td colSpan={span}>{lang === "az" ? b.az : b.en}</td>
+                      <td colSpan={span}>{buildingName(b.id, lang)}</td>
                       <td className="num">{fmtMoney(b.total)}</td>
                       {compact ? null : <td />}
                     </tr>
@@ -198,8 +201,8 @@ export function BillPage() {
       <Drawer
         open={Boolean(selected)}
         onClose={() => setParam("line", null)}
-        kicker={selected ? `${selected.code}, ${data.buildings.find((b) => b.id === selected.building)?.short}` : null}
-        title={selected ? (data.sections.find((s) => s.id === selected.section)?.en ?? "") : ""}
+        kicker={selected ? `${selected.code}, ${buildingShort(selected.building, lang)}` : null}
+        title={selected ? ((s) => (s ? (lang === "az" ? s.az : s.en) : ""))(data.sections.find((s) => s.id === selected.section)) : ""}
       >
         {selected ? <LineInspector key={selected.id} line={selected} /> : null}
       </Drawer>
@@ -208,6 +211,7 @@ export function BillPage() {
 }
 
 function LineRow({ line, lang, compact, selected, onSelect }: { line: Line; lang: "az" | "en"; compact: boolean; selected: boolean; onSelect: () => void }) {
+  const t = useT();
   const sheets = [...new Set(line.items.flatMap((i) => i.src.map((s) => s.sheet)))];
   const finding = line.checks.find((c) => c.severity === "error") ?? line.checks.find((c) => c.severity === "warn");
   return (
@@ -215,8 +219,8 @@ function LineRow({ line, lang, compact, selected, onSelect }: { line: Line; lang
       <td className="num code">{line.code}</td>
       <td className="desc">
         <span>{lang === "az" ? line.az : line.en}</span>
-        {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? "Error" : "Conflict"}</span> : null}
-        {line.adjusted ? <span className="flag flag-adjusted">{line.adjusted === "fix" ? "Corrected" : "Overridden"}</span> : null}
+        {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? t("Error") : t("Conflict")}</span> : null}
+        {line.adjusted ? <span className="flag flag-adjusted">{line.adjusted === "fix" ? t("Corrected") : t("Overridden")}</span> : null}
       </td>
       {compact ? null : <td className="unit">{unitLabel(line.unit, lang)}</td>}
       <td className="num">

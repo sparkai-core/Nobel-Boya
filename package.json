@@ -1,8 +1,8 @@
 {
-  "name": "storm-takeoff-platform",
+  "name": "nobel-boq",
   "version": "1.0.0",
   "private": true,
-  "description": "Enterprise-grade automated Bill of Quantities (BOQ) takeoff platform for Azerbaijani construction packages with redline evidence verification.",
+  "description": "Nobel BOQ: bill of quantities generated from drawing packages, with every quantity traced to its sheet.",
   "scripts": {
     "dev": "npm --prefix app run dev",
     "build": "npm --prefix app run build",
@@ -11,17 +11,5 @@
     "pipeline:verify": "py -3 tools/verify_boxes.py",
     "pipeline:render": "py -3 tools/render_sheets.py"
   },
-  "keywords": [
-    "boq",
-    "construction-estimating",
-    "takeoff",
-    "quantity-surveying",
-    "azerbaijan",
-    "cad-takeoff",
-    "redline-evidence",
-    "bim"
-  ],
-  "author": "Storm Building MMC",
   "license": "UNLICENSED"
 }
-

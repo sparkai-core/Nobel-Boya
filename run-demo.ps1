@@ -1,4 +1,4 @@
-# One-click startup for Tutulan BOQ Platform Demo
+# One-click startup for Nobel BOQ demo
 param(
     [int]$Port = 5173,
     [switch]$BuildFirst,
@@ -9,7 +9,7 @@ $ErrorActionPreference = "Stop"
 $RepoRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  TUTULAN BOQ PLATFORM - QOBU LOGISTICS COMPLEX DEMO     " -ForegroundColor White
+Write-Host "  NOBEL BOQ - QOBU DEMO" -ForegroundColor White
 Write-Host "==========================================================" -ForegroundColor Cyan
 Write-Host "Root: $RepoRoot" -ForegroundColor Gray
 
@@ -22,11 +22,12 @@ if ($BuildFirst -or (-not (Test-Path "$RepoRoot\app\dist\index.html"))) {
 
 if ($Dev) {
     Write-Host "[2/2] Starting Vite Dev Server on port $Port..." -ForegroundColor Green
-    Start-Job -ScriptBlock { param($p) Start-Sleep 3; Start-Process "http://localhost:$p/#/login" } -ArgumentList $Port | Out-Null
+    Start-Job -ScriptBlock { param($p) Start-Sleep 3; Start-Process "http://localhost:$p/#/" } -ArgumentList $Port | Out-Null
     npx vite --port $Port --open
 } else {
     Write-Host "[2/2] Starting High-Performance Preview Server on port $Port..." -ForegroundColor Green
-    Start-Job -ScriptBlock { param($p) Start-Sleep 2; Start-Process "http://localhost:$p/#/login" } -ArgumentList $Port | Out-Null
+    Start-Job -ScriptBlock { param($p) Start-Sleep 2; Start-Process "http://localhost:$p/#/" } -ArgumentList $Port | Out-Null
     npx vite preview --port $Port
 }
+
 

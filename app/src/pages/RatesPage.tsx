@@ -5,6 +5,8 @@ import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
 import { DEFAULT_MARKUPS, useApp, type Markups } from "../lib/store";
 import { PageHead } from "../components/Shell";
+import { chainLabel, rateDesc, rateGroup } from "../lib/loc";
+import { useT } from "../lib/i18n";
 
 const MARKUP_LABEL: Record<keyof Markups, string> = {
   overheads: "Overheads",
@@ -14,8 +16,10 @@ const MARKUP_LABEL: Record<keyof Markups, string> = {
 };
 
 export function RatesPage() {
+  const t = useT();
   const boq = useBoq();
   const rates = useApp((s) => s.rates);
+  const lang = useApp((s) => s.lang);
   const markups = useApp((s) => s.markups);
   const setRate = useApp((s) => s.setRate);
   const setMarkup = useApp((s) => s.setMarkup);
@@ -46,12 +50,12 @@ export function RatesPage() {
   return (
     <div className="page">
       <PageHead
-        title="Rates and mark-ups"
-        lead="The package has no prices. These are sample AZN rates so the bill can be totalled. Edit any rate and every line that uses it updates. Changes stay in this browser."
+        title={t("Rates and mark-ups")}
+        lead={t("The package has no prices. These are sample AZN rates so the bill can be totalled. Edit any rate and every line that uses it updates. Changes stay in this browser.")}
         actions={
           edited || markupEdited ? (
             <button type="button" className="btn btn-ghost" onClick={resetPricing}>
-              <RotateCcw size={15} /> Reset to sample rates
+              <RotateCcw size={15} /> {t("Reset to sample rates")}
             </button>
           ) : null
         }
@@ -59,15 +63,15 @@ export function RatesPage() {
 
       <section className="panel markups">
         <header className="panel-head">
-          <h2>Mark-ups, in calculation order</h2>
-          <span className="muted small">Each step applies to the running total above it</span>
+          <h2>{t("Mark-ups, in calculation order")}</h2>
+          <span className="muted small">{t("Each step applies to the running total above it")}</span>
         </header>
         <div className="markup-grid">
           {(Object.keys(MARKUP_LABEL) as (keyof Markups)[]).map((k) => {
             const step = boq.chain.find((c) => c.key === k)!;
             return (
               <label key={k} className="markup">
-                <span className="figure-label">{MARKUP_LABEL[k]}</span>
+                <span className="figure-label">{chainLabel(k, MARKUP_LABEL[k], lang)}</span>
                 <span className="markup-input">
                   <PercentInput value={markups[k]} onChange={(v) => setMarkup(k, v)} />
                   <span className="muted">%</span>
@@ -77,7 +81,7 @@ export function RatesPage() {
             );
           })}
           <div className="markup total">
-            <span className="figure-label">Total including VAT</span>
+            <span className="figure-label">{t("Total including VAT")}</span>
             <span className="figure-value num">{fmtMoney(boq.total)}</span>
             <span className="muted small">AZN</span>
           </div>
@@ -88,22 +92,22 @@ export function RatesPage() {
         <table className="boq rates">
           <thead>
             <tr>
-              <th scope="col">Rate</th>
-              <th scope="col">Unit</th>
+              <th scope="col">{t("Rate")}</th>
+              <th scope="col">{t("Unit")}</th>
               <th scope="col" className="num">
-                Lines
+                {t("Lines")}
               </th>
               <th scope="col" className="num">
-                Quantity
+                {t("Quantity")}
               </th>
               <th scope="col" className="num">
-                Sample
+                {t("Sample")}
               </th>
               <th scope="col" className="num">
-                Rate used
+                {t("Rate used")}
               </th>
               <th scope="col" className="num">
-                Amount
+                {t("Amount")}
               </th>
             </tr>
           </thead>
@@ -111,13 +115,13 @@ export function RatesPage() {
             {rows.map(([group, list]) => (
               <Fragment key={group}>
                 <tr className="row-section">
-                  <td colSpan={6}>{group}</td>
+                  <td colSpan={6}>{rateGroup(group, lang)}</td>
                   <td className="num">{fmtMoney(list.reduce((a, r) => a + r.usage.amount, 0))}</td>
                 </tr>
                 {list.map((r) => (
                   <tr key={r.key} className="row-line">
-                    <td className="desc">{r.en}</td>
-                    <td className="unit">{unitLabel(r.unit, "en")}</td>
+                    <td className="desc">{rateDesc(r.key, lang)}</td>
+                    <td className="unit">{unitLabel(r.unit, lang)}</td>
                     <td className="num muted">{r.usage.lines}</td>
                     <td className="num">{fmtQty(r.usage.qty, r.unit)}</td>
                     <td className="num muted">{fmtNum(r.sample)}</td>
@@ -137,6 +141,7 @@ export function RatesPage() {
 }
 
 function RateInput({ value, edited, onChange }: { value: number; edited: boolean; onChange: (v: number) => void }) {
+  const t = useT();
   const [draft, setDraft] = useState<string | null>(null);
   return (
     <input
@@ -154,7 +159,7 @@ function RateInput({ value, edited, onChange }: { value: number; edited: boolean
         setDraft(null);
       }}
       onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
-      aria-label="Rate"
+      aria-label={t("Rate")}
     />
   );
 }

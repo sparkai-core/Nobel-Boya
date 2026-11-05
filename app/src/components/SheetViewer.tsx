@@ -2,6 +2,7 @@ import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffec
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { sheetImage } from "../data";
 import type { Box, Sheet } from "../data/types";
+import { useT } from "../lib/i18n";
 
 export type ViewerMark = { key: string; box: Box; tone: "red" | "blue" | "muted"; active?: boolean; label?: string };
 
@@ -18,6 +19,7 @@ type Props = {
 
 /** Pan and zoom over a rendered sheet. Coordinates are PDF points; s is points per screen pixel. */
 export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer({ sheet, marks, focus, onMark }, ref) {
+  const t = useT();
   const host = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 800, h: 600 });
   const [view, setView] = useState<View>({ x: 0, y: 0, s: 1 });
@@ -213,16 +215,16 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
               })
           : null}
       </svg>
-      {!loaded ? <div className="viewer-loading">Loading sheet</div> : null}
+      {!loaded ? <div className="viewer-loading">{t("Loading sheet")}</div> : null}
       <div className="viewer-tools">
-        <button type="button" onClick={() => zoomBy(1 / 1.5)} aria-label="Zoom in">
+        <button type="button" onClick={() => zoomBy(1 / 1.5)} aria-label={t("Zoom in")}>
           <Plus size={16} />
         </button>
         <span className="viewer-zoom num">{zoomPct}%</span>
-        <button type="button" onClick={() => zoomBy(1.5)} aria-label="Zoom out">
+        <button type="button" onClick={() => zoomBy(1.5)} aria-label={t("Zoom out")}>
           <Minus size={16} />
         </button>
-        <button type="button" onClick={() => animateTo(fitView())} aria-label="Fit sheet">
+        <button type="button" onClick={() => animateTo(fitView())} aria-label={t("Fit sheet")}>
           <Maximize2 size={15} />
         </button>
       </div>

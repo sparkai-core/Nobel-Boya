@@ -1,15 +1,18 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
 import { ArrowUpRight, RotateCcw } from "lucide-react";
-import { buildingById, data, sheetById } from "../data";
+import { data, sheetById, P } from "../data";
 import type { Item, Source } from "../data/types";
 import { effectiveQty, type Line } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
 import { EvidenceCrop } from "./EvidenceCrop";
-import { METHOD_HINT, MethodTag, SeverityTag } from "./ui";
+import { methodHint, MethodTag, SeverityTag } from "./ui";
+import { buildingShort, checkTitle, formulaText, noteText, sheetTitle } from "../lib/loc";
+import { useT } from "../lib/i18n";
 
 export function LineInspector({ line }: { line: Line }) {
+  const t = useT();
   const lang = useApp((s) => s.lang);
   const setRate = useApp((s) => s.setRate);
   const rateOverridden = line.rate !== line.sampleRate;
@@ -25,19 +28,19 @@ export function LineInspector({ line }: { line: Line }) {
 
       <section className="insp-figures">
         <div className="figure">
-          <span className="figure-label">Quantity</span>
+          <span className="figure-label">{t("Quantity")}</span>
           <span className="figure-value num">
             {fmtQty(line.qty, line.unit)} <small>{unitLabel(line.unit, lang)}</small>
           </span>
           {line.adjusted ? (
             <span className="figure-note">
-              Printed {fmtQty(line.printedQty, line.unit)}, {line.adjusted === "fix" ? "corrected from a check" : "overridden by hand"}
+              {t("Printed {q}, {how}", { q: fmtQty(line.printedQty, line.unit), how: line.adjusted === "fix" ? t("corrected from a check") : t("overridden by hand") })}
             </span>
           ) : null}
         </div>
         <div className="figure">
           <label className="figure-label" htmlFor={`rate-${line.id}`}>
-            Rate, AZN per {unitLabel(line.unit, "en")}
+            {t("Rate, AZN per {u}", { u: unitLabel(line.unit, lang) })}
           </label>
           <span className="rate-edit">
             <input
@@ -60,15 +63,15 @@ export function LineInspector({ line }: { line: Line }) {
               }}
             />
             {rateOverridden ? (
-              <button type="button" className="icon-btn" title={`Back to sample rate ${fmtNum(line.sampleRate)}`} onClick={() => setRate(line.rateKey, null)}>
+              <button type="button" className="icon-btn" title={t("Back to sample rate {r}", { r: fmtNum(line.sampleRate) })} onClick={() => setRate(line.rateKey, null)}>
                 <RotateCcw size={14} />
               </button>
             ) : null}
           </span>
-          <span className="figure-note">{rateOverridden ? `Edited. Sample rate ${fmtNum(line.sampleRate)}` : "Sample rate, not from the package"}</span>
+          <span className="figure-note">{rateOverridden ? t("Edited. Sample rate {r}", { r: fmtNum(line.sampleRate) }) : t("Sample rate, not from the package")}</span>
         </div>
         <div className="figure">
-          <span className="figure-label">Amount, AZN</span>
+          <span className="figure-label">{t("Amount, AZN")}</span>
           <span className="figure-value num">{fmtMoney(line.amount)}</span>
         </div>
       </section>
@@ -76,9 +79,9 @@ export function LineInspector({ line }: { line: Line }) {
       {line.checks.length ? (
         <section className="insp-checks">
           {line.checks.map((c) => (
-            <Link key={c.id} to={`/checks/${c.id}`} className={`insp-check sev-row-${c.severity}`}>
+            <Link key={c.id} to={`${P}/checks/${c.id}`} className={`insp-check sev-row-${c.severity}`}>
               <SeverityTag severity={c.severity} kind={c.kind} />
-              <span>{c.title}</span>
+              <span>{checkTitle(c, lang)}</span>
               <ArrowUpRight size={14} />
             </Link>
           ))}
@@ -86,7 +89,7 @@ export function LineInspector({ line }: { line: Line }) {
       ) : null}
 
       <section className="insp-sources">
-        <h3>Where the number comes from</h3>
+        <h3>{t("Where the number comes from")}</h3>
         {line.items.map((it) => (
           <ItemEvidence key={it.id} item={it} showQty={line.items.length > 1} />
         ))}
@@ -96,6 +99,7 @@ export function LineInspector({ line }: { line: Line }) {
 }
 
 function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
+  const t = useT();
   const lang = useApp((s) => s.lang);
   const qtyOverrides = useApp((s) => s.qty);
   const fixes = useApp((s) => s.fixes);
@@ -116,13 +120,13 @@ function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
         ) : null}
       </header>
       {showQty ? <p className="evidence-title">{lang === "az" ? item.az : item.en}</p> : null}
-      <p className="evidence-hint">{METHOD_HINT[item.method]}</p>
+      <p className="evidence-hint">{methodHint(item.method, lang)}</p>
       {item.formula ? (
         <p className="formula">
-          <span className="muted">Formula</span> <span className="num">{item.formula}</span>
+          <span className="muted">{t("Formula")}</span> <span className="num">{formulaText(item.formula, lang)}</span>
         </p>
       ) : null}
-      {item.note ? <p className="evidence-note">{item.note}</p> : null}
+      {item.note ? <p className="evidence-note">{noteText(item.id, item.note, lang)}</p> : null}
       <div className="evidence-sources">
         {item.src.map((s, i) => (
           <SourceCard key={i} source={s} itemId={item.id} index={i} />
@@ -136,17 +140,17 @@ function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
               e.preventDefault();
               const v = Number(draft.replace(",", "."));
               if (!Number.isFinite(v) || v < 0) return;
-              setQty(item.id, v === item.qty && !reason ? null : { qty: v, reason: reason || "Edited by reviewer" });
+              setQty(item.id, v === item.qty && !reason ? null : { qty: v, reason: reason || t("Edited by reviewer") });
               setEditing(false);
             }}
           >
-            <input className="input num" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label="Quantity" autoFocus />
-            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Reason" aria-label="Reason for override" />
+            <input className="input num" value={draft} onChange={(e) => setDraft(e.target.value)} aria-label={t("Quantity")} autoFocus />
+            <input className="input" value={reason} onChange={(e) => setReason(e.target.value)} placeholder={t("Reason")} aria-label={t("Reason for override")} />
             <button type="submit" className="btn btn-primary btn-sm">
-              Save
+              {t("Save")}
             </button>
             <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(false)}>
-              Cancel
+              {t("Cancel")}
             </button>
           </form>
         ) : (
@@ -154,10 +158,10 @@ function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
             {qtyOverrides[item.id] ? (
               <>
                 <span className="small">
-                  Overridden to {fmtQty(qtyOverrides[item.id]!.qty, item.unit)}: {qtyOverrides[item.id]!.reason}
+                  {t("Overridden to {q}: {r}", { q: fmtQty(qtyOverrides[item.id]!.qty, item.unit), r: qtyOverrides[item.id]!.reason })}
                 </span>
                 <button type="button" className="btn btn-ghost btn-sm" onClick={() => setQty(item.id, null)}>
-                  Restore printed value
+                  {t("Restore printed value")}
                 </button>
               </>
             ) : (
@@ -169,7 +173,7 @@ function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
                   setEditing(true);
                 }}
               >
-                Override quantity
+                {t("Override quantity")}
               </button>
             )}
           </div>
@@ -180,12 +184,14 @@ function ItemEvidence({ item, showQty }: { item: Item; showQty: boolean }) {
 }
 
 export function SourceCard({ source, itemId, index, compact }: { source: Source; itemId?: string; index?: number; compact?: boolean }) {
+  const t = useT();
+  const lang = useApp((s) => s.lang);
   const sheet = sheetById.get(source.sheet);
   const doc = data.documents.find((d) => d.code === sheet?.doc);
-  const to = `/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
+  const to = `${P}/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
   return (
     <figure className={`source${compact ? " compact" : ""}`}>
-      <Link to={to} className="source-crop" aria-label={`Open ${source.sheet} at the marked value`}>
+      <Link to={to} className="source-crop" aria-label={t("Open {s} at the marked value", { s: source.sheet })}>
         <EvidenceCrop source={source} />
       </Link>
       <figcaption>
@@ -194,15 +200,15 @@ export function SourceCard({ source, itemId, index, compact }: { source: Source;
             {source.sheet}
             <ArrowUpRight size={13} />
           </Link>
-          <span className="truncate">{sheet?.titleEn}</span>
+          <span className="truncate">{sheet ? sheetTitle(sheet, lang) : ""}</span>
         </div>
         <blockquote lang="az" className="source-quote">
           {source.quote}
         </blockquote>
         {!compact ? (
           <div className="source-meta muted small">
-            {doc?.file}, page {sheet?.page}
-            {sheet ? `, ${buildingById.get(sheet.building)?.short ?? ""}` : ""}
+            {t("{f}, page {p}", { f: doc?.file ?? "", p: sheet?.page ?? "" })}
+            {sheet ? `, ${buildingShort(sheet.building, lang)}` : ""}
           </div>
         ) : null}
       </figcaption>

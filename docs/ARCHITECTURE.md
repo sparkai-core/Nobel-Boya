@@ -1,4 +1,4 @@
-# Tutulan BOQ Platform — System Architecture
+# Nobel BOQ BOQ Platform — System Architecture
 
 A production-grade, zero-black-box Bill of Quantities (BOQ) takeoff platform designed specifically for Azerbaijani construction packages, featuring interactive blueprint visualization, bidirectional redline evidence linking, parametric formula inspection, and audit-grade Excel reporting.
 

@@ -23,6 +23,12 @@ export const DISCIPLINES: Record<string, string> = {
   pa: "Public address",
 };
 
+/** Base route of the open project. */
+export const P = "/p/qobu";
+
+/** One representative sheet per file, used as the project cover. */
+export const COVER_SHEETS = ["BP-7", "AR-10", "KS-7", "MEP-24"];
+
 export type SheetKind = "drawing" | "schedule" | "source";
 
 /** Drawings are plans, sections and elevations; schedules are tables; source files are covers, licences and notes. */

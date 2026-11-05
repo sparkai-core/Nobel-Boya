@@ -1,6 +1,8 @@
 import { useEffect, type ReactNode } from "react";
 import { X } from "lucide-react";
 import type { Check, Method } from "../data/types";
+import { useApp } from "../lib/store";
+import { useT, type Lang } from "../lib/i18n";
 
 export const METHOD_LABEL: Record<Method, string> = {
   schedule: "Printed schedule",
@@ -14,27 +16,51 @@ export const METHOD_HINT: Record<Method, string> = {
   derived: "Calculated from printed values. The formula and every input are listed.",
 };
 
+const METHOD_LABEL_AZ: Record<Method, string> = {
+  schedule: "Çap olunmuş cədvəl",
+  image: "Təsvirdən oxunub",
+  derived: "Hesablanıb",
+};
+
+const METHOD_HINT_AZ: Record<Method, string> = {
+  schedule: "Rəqəm mətn qatı olan vərəqdəki cədvəldə çap olunub və orada avtomatik tapılıb.",
+  image: "Vərəq təsvir kimidir. Rəqəm cizgidən böyüdülərək oxunub, yeri əl ilə işarələnib.",
+  derived: "Çap olunmuş dəyərlərdən hesablanıb. Düstur və bütün daxil olan dəyərlər göstərilir.",
+};
+
+export function methodLabel(m: Method, lang: Lang) {
+  return lang === "az" ? METHOD_LABEL_AZ[m] : METHOD_LABEL[m];
+}
+
+export function methodHint(m: Method, lang: Lang) {
+  return lang === "az" ? METHOD_HINT_AZ[m] : METHOD_HINT[m];
+}
+
 export function MethodTag({ method, compact }: { method: Method; compact?: boolean }) {
+  const lang = useApp((s) => s.lang);
   return (
-    <span className={`method method-${method}`} title={METHOD_HINT[method]}>
+    <span className={`method method-${method}`} title={methodHint(method, lang)}>
       <i aria-hidden="true" />
-      {compact ? null : METHOD_LABEL[method]}
+      {compact ? null : methodLabel(method, lang)}
     </span>
   );
 }
 
 export const SEVERITY_LABEL: Record<Check["severity"], string> = { error: "Error", warn: "Conflict", info: "Note", ok: "Agrees" };
 
-export function severityLabel(check: Pick<Check, "severity" | "kind">) {
-  if (check.severity === "warn" && check.kind === "missing") return "Missing";
-  return SEVERITY_LABEL[check.severity];
+const SEVERITY_LABEL_AZ: Record<Check["severity"], string> = { error: "Xəta", warn: "Ziddiyyət", info: "Qeyd", ok: "Uyğundur" };
+
+export function severityLabel(check: Pick<Check, "severity" | "kind">, lang: Lang = "en") {
+  if (check.severity === "warn" && check.kind === "missing") return lang === "az" ? "Çatışmır" : "Missing";
+  return (lang === "az" ? SEVERITY_LABEL_AZ : SEVERITY_LABEL)[check.severity];
 }
 
 export function SeverityTag({ severity, kind }: { severity: Check["severity"]; kind?: Check["kind"] }) {
+  const lang = useApp((s) => s.lang);
   return (
     <span className={`sev sev-${severity}`}>
       <i aria-hidden="true" />
-      {kind ? severityLabel({ severity, kind }) : SEVERITY_LABEL[severity]}
+      {severityLabel({ severity, kind: kind ?? "agree" }, lang)}
     </span>
   );
 }
@@ -63,6 +89,7 @@ export function Segmented<T extends string>({
 }
 
 export function Drawer({ open, onClose, title, kicker, children, width }: { open: boolean; onClose: () => void; title: ReactNode; kicker?: ReactNode; children: ReactNode; width?: number }) {
+  const t = useT();
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
@@ -78,7 +105,7 @@ export function Drawer({ open, onClose, title, kicker, children, width }: { open
           {kicker ? <div className="drawer-kicker">{kicker}</div> : null}
           <h2>{title}</h2>
         </div>
-        <button type="button" className="icon-btn" onClick={onClose} aria-label="Close panel">
+        <button type="button" className="icon-btn" onClick={onClose} aria-label={t("Close panel")}>
           <X size={18} />
         </button>
       </header>

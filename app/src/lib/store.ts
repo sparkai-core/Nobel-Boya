@@ -9,12 +9,15 @@ type QtyOverride = { qty: number; reason: string };
 
 type State = {
   lang: "az" | "en";
+  user: string | null;
   generated: boolean;
   rates: Record<string, number>;
   markups: Markups;
   qty: Record<string, QtyOverride>;
   fixes: Record<string, boolean>;
   setLang: (l: "az" | "en") => void;
+  signIn: (email: string) => void;
+  signOut: () => void;
   setGenerated: (v: boolean) => void;
   setRate: (key: string, value: number | null) => void;
   setMarkup: (key: keyof Markups, value: number) => void;
@@ -27,12 +30,15 @@ export const useApp = create<State>()(
   persist(
     (set) => ({
       lang: "en",
+      user: null,
       generated: false,
       rates: {},
       markups: DEFAULT_MARKUPS,
       qty: {},
       fixes: {},
       setLang: (lang) => set({ lang }),
+      signIn: (user) => set({ user }),
+      signOut: () => set({ user: null }),
       setGenerated: (generated) => set({ generated }),
       setRate: (key, value) =>
         set((s) => {
@@ -52,6 +58,6 @@ export const useApp = create<State>()(
       setFix: (checkId, on) => set((s) => ({ fixes: { ...s.fixes, [checkId]: on } })),
       resetPricing: () => set({ rates: {}, markups: DEFAULT_MARKUPS }),
     }),
-    { name: "tutulan.qobu.v1" },
+    { name: "nobel.boq.v1" },
   ),
 );

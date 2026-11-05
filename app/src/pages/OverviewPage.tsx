@@ -1,17 +1,19 @@
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
-import { data } from "../data";
+import { COVER_SHEETS, data, P, sheetImage } from "../data";
 import type { Method } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, pct } from "../lib/format";
 import { useApp } from "../lib/store";
-import { Building3D } from "../components/Building3D";
-import { METHOD_LABEL, SeverityTag } from "../components/ui";
+import { buildingName, chainLabel, checkTitle, gapDetail, gapName, projectName, projectPlace } from "../lib/loc";
+import { methodLabel, SeverityTag } from "../components/ui";
+import { useT } from "../lib/i18n";
 
 const METHODS: Method[] = ["schedule", "derived", "image"];
 const METHOD_COLOR: Record<Method, string> = { schedule: "#2b0266", derived: "#9b87d6", image: "#c98a1b" };
 
 export function OverviewPage() {
+  const t = useT();
   const boq = useBoq();
   const navigate = useNavigate();
   const fixes = useApp((s) => s.fixes);
@@ -48,61 +50,63 @@ export function OverviewPage() {
     <div className="page ov">
       <section className="ov-hero card">
         <div className="ov-hero-copy">
-          <span className="ov-place">{data.project.placeEn}</span>
-          <h1>{data.project.nameEn}</h1>
+          <span className="ov-place">{projectPlace(lang)}</span>
+          <h1>{projectName(lang)}</h1>
           <div className="ov-total">
-            <span className="ov-total-label">Bill total including VAT</span>
+            <span className="ov-total-label">{t("Bill total including VAT")}</span>
             <span className="ov-total-value num-inline">
               {fmtMoney(boq.total)} <small>AZN</small>
             </span>
           </div>
           <dl className="ov-stats">
             <div>
-              <dt>Measured works</dt>
+              <dt>{t("Measured works")}</dt>
               <dd className="num-inline">{fmtMoney(boq.works)}</dd>
             </div>
             <div>
-              <dt>Mark-ups and VAT</dt>
+              <dt>{t("Mark-ups and VAT")}</dt>
               <dd className="num-inline">{fmtMoney(markups)}</dd>
             </div>
             <div>
-              <dt>Bill lines</dt>
+              <dt>{t("Bill lines")}</dt>
               <dd className="num-inline">{boq.lines.length}</dd>
             </div>
             <div>
-              <dt>Sheets used</dt>
+              <dt>{t("Sheets used")}</dt>
               <dd className="num-inline">
-                {sheetsUsed} <span className="muted">of 205</span>
+                {sheetsUsed} <span className="muted">{t("of 205")}</span>
               </dd>
             </div>
           </dl>
           <div className="ov-actions">
-            <button type="button" className="btn btn-primary" onClick={() => navigate("/bill")}>
-              Open the bill
+            <button type="button" className="btn btn-primary" onClick={() => navigate(`${P}/bill`)}>
+              {t("Open the bill")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate("/checks")}>
-              Review {open} findings
+            <button type="button" className="btn btn-ghost" onClick={() => navigate(`${P}/checks`)}>
+              {t("Review {n} findings", { n: open })}
             </button>
           </div>
         </div>
-        <div className="ov-hero-art">
-          <Building3D />
-        </div>
+        <button type="button" className="ov-hero-art project-cover" onClick={() => navigate(`${P}/drawings`)} aria-label={t("Open the drawings")}>
+          {COVER_SHEETS.map((id) => (
+            <img key={id} src={sheetImage(id, true)} alt="" loading="lazy" />
+          ))}
+        </button>
       </section>
 
       <div className="ov-grid">
         <section className="card ov-summary">
           <header className="card-head">
-            <h2>Summary by structure</h2>
-            <span className="muted small">AZN, sample rates</span>
+            <h2>{t("Summary by structure")}</h2>
+            <span className="muted small">{t("AZN, sample rates")}</span>
           </header>
           <table className="collection-table">
             <tbody>
               {boq.buildings.map((b) => (
-                <tr key={b.id} className="clickable" onClick={() => navigate(`/bill?b=${b.id}`)}>
+                <tr key={b.id} className="clickable" onClick={() => navigate(`${P}/bill?b=${b.id}`)}>
                   <td className="code num-inline">{b.code}</td>
                   <td>
-                    <div className="coll-name">{lang === "az" ? b.az : b.en}</div>
+                    <div className="coll-name">{buildingName(b.id, lang)}</div>
                     <div className="share-bar" aria-hidden="true">
                       <span style={{ width: `${Math.max(1, (b.total / works) * 100)}%` }} />
                     </div>
@@ -117,7 +121,7 @@ export function OverviewPage() {
                 <tr key={c.key} className={c.key === "works" ? "chain-works" : ""}>
                   <td />
                   <td>
-                    {c.label}
+                    {chainLabel(c.key, c.label, lang)}
                     {c.rate != null ? <span className="muted"> {pct(c.rate, 0)}</span> : null}
                   </td>
                   <td />
@@ -126,7 +130,7 @@ export function OverviewPage() {
               ))}
               <tr className="chain-total">
                 <td />
-                <td>Total including VAT</td>
+                <td>{t("Total including VAT")}</td>
                 <td />
                 <td className="num">{fmtMoney(boq.total)}</td>
               </tr>
@@ -137,10 +141,10 @@ export function OverviewPage() {
         <div className="ov-side">
           <section className="card">
             <header className="card-head">
-              <h2>Evidence behind the value</h2>
+              <h2>{t("Evidence behind the value")}</h2>
             </header>
             <div className="donut-wrap">
-              <svg className="donut" viewBox="0 0 120 120" role="img" aria-label="Share of bill value by evidence type">
+              <svg className="donut" viewBox="0 0 120 120" role="img" aria-label={t("Share of bill value by evidence type")}>
                 <circle cx="60" cy="60" r={R} className="donut-track" />
                 {arcs.map((a) => (
                   <circle
@@ -160,14 +164,14 @@ export function OverviewPage() {
                   {pct(boq.methodValue.schedule / works, 0)}
                 </text>
                 <text x="60" y="73" textAnchor="middle" className="donut-label">
-                  printed
+                  {t("printed")}
                 </text>
               </svg>
               <ul className="donut-legend">
                 {METHODS.map((m) => (
                   <li key={m}>
                     <i style={{ background: METHOD_COLOR[m] }} aria-hidden="true" />
-                    <span>{METHOD_LABEL[m]}</span>
+                    <span>{methodLabel(m, lang)}</span>
                     <span className="num-inline muted">{boq.methodCount[m]}</span>
                     <span className="num-inline">{pct(boq.methodValue[m] / works)}</span>
                   </li>
@@ -178,32 +182,32 @@ export function OverviewPage() {
 
           <section className="card">
             <header className="card-head">
-              <h2>Findings in the drawings</h2>
-              <Link to="/checks" className="text-link small">
-                All checks
+              <h2>{t("Findings in the drawings")}</h2>
+              <Link to={`${P}/checks`} className="text-link small">
+                {t("All checks")}
               </Link>
             </header>
             <ul className="finding-list">
               {findings.slice(0, 5).map((c) => (
                 <li key={c.id}>
-                  <Link to={`/checks/${c.id}`}>
+                  <Link to={`${P}/checks/${c.id}`}>
                     <SeverityTag severity={c.severity} kind={c.kind} />
-                    <span className="finding-title">{c.title}</span>
-                    {fixes[c.id] ? <span className="applied">Applied</span> : <ArrowUpRight size={14} className="faint" />}
+                    <span className="finding-title">{checkTitle(c, lang)}</span>
+                    {fixes[c.id] ? <span className="applied">{t("Applied")}</span> : <ArrowUpRight size={14} className="faint" />}
                   </Link>
                 </li>
               ))}
             </ul>
             <p className="muted small finding-foot">
-              {findings.length - Math.min(5, findings.length)} more notes, and {agreements} places where two documents agree.
+              {t("{n} more notes, and {a} places where two documents agree.", { n: findings.length - Math.min(5, findings.length), a: agreements })}
             </p>
           </section>
         </div>
 
         <section className="card ov-trades">
           <header className="card-head">
-            <h2>By trade</h2>
-            <span className="muted small">All structures, before mark-ups</span>
+            <h2>{t("By trade")}</h2>
+            <span className="muted small">{t("All structures, before mark-ups")}</span>
           </header>
           <ul className="trade-list">
             {tradeList.map(([id, t]) => (
@@ -221,14 +225,14 @@ export function OverviewPage() {
 
         <section className="card ov-gaps">
           <header className="card-head">
-            <h2>Not in the package</h2>
-            <span className="muted small">Left out rather than guessed</span>
+            <h2>{t("Not in the package")}</h2>
+            <span className="muted small">{t("Left out rather than guessed")}</span>
           </header>
           <ul className="gap-list">
             {data.gaps.map((g) => (
               <li key={g.en}>
-                <strong>{g.en}</strong>
-                <span className="muted">{g.detail}</span>
+                <strong>{gapName(g, lang)}</strong>
+                <span className="muted">{gapDetail(g, lang)}</span>
               </li>
             ))}
           </ul>

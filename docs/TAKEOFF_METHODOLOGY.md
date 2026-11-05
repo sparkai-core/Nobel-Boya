@@ -1,6 +1,6 @@
 # Zero-Black-Box Takeoff Methodology
 
-Conventional estimating platforms output flat numbers with unverified provenance. Tutulan enforces a **zero-black-box standard**: every single quantity in the Bill of Quantities must demonstrate mathematical transparency and link directly to visual evidence on the original construction drawings.
+Conventional estimating platforms output flat numbers with unverified provenance. Nobel BOQ enforces a **zero-black-box standard**: every single quantity in the Bill of Quantities must demonstrate mathematical transparency and link directly to visual evidence on the original construction drawings.
 
 ---
 
