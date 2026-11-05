@@ -166,7 +166,7 @@ export function OverviewPage() {
         {/* Top App Window Bar */}
         <header className="dash-topbar">
           {/* Brand Identity */}
-          <div className="dash-topbar-brand" onClick={() => navigate("/")} role="button" tabIndex={0}>
+          <div className="dash-topbar-brand" onClick={() => navigate("/overview")} role="button" tabIndex={0}>
             <Logo size={32} />
             <div className="dash-brand-meta">
               <span className="dash-brand-title">Storm</span>

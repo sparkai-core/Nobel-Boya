@@ -68,7 +68,7 @@ export function Shell() {
             <button
               type="button"
               className="dock-brand"
-              onClick={() => navigate("/")}
+              onClick={() => navigate("/overview")}
               title="Storm Takeoff Platform"
             >
               <Logo size={32} />
