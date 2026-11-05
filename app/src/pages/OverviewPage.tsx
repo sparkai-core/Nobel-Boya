@@ -1,11 +1,10 @@
 import { useState, useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowUpRight,
   Bell,
-  Box,
   Check,
-  CheckCircle2,
   ChevronDown,
   HelpCircle,
   Layers,
@@ -13,16 +12,12 @@ import {
   Settings,
   SlidersHorizontal,
   Wrench,
-  X,
 } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, pct } from "../lib/format";
 import { useApp } from "../lib/store";
 import { Logo } from "../components/ui";
-import { Building3D } from "../components/brand/Building3D";
-
-type ScopeFilter = "ALL" | "WH" | "AD" | "PS_TK" | "SITE";
 
 export function OverviewPage() {
   const boq = useBoq();
@@ -33,10 +28,8 @@ export function OverviewPage() {
   const toggleApprove = useApp((s) => s.toggleApprove);
   const user = useApp((s) => s.user);
 
-  const [scope, setScope] = useState<ScopeFilter>("ALL");
   const [taskTab, setTaskTab] = useState<"pending" | "approved">("pending");
   const [search, setSearch] = useState("");
-  const [show3DModal, setShow3DModal] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
   const [curveTooltip, setCurveTooltip] = useState<{
     stage: string;
@@ -47,21 +40,6 @@ export function OverviewPage() {
   } | null>(null);
 
   const works = boq.works || 1;
-
-  // Filtered scope calculations
-  const scopeBuildings = useMemo(() => {
-    if (scope === "ALL") return boq.buildings;
-    if (scope === "WH") return boq.buildings.filter((b) => b.id === "WH");
-    if (scope === "AD") return boq.buildings.filter((b) => b.id === "AD");
-    if (scope === "PS_TK") return boq.buildings.filter((b) => b.id === "PS" || b.id === "TK");
-    if (scope === "SITE") return boq.buildings.filter((b) => b.id === "SITE");
-    return boq.buildings;
-  }, [boq.buildings, scope]);
-
-  const scopeWorksTotal = useMemo(
-    () => scopeBuildings.reduce((sum, b) => sum + b.total, 0),
-    [scopeBuildings]
-  );
 
   // Asset shares for Donut Chart
   const assetSlices = useMemo(() => {
@@ -104,7 +82,7 @@ export function OverviewPage() {
     ];
   }, [boq.buildings, works]);
 
-  // Dual curve points for Commercial Valuation Progression
+  // Dual curve milestones for Commercial Valuation Progression
   const milestones = [
     { stage: "Substructure", direct: 184000, gross: 274160 },
     { stage: "Frame & Trusses", direct: 452000, gross: 673480 },
@@ -114,11 +92,10 @@ export function OverviewPage() {
     { stage: "MEP & Utility", direct: 994000, gross: 1481060 },
   ];
 
-  // SVG coordinate calculations for dual curve
-  const width = 380;
-  const height = 140;
-  const padX = 24;
-  const padY = 20;
+  const width = 340;
+  const height = 110;
+  const padX = 20;
+  const padY = 16;
   const maxVal = 1600000;
 
   const pointsDirect = milestones.map((m, i) => {
@@ -150,7 +127,7 @@ export function OverviewPage() {
   const areaDirect = `${dPathDirect} L ${width - padX} ${height - padY} L ${padX} ${height - padY} Z`;
   const areaGross = `${dPathGross} L ${width - padX} ${height - padY} L ${padX} ${height - padY} Z`;
 
-  // Action Queue Tasks
+  // Action status checks
   const isBracingFixed = !!fixes["C-01"];
   const isFootingSigned = !!approved["WH-F1-REBAR"];
 
@@ -163,88 +140,27 @@ export function OverviewPage() {
     <div className="dash-stage">
       {/* Pristine Inset Rounded Stage Canvas */}
       <div className="dash-canvas">
-        {/* Top App Window Bar */}
+        {/* Top App Bar (Clean, no clutter) */}
         <header className="dash-topbar">
           {/* Brand Identity */}
           <div className="dash-topbar-brand" onClick={() => navigate("/overview")} role="button" tabIndex={0}>
-            <Logo size={32} />
+            <Logo size={28} />
             <div className="dash-brand-meta">
               <span className="dash-brand-title">Storm</span>
               <span className="dash-brand-tag">Takeoff Platform</span>
             </div>
           </div>
 
-          {/* Scope Filter Segmented Pills */}
-          <div className="dash-scope-pills" role="tablist" aria-label="Project Scope Filter">
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === "ALL"}
-              className={`dash-scope-pill${scope === "ALL" ? " active" : ""}`}
-              onClick={() => setScope("ALL")}
-            >
-              All Assets
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === "WH"}
-              className={`dash-scope-pill${scope === "WH" ? " active" : ""}`}
-              onClick={() => setScope("WH")}
-            >
-              Warehouse (48×24m)
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === "AD"}
-              className={`dash-scope-pill${scope === "AD" ? " active" : ""}`}
-              onClick={() => setScope("AD")}
-            >
-              Admin (2-Story)
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === "PS_TK"}
-              className={`dash-scope-pill${scope === "PS_TK" ? " active" : ""}`}
-              onClick={() => setScope("PS_TK")}
-            >
-              Pump &amp; Tanks
-            </button>
-            <button
-              type="button"
-              role="tab"
-              aria-selected={scope === "SITE"}
-              className={`dash-scope-pill${scope === "SITE" ? " active" : ""}`}
-              onClick={() => setScope("SITE")}
-            >
-              Site Works
-            </button>
-          </div>
-
           {/* Right Action Icons & Surveyor Chip */}
           <div className="dash-topbar-actions">
-            <button
-              type="button"
-              className="dash-action-icon-btn"
-              onClick={() => setShow3DModal(true)}
-              title="Inspect 3D Digital Twin model"
-            >
-              <Box size={17} />
-              <span className="dash-action-label">3D Twin</span>
-            </button>
-
             <button
               type="button"
               className="dash-action-icon-btn badge-wrap"
               onClick={() => navigate("/checks")}
               title={`${openAuditCount} active discipline audits`}
             >
-              <Bell size={17} />
-              {openAuditCount > 0 ? (
-                <span className="dash-badge-pulse" />
-              ) : null}
+              <Bell size={16} />
+              {openAuditCount > 0 ? <span className="dash-badge-pulse" /> : null}
             </button>
 
             <button
@@ -253,7 +169,7 @@ export function OverviewPage() {
               onClick={() => navigate("/rates")}
               title="Pricing & mark-up configurations"
             >
-              <Settings size={17} />
+              <Settings size={16} />
             </button>
 
             <button
@@ -262,7 +178,7 @@ export function OverviewPage() {
               onClick={() => navigate("/checks")}
               title="Documentation & Audit rules"
             >
-              <HelpCircle size={17} />
+              <HelpCircle size={16} />
             </button>
 
             {/* Surveyor User Profile Chip */}
@@ -291,7 +207,7 @@ export function OverviewPage() {
           </div>
 
           <div className="dash-search-container">
-            <Search size={15} className="dash-search-icon" />
+            <Search size={14} className="dash-search-icon" />
             <input
               type="text"
               className="dash-search-input"
@@ -308,9 +224,9 @@ export function OverviewPage() {
           </div>
         </div>
 
-        {/* 3-Column Executive Card Grid (Molded from uploaded design) */}
+        {/* 3-Column Executive Grid (Fitted to viewport) */}
         <div className="dash-grid">
-          {/* Column 1: Surveyor Action Queue (Molded from 'My Tasks') */}
+          {/* Column 1: Surveyor Action Queue (My Tasks) */}
           <div className="dash-col dash-col-tasks">
             <div className="dash-card dash-card-tasks">
               <div className="dash-card-header">
@@ -324,7 +240,7 @@ export function OverviewPage() {
                   onClick={() => navigate("/checks")}
                   title="Inspect all checks"
                 >
-                  <ArrowUpRight size={14} />
+                  <ArrowUpRight size={13} />
                 </button>
               </div>
 
@@ -350,122 +266,103 @@ export function OverviewPage() {
                 <span>
                   {taskTab === "pending" ? "4 Required Reconciliations" : "18 Verified Approvals"}
                 </span>
-                <ChevronDown size={14} />
+                <ChevronDown size={13} />
               </div>
 
-              {/* Task Cards List */}
+              {/* Task Cards List (Compact ~48px each) */}
               <div className="dash-tasks-list">
                 {/* Task 1: Bracing Şr-2 profile total */}
                 <div className={`dash-task-item${isBracingFixed ? " done" : ""}`}>
-                  <div className="dash-task-lead">
-                    <span className="dash-task-discipline-tag tag-structural">Structural Steel</span>
-                    <span className="dash-task-sheet-ref">KS-33</span>
+                  <div className="dash-task-icon-box box-warning">
+                    <AlertTriangle size={14} />
                   </div>
-                  <h3 className="dash-task-heading">Bracing Şr-2 math overstatement</h3>
-                  <p className="dash-task-desc">
-                    Row schedule prints 808.80 kg; calculated 4 × 51.10 kg &amp; 8 × 25.55 kg sum to 408.80 kg.
-                  </p>
-                  <div className="dash-task-action-row">
+                  <div className="dash-task-text truncate">
+                    <h3 className="dash-task-heading truncate">Bracing Şr-2 math overstatement</h3>
+                    <span className="dash-task-sub truncate">KS-33 • Overstated by 400 kg</span>
+                  </div>
+                  <div className="dash-task-action-wrap">
                     {isBracingFixed ? (
                       <button
                         type="button"
-                        className="dash-action-btn btn-done"
+                        className="task-circle-btn done"
                         onClick={() => setFix("C-01", false)}
+                        title="Correction applied (-400 kg)"
                       >
                         <Check size={13} strokeWidth={2.5} />
-                        <span>Corrected (-400 kg)</span>
                       </button>
                     ) : (
                       <button
                         type="button"
-                        className="dash-action-btn btn-apply"
+                        className="task-circle-btn fix"
                         onClick={() => setFix("C-01", true)}
+                        title="Apply 400 kg correction"
                       >
-                        <Wrench size={13} />
-                        <span>Apply Fix (-400 kg)</span>
+                        <Wrench size={12} />
                       </button>
                     )}
-                    <button
-                      type="button"
-                      className="dash-inspect-link"
-                      onClick={() => navigate("/checks/C-01")}
-                      title="Inspect calculation evidence"
-                    >
-                      Inspect <ArrowUpRight size={12} />
-                    </button>
                   </div>
                 </div>
 
                 {/* Task 2: Warehouse slab area */}
-                <div className="dash-task-item">
-                  <div className="dash-task-lead">
-                    <span className="dash-task-discipline-tag tag-variance">Cross-Discipline</span>
-                    <span className="dash-task-sheet-ref">KS-03 / AR-02</span>
+                <div
+                  className="dash-task-item clickable"
+                  onClick={() => navigate("/checks/C-02")}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="dash-task-icon-box box-variance">
+                    <Layers size={14} />
                   </div>
-                  <h3 className="dash-task-heading">Warehouse slab area variance</h3>
-                  <p className="dash-task-desc">
-                    Structural drawing indicates 1,122.0 m²; architectural finish schedule sums to 1,130.4 m².
-                  </p>
-                  <div className="dash-task-action-row">
-                    <button
-                      type="button"
-                      className="dash-action-btn btn-outline"
-                      onClick={() => navigate("/checks/C-02")}
-                    >
-                      Reconcile Variance
-                    </button>
-                    <span className="dash-task-metric">Δ +8.4 m²</span>
+                  <div className="dash-task-text truncate">
+                    <h3 className="dash-task-heading truncate">Warehouse slab area variance</h3>
+                    <span className="dash-task-sub truncate">KS-03 vs AR-02 • Δ +8.4 m²</span>
+                  </div>
+                  <div className="dash-task-action-wrap">
+                    <span className="task-circle-btn neutral">
+                      <ArrowUpRight size={13} />
+                    </span>
                   </div>
                 </div>
 
                 {/* Task 3: Admin ground slab thickness */}
-                <div className="dash-task-item">
-                  <div className="dash-task-lead">
-                    <span className="dash-task-discipline-tag tag-spec">Specification</span>
-                    <span className="dash-task-sheet-ref">KS-42 / AR-14</span>
+                <div
+                  className="dash-task-item clickable"
+                  onClick={() => navigate("/checks/C-03")}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="dash-task-icon-box box-spec">
+                    <SlidersHorizontal size={14} />
                   </div>
-                  <h3 className="dash-task-heading">Admin ground slab thickness</h3>
-                  <p className="dash-task-desc">
-                    Structure specifies 100 mm slab; architecture notes 150 mm monolithic cast.
-                  </p>
-                  <div className="dash-task-action-row">
-                    <button
-                      type="button"
-                      className="dash-action-btn btn-outline"
-                      onClick={() => navigate("/checks/C-03")}
-                    >
-                      Compare Notes
-                    </button>
-                    <span className="dash-task-metric">100 vs 150mm</span>
+                  <div className="dash-task-text truncate">
+                    <h3 className="dash-task-heading truncate">Admin ground slab thickness</h3>
+                    <span className="dash-task-sub truncate">KS-42 vs AR-14 • 100 vs 150mm</span>
+                  </div>
+                  <div className="dash-task-action-wrap">
+                    <span className="task-circle-btn neutral">
+                      <ArrowUpRight size={13} />
+                    </span>
                   </div>
                 </div>
 
                 {/* Task 4: Pad Footing F-1 Rebar */}
                 <div className={`dash-task-item${isFootingSigned ? " done" : ""}`}>
-                  <div className="dash-task-lead">
-                    <span className="dash-task-discipline-tag tag-reinforce">Reinforcement</span>
-                    <span className="dash-task-sheet-ref">KS-04</span>
+                  <div className="dash-task-icon-box box-rebar">
+                    <Check size={14} />
                   </div>
-                  <h3 className="dash-task-heading">Pad Footing F-1 rebar sign-off</h3>
-                  <p className="dash-task-desc">
-                    31 pad foundations: 32.4 tonnes of A500C rebar cross-verified with column starters.
-                  </p>
-                  <div className="dash-task-action-row">
+                  <div className="dash-task-text truncate">
+                    <h3 className="dash-task-heading truncate">Pad Footing F-1 rebar</h3>
+                    <span className="dash-task-sub truncate">KS-04 • 32.4 t A500C verified</span>
+                  </div>
+                  <div className="dash-task-action-wrap">
                     <button
                       type="button"
-                      className={`dash-action-btn${isFootingSigned ? " btn-done" : " btn-apply"}`}
+                      className={`task-circle-btn${isFootingSigned ? " done" : " action"}`}
                       onClick={() => toggleApprove("WH-F1-REBAR")}
+                      title={isFootingSigned ? "Approved" : "Sign off"}
                     >
-                      {isFootingSigned ? (
-                        <>
-                          <Check size={13} strokeWidth={2.5} />
-                          <span>Signed Off ✓</span>
-                        </>
-                      ) : (
-                        <span>Sign Off Approval</span>
-                      )}
+                      <Check size={13} strokeWidth={2.5} />
                     </button>
-                    <span className="dash-task-metric">32.4 t</span>
                   </div>
                 </div>
               </div>
@@ -476,26 +373,26 @@ export function OverviewPage() {
           <div className="dash-col dash-col-center">
             {/* Top Sub-Grid: 2 cards side by side */}
             <div className="dash-center-top-row">
-              {/* Card A: Asset Valuation Share (Donut Chart) */}
+              {/* Card A: Projects Overview (Donut Chart) */}
               <div className="dash-card dash-card-donut">
                 <div className="dash-card-header">
-                  <h2 className="dash-card-title">Asset Valuation Share</h2>
+                  <h2 className="dash-card-title">Projects Overview</h2>
                   <button
                     type="button"
                     className="dash-mini-btn"
                     onClick={() => navigate("/bill")}
                     title="View Bill of Quantities"
                   >
-                    <ArrowUpRight size={14} />
+                    <ArrowUpRight size={13} />
                   </button>
                 </div>
 
                 <div className="dash-donut-wrap">
-                  {/* Interactive SVG Donut */}
-                  <svg className="dash-donut-svg" viewBox="0 0 160 160">
-                    <circle cx="80" cy="80" r="54" fill="none" stroke="#F1F1EE" strokeWidth="18" />
+                  {/* Compact SVG Donut */}
+                  <svg className="dash-donut-svg" viewBox="0 0 130 130">
+                    <circle cx="65" cy="65" r="44" fill="none" stroke="#F1F1EE" strokeWidth="14" />
                     {(() => {
-                      const radius = 54;
+                      const radius = 44;
                       const circumference = 2 * Math.PI * radius;
                       let accumulatedOffset = 0;
 
@@ -508,12 +405,12 @@ export function OverviewPage() {
                         return (
                           <circle
                             key={slice.id}
-                            cx="80"
-                            cy="80"
+                            cx="65"
+                            cy="65"
                             r={radius}
                             fill="none"
                             stroke={slice.color}
-                            strokeWidth={isHovered ? 21 : 18}
+                            strokeWidth={isHovered ? 17 : 14}
                             strokeDasharray={`${dashLength} ${circumference - dashLength}`}
                             strokeDashoffset={dashOffset}
                             className="dash-donut-slice"
@@ -522,7 +419,7 @@ export function OverviewPage() {
                             style={{
                               transformOrigin: "center",
                               transform: "rotate(-90deg)",
-                              transition: "stroke-width 200ms ease, opacity 200ms ease",
+                              transition: "stroke-width 180ms ease, opacity 180ms ease",
                               opacity: hoveredSlice && !isHovered ? 0.6 : 1,
                               cursor: "pointer",
                             }}
@@ -533,42 +430,42 @@ export function OverviewPage() {
 
                     {/* Donut Hole Value */}
                     <g className="dash-donut-hole-text">
-                      <text x="80" y="74" textAnchor="middle" className="donut-hole-label">
+                      <text x="65" y="60" textAnchor="middle" className="donut-hole-label">
                         DIRECT WORKS
                       </text>
-                      <text x="80" y="93" textAnchor="middle" className="donut-hole-val num">
-                        {Math.round(scopeWorksTotal / 1000)}k
+                      <text x="65" y="76" textAnchor="middle" className="donut-hole-val num">
+                        {Math.round(works / 1000)}k
                       </text>
-                      <text x="80" y="106" textAnchor="middle" className="donut-hole-unit">
+                      <text x="65" y="87" textAnchor="middle" className="donut-hole-unit">
                         AZN
                       </text>
                     </g>
                   </svg>
                 </div>
 
-                {/* Donut Legend */}
-                <div className="dash-donut-legend">
+                {/* Donut Legend (Compact 2x2 grid) */}
+                <div className="dash-donut-legend-compact">
                   {assetSlices.map((s) => (
                     <div
                       key={s.id}
-                      className={`dash-legend-item${hoveredSlice === s.id ? " active" : ""}`}
+                      className={`dash-legend-item-compact${hoveredSlice === s.id ? " active" : ""}`}
                       onMouseEnter={() => setHoveredSlice(s.id)}
                       onMouseLeave={() => setHoveredSlice(null)}
                       onClick={() => navigate(`/bill?b=${s.id === "PS_TK" ? "PS" : s.id}`)}
                     >
                       <span className="legend-dot" style={{ backgroundColor: s.color }} />
-                      <span className="legend-name truncate">{s.name}</span>
-                      <span className="legend-pct num">{pct(s.share)}</span>
+                      <span className="legend-name truncate">{s.name.split(" ")[0]}</span>
+                      <span className="legend-pct num">{pct(s.share, 0)}</span>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Card B: Commercial Progression (Dual Curve Chart) */}
+              {/* Card B: Income VS Expense (Commercial Progression) */}
               <div className="dash-card dash-card-curve">
                 <div className="dash-card-header">
                   <div className="dash-header-title-wrap">
-                    <h2 className="dash-card-title">Commercial Progression</h2>
+                    <h2 className="dash-card-title">Income VS Expense</h2>
                     <div className="dash-curve-legend-inline">
                       <span className="curve-dot dot-bronze" />
                       <span className="curve-legend-label">Direct</span>
@@ -582,7 +479,7 @@ export function OverviewPage() {
                     onClick={() => navigate("/export")}
                     title="Export financial report"
                   >
-                    <ArrowUpRight size={14} />
+                    <ArrowUpRight size={13} />
                   </button>
                 </div>
 
@@ -612,14 +509,14 @@ export function OverviewPage() {
                       d={dPathGross}
                       fill="none"
                       stroke="#18181B"
-                      strokeWidth="2.2"
+                      strokeWidth="2"
                       strokeLinecap="round"
                     />
                     <path
                       d={dPathDirect}
                       fill="none"
                       stroke="#B45309"
-                      strokeWidth="2.2"
+                      strokeWidth="2"
                       strokeLinecap="round"
                     />
 
@@ -629,10 +526,10 @@ export function OverviewPage() {
                         key={`g-${p.stage}`}
                         cx={p.x}
                         cy={p.y}
-                        r={4}
+                        r={3.5}
                         fill="#FFFFFF"
                         stroke="#18181B"
-                        strokeWidth="2"
+                        strokeWidth="1.8"
                         className="curve-point"
                         onMouseEnter={() => setCurveTooltip(p)}
                         onMouseLeave={() => setCurveTooltip(null)}
@@ -644,10 +541,10 @@ export function OverviewPage() {
                         key={`d-${p.stage}`}
                         cx={p.x}
                         cy={p.y}
-                        r={4}
+                        r={3.5}
                         fill="#FFFFFF"
                         stroke="#B45309"
-                        strokeWidth="2"
+                        strokeWidth="1.8"
                         className="curve-point"
                         onMouseEnter={() => setCurveTooltip(p)}
                         onMouseLeave={() => setCurveTooltip(null)}
@@ -680,7 +577,7 @@ export function OverviewPage() {
                   <div className="dash-curve-stages">
                     {milestones.map((m) => (
                       <span key={m.stage} className="dash-stage-label">
-                        {m.stage.split(" ")[0]}
+                        {m.stage.slice(0, 3)}
                       </span>
                     ))}
                   </div>
@@ -688,12 +585,12 @@ export function OverviewPage() {
               </div>
             </div>
 
-            {/* Bottom Card: Statutory Markups Sequence (Molded from 'Invoice Overview') */}
+            {/* Bottom Card: Invoice Overview (Statutory Markups Meter Bars) */}
             <div className="dash-card dash-card-markups">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Statutory Markups &amp; Valuation Chain</h2>
-                  <span className="dash-subtext-muted">4 Statutory Commercial Tiers + VAT</span>
+                  <h2 className="dash-card-title">Invoice Overview</h2>
+                  <span className="dash-subtext-muted">Statutory Markups Sequence</span>
                 </div>
                 <button
                   type="button"
@@ -701,18 +598,15 @@ export function OverviewPage() {
                   onClick={() => navigate("/rates")}
                   title="Configure markup percentages"
                 >
-                  <SlidersHorizontal size={14} />
+                  <SlidersHorizontal size={13} />
                 </button>
               </div>
 
-              {/* Sleek Horizontal Progress Meter Bars */}
+              {/* Horizontal Progress Meter Bars (Clean & Compact) */}
               <div className="dash-meter-bars">
                 {/* 1. Direct Works Scope */}
                 <div className="dash-meter-item">
-                  <div className="dash-meter-info">
-                    <span className="dash-meter-name">Direct Works Scope</span>
-                    <span className="dash-meter-tag">100.0% Baseline</span>
-                  </div>
+                  <span className="dash-meter-name">Direct Works Scope</span>
                   <div className="dash-meter-bar-track">
                     <div className="dash-meter-bar-fill bar-bronze" style={{ width: "100%" }} />
                   </div>
@@ -723,10 +617,7 @@ export function OverviewPage() {
 
                 {/* 2. Overheads */}
                 <div className="dash-meter-item">
-                  <div className="dash-meter-info">
-                    <span className="dash-meter-name">Site Overheads &amp; Preliminaries</span>
-                    <span className="dash-meter-tag">+8.00%</span>
-                  </div>
+                  <span className="dash-meter-name">Overheads (8%)</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-obsidian"
@@ -740,10 +631,7 @@ export function OverviewPage() {
 
                 {/* 3. Contractor Profit */}
                 <div className="dash-meter-item">
-                  <div className="dash-meter-info">
-                    <span className="dash-meter-name">Contractor Profit Margin</span>
-                    <span className="dash-meter-tag">+6.00%</span>
-                  </div>
+                  <span className="dash-meter-name">Profit (6%)</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-amber"
@@ -757,10 +645,7 @@ export function OverviewPage() {
 
                 {/* 4. Contingency */}
                 <div className="dash-meter-item">
-                  <div className="dash-meter-info">
-                    <span className="dash-meter-name">Unforeseen Contingency Reserve</span>
-                    <span className="dash-meter-tag">+5.00%</span>
-                  </div>
+                  <span className="dash-meter-name">Contingency (5%)</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-slate"
@@ -774,10 +659,7 @@ export function OverviewPage() {
 
                 {/* 5. Statutory VAT */}
                 <div className="dash-meter-item">
-                  <div className="dash-meter-info">
-                    <span className="dash-meter-name">Statutory State VAT</span>
-                    <span className="dash-meter-tag">+18.00%</span>
-                  </div>
+                  <span className="dash-meter-name">VAT (18%)</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-emerald"
@@ -789,29 +671,17 @@ export function OverviewPage() {
                   </div>
                 </div>
               </div>
-
-              {/* Total Callout Footer */}
-              <div className="dash-markups-foot">
-                <div className="dash-foot-lead">
-                  <CheckCircle2 size={15} className="dash-ok-icon" />
-                  <span>Statutory 5-tier valuation sequence active</span>
-                </div>
-                <div className="dash-foot-total">
-                  <span className="dash-foot-label">Total Contract Valuation:</span>
-                  <strong className="dash-foot-amount num">{fmtMoney(boq.total)} AZN</strong>
-                </div>
-              </div>
             </div>
           </div>
 
           {/* Column 3: Package Registry & Discipline Audits (Right Column) */}
           <div className="dash-col dash-col-right">
-            {/* Top Card: Drawing Packages Registry (Molded from 'My Meetings') */}
+            {/* Top Card: My Meetings (Drawing Packages Registry) */}
             <div className="dash-card dash-card-packages">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Drawing Packages</h2>
-                  <span className="dash-pill-counter">205 Sheets</span>
+                  <h2 className="dash-card-title">My Meetings</h2>
+                  <span className="dash-pill-counter">4 Packages</span>
                 </div>
                 <button
                   type="button"
@@ -819,84 +689,84 @@ export function OverviewPage() {
                   onClick={() => navigate("/drawings")}
                   title="Open drawing register"
                 >
-                  <Layers size={14} />
+                  <Layers size={13} />
                 </button>
               </div>
 
               <div className="dash-packages-list">
                 {/* 1. Master Plan */}
                 <div
-                  className="dash-pkg-item"
+                  className="dash-pkg-item-compact"
                   onClick={() => navigate("/drawings?doc=BP")}
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="dash-pkg-code-badge badge-bp">BP</div>
+                  <div className="dash-pkg-code-badge-compact badge-bp">BP</div>
                   <div className="dash-pkg-content truncate">
                     <h3 className="dash-pkg-title truncate">Qobu Baş plan</h3>
-                    <span className="dash-pkg-meta">8 Sheets • 0.9998 ha Site Layout</span>
+                    <span className="dash-pkg-meta">8 Sheets • 0.9998 ha Site</span>
                   </div>
-                  <ArrowUpRight size={14} className="dash-pkg-arrow" />
+                  <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
 
                 {/* 2. Architecture */}
                 <div
-                  className="dash-pkg-item"
+                  className="dash-pkg-item-compact"
                   onClick={() => navigate("/drawings?doc=AR")}
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="dash-pkg-code-badge badge-ar">AR</div>
+                  <div className="dash-pkg-code-badge-compact badge-ar">AR</div>
                   <div className="dash-pkg-content truncate">
                     <h3 className="dash-pkg-title truncate">Memarlıq hissəsi</h3>
-                    <span className="dash-pkg-meta">36 Sheets • ±0.000 Plans &amp; Finishes</span>
+                    <span className="dash-pkg-meta">36 Sheets • Architecture</span>
                   </div>
-                  <ArrowUpRight size={14} className="dash-pkg-arrow" />
+                  <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
 
                 {/* 3. Structure */}
                 <div
-                  className="dash-pkg-item"
+                  className="dash-pkg-item-compact"
                   onClick={() => navigate("/drawings?doc=KS")}
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="dash-pkg-code-badge badge-ks">KS</div>
+                  <div className="dash-pkg-code-badge-compact badge-ks">KS</div>
                   <div className="dash-pkg-content truncate">
                     <h3 className="dash-pkg-title truncate">Konstruksiya hissəsi</h3>
-                    <span className="dash-pkg-meta">61 Sheets • Pad Footings &amp; Trusses</span>
+                    <span className="dash-pkg-meta">61 Sheets • Structure</span>
                   </div>
-                  <ArrowUpRight size={14} className="dash-pkg-arrow" />
+                  <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
 
                 {/* 4. MEP */}
                 <div
-                  className="dash-pkg-item"
+                  className="dash-pkg-item-compact"
                   onClick={() => navigate("/drawings?doc=MEP")}
                   role="button"
                   tabIndex={0}
                 >
-                  <div className="dash-pkg-code-badge badge-mep">MEP</div>
+                  <div className="dash-pkg-code-badge-compact badge-mep">MEP</div>
                   <div className="dash-pkg-content truncate">
                     <h3 className="dash-pkg-title truncate">Mühəndis sistemləri</h3>
-                    <span className="dash-pkg-meta">100 Sheets • HVAC, Water, Fire &amp; Power</span>
+                    <span className="dash-pkg-meta">100 Sheets • Utilities</span>
                   </div>
-                  <ArrowUpRight size={14} className="dash-pkg-arrow" />
+                  <ArrowUpRight size={13} className="dash-pkg-arrow" />
                 </div>
               </div>
 
               <div className="dash-packages-footer">
                 <Link to="/drawings" className="dash-see-all-link">
-                  Browse All 205 Drawing Sheets →
+                  See All 205 Sheets &gt;
                 </Link>
               </div>
             </div>
 
-            {/* Bottom Card: Discipline Audits (Molded from 'Open Tickets') */}
+            {/* Bottom Card: Open Tickets (Discipline Audits) */}
             <div className="dash-card dash-card-audits">
               <div className="dash-card-header">
                 <div className="dash-header-title-wrap">
-                  <h2 className="dash-card-title">Discipline Audits</h2>
+                  <h2 className="dash-card-title">Open Tickets</h2>
                   <span className="dash-pill-counter">{openAuditCount} Active</span>
                 </div>
                 <button
@@ -905,82 +775,58 @@ export function OverviewPage() {
                   onClick={() => navigate("/checks")}
                   title="Inspect all checks"
                 >
-                  <ArrowUpRight size={14} />
+                  <ArrowUpRight size={13} />
                 </button>
               </div>
 
               {/* Tickets List */}
               <div className="dash-audits-list">
                 {/* Finding 1 */}
-                <div className="dash-audit-ticket">
-                  <div className="dash-ticket-top">
-                    <div className="dash-reviewer-chip">
-                      <div className="dash-reviewer-avatar">KS</div>
-                      <span className="dash-reviewer-name">Structural QS Lead</span>
-                    </div>
-                    <span className="dash-severity-chip chip-error">Discrepancy</span>
+                <div className="dash-audit-ticket-compact">
+                  <div className="dash-reviewer-avatar">KS</div>
+                  <div className="dash-ticket-content truncate">
+                    <h3 className="dash-ticket-title truncate">Bracing Şr-2 math overstatement</h3>
+                    <span className="dash-ticket-sub truncate">Sheet KS-33 • -400 kg error</span>
                   </div>
-                  <p className="dash-ticket-desc">
-                    Bracing Şr-2 profile total is overstated by 400 kg on sheet KS-33.
-                  </p>
-                  <div className="dash-ticket-foot">
-                    <span className="dash-ticket-bldg">Warehouse</span>
-                    <button
-                      type="button"
-                      className="dash-ticket-btn"
-                      onClick={() => navigate("/checks/C-01")}
-                    >
-                      Review &gt;
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="dash-ticket-btn-compact"
+                    onClick={() => navigate("/checks/C-01")}
+                  >
+                    Check &gt;
+                  </button>
                 </div>
 
                 {/* Finding 2 */}
-                <div className="dash-audit-ticket">
-                  <div className="dash-ticket-top">
-                    <div className="dash-reviewer-chip">
-                      <div className="dash-reviewer-avatar">AR</div>
-                      <span className="dash-reviewer-name">Arch / Struct Audit</span>
-                    </div>
-                    <span className="dash-severity-chip chip-warn">Variance</span>
+                <div className="dash-audit-ticket-compact">
+                  <div className="dash-reviewer-avatar">AR</div>
+                  <div className="dash-ticket-content truncate">
+                    <h3 className="dash-ticket-title truncate">Admin ground slab thickness</h3>
+                    <span className="dash-ticket-sub truncate">KS 100mm vs AR 150mm</span>
                   </div>
-                  <p className="dash-ticket-desc">
-                    Admin ground slab is 100 mm on structure and 150 mm on architecture.
-                  </p>
-                  <div className="dash-ticket-foot">
-                    <span className="dash-ticket-bldg">Admin</span>
-                    <button
-                      type="button"
-                      className="dash-ticket-btn"
-                      onClick={() => navigate("/checks/C-03")}
-                    >
-                      Review &gt;
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="dash-ticket-btn-compact"
+                    onClick={() => navigate("/checks/C-03")}
+                  >
+                    Check &gt;
+                  </button>
                 </div>
 
                 {/* Finding 3 */}
-                <div className="dash-audit-ticket">
-                  <div className="dash-ticket-top">
-                    <div className="dash-reviewer-chip">
-                      <div className="dash-reviewer-avatar">MEP</div>
-                      <span className="dash-reviewer-name">MEP Engineer</span>
-                    </div>
-                    <span className="dash-severity-chip chip-info">Note</span>
+                <div className="dash-audit-ticket-compact">
+                  <div className="dash-reviewer-avatar">MEP</div>
+                  <div className="dash-ticket-content truncate">
+                    <h3 className="dash-ticket-title truncate">Booster pump rating note</h3>
+                    <span className="dash-ticket-sub truncate">Kommunikasiya schedule</span>
                   </div>
-                  <p className="dash-ticket-desc">
-                    Booster water pump station schedules omit explicit unit rating.
-                  </p>
-                  <div className="dash-ticket-foot">
-                    <span className="dash-ticket-bldg">Pump House</span>
-                    <button
-                      type="button"
-                      className="dash-ticket-btn"
-                      onClick={() => navigate("/checks/C-05")}
-                    >
-                      Review &gt;
-                    </button>
-                  </div>
+                  <button
+                    type="button"
+                    className="dash-ticket-btn-compact"
+                    onClick={() => navigate("/checks/C-05")}
+                  >
+                    Check &gt;
+                  </button>
                 </div>
               </div>
 
@@ -993,36 +839,6 @@ export function OverviewPage() {
           </div>
         </div>
       </div>
-
-      {/* Interactive 3D Digital Twin Modal */}
-      {show3DModal ? (
-        <div className="dash-modal-overlay" onClick={() => setShow3DModal(false)}>
-          <div className="dash-modal-dialog" onClick={(e) => e.stopPropagation()}>
-            <div className="dash-modal-header">
-              <div className="dash-modal-title-wrap">
-                <Box size={18} className="dash-modal-icon" />
-                <div>
-                  <h2 className="dash-modal-title">Interactive 3D Digital Twin</h2>
-                  <span className="dash-modal-sub">
-                    Qobu Logistics Hub • Structural &amp; Member Geometry Takeoff
-                  </span>
-                </div>
-              </div>
-              <button
-                type="button"
-                className="dash-modal-close-btn"
-                onClick={() => setShow3DModal(false)}
-                title="Close 3D viewer"
-              >
-                <X size={18} />
-              </button>
-            </div>
-            <div className="dash-modal-body">
-              <Building3D showCaption />
-            </div>
-          </div>
-        </div>
-      ) : null}
     </div>
   );
 }
