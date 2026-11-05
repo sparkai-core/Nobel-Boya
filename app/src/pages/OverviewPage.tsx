@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
   AlertTriangle,
@@ -6,17 +6,24 @@ import {
   Bell,
   Check,
   ChevronDown,
+  Command,
+  Globe,
   HelpCircle,
+  Keyboard,
   Layers,
+  Percent,
+  RotateCcw,
   Search,
   Settings,
+  ShieldCheck,
   SlidersHorizontal,
   Wrench,
+  X,
 } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, pct } from "../lib/format";
-import { useApp } from "../lib/store";
+import { DEFAULT_MARKUPS, useApp } from "../lib/store";
 import { Logo } from "../components/ui";
 
 export function OverviewPage() {
@@ -27,9 +34,15 @@ export function OverviewPage() {
   const approved = useApp((s) => s.approved);
   const toggleApprove = useApp((s) => s.toggleApprove);
   const user = useApp((s) => s.user);
+  const markups = useApp((s) => s.markups);
+  const setMarkup = useApp((s) => s.setMarkup);
+  const lang = useApp((s) => s.lang);
+  const setLang = useApp((s) => s.setLang);
 
   const [taskTab, setTaskTab] = useState<"pending" | "approved">("pending");
   const [search, setSearch] = useState("");
+  const [showSettings, setShowSettings] = useState(false);
+  const [showShortcuts, setShowShortcuts] = useState(false);
   const [hoveredSlice, setHoveredSlice] = useState<string | null>(null);
   const [curveTooltip, setCurveTooltip] = useState<{
     stage: string;
@@ -39,7 +52,27 @@ export function OverviewPage() {
     y: number;
   } | null>(null);
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const works = boq.works || 1;
+
+  // Global Keyboard Shortcuts Listener
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const isInput = ["INPUT", "TEXTAREA", "SELECT"].includes((e.target as HTMLElement)?.tagName);
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "?" && !isInput) {
+        e.preventDefault();
+        setShowShortcuts((s) => !s);
+      } else if (e.key === "Escape") {
+        setShowSettings(false);
+        setShowShortcuts(false);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   // Asset shares for Donut Chart
   const assetSlices = useMemo(() => {
@@ -140,7 +173,7 @@ export function OverviewPage() {
     <div className="dash-stage">
       {/* Pristine Inset Rounded Stage Canvas */}
       <div className="dash-canvas">
-        {/* Top App Bar (Clean, no clutter) */}
+        {/* Top App Bar */}
         <header className="dash-topbar">
           {/* Brand Identity */}
           <div className="dash-topbar-brand" onClick={() => navigate("/overview")} role="button" tabIndex={0}>
@@ -165,18 +198,18 @@ export function OverviewPage() {
 
             <button
               type="button"
-              className="dash-action-icon-btn"
-              onClick={() => navigate("/rates")}
-              title="Pricing & mark-up configurations"
+              className={`dash-action-icon-btn${showSettings ? " active" : ""}`}
+              onClick={() => setShowSettings(true)}
+              title="Platform Settings & Commercial Parameters"
             >
               <Settings size={16} />
             </button>
 
             <button
               type="button"
-              className="dash-action-icon-btn"
-              onClick={() => navigate("/checks")}
-              title="Documentation & Audit rules"
+              className={`dash-action-icon-btn${showShortcuts ? " active" : ""}`}
+              onClick={() => setShowShortcuts(true)}
+              title="Keyboard Shortcuts & Productivity Guide (?)"
             >
               <HelpCircle size={16} />
             </button>
@@ -209,6 +242,7 @@ export function OverviewPage() {
           <div className="dash-search-container">
             <Search size={14} className="dash-search-icon" />
             <input
+              ref={searchInputRef}
               type="text"
               className="dash-search-input"
               placeholder="Search bill lines, drawing sheets, specifications..."
@@ -595,8 +629,8 @@ export function OverviewPage() {
                 <button
                   type="button"
                   className="dash-mini-btn"
-                  onClick={() => navigate("/rates")}
-                  title="Configure markup percentages"
+                  onClick={() => setShowSettings(true)}
+                  title="Configure markup percentages in Settings"
                 >
                   <SlidersHorizontal size={13} />
                 </button>
@@ -617,57 +651,57 @@ export function OverviewPage() {
 
                 {/* 2. Overheads */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Overheads (8%)</span>
+                  <span className="dash-meter-name">Overheads ({pct(markups.overheads, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-obsidian"
-                      style={{ width: `${(79520 / boq.total) * 100 * 3.5}%` }}
+                      style={{ width: `${(boq.chain[1]?.amount ?? 79520) / boq.total * 100 * 3.5}%` }}
                     />
                   </div>
                   <div className="dash-meter-value num">
-                    {fmtMoney(79520)} <span className="currency">AZN</span>
+                    {fmtMoney(boq.chain[1]?.amount ?? 79520)} <span className="currency">AZN</span>
                   </div>
                 </div>
 
                 {/* 3. Contractor Profit */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Profit (6%)</span>
+                  <span className="dash-meter-name">Profit ({pct(markups.profit, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-amber"
-                      style={{ width: `${(59640 / boq.total) * 100 * 3.5}%` }}
+                      style={{ width: `${(boq.chain[2]?.amount ?? 59640) / boq.total * 100 * 3.5}%` }}
                     />
                   </div>
                   <div className="dash-meter-value num">
-                    {fmtMoney(59640)} <span className="currency">AZN</span>
+                    {fmtMoney(boq.chain[2]?.amount ?? 59640)} <span className="currency">AZN</span>
                   </div>
                 </div>
 
                 {/* 4. Contingency */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">Contingency (5%)</span>
+                  <span className="dash-meter-name">Contingency ({pct(markups.contingency, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-slate"
-                      style={{ width: `${(49700 / boq.total) * 100 * 3.5}%` }}
+                      style={{ width: `${(boq.chain[3]?.amount ?? 49700) / boq.total * 100 * 3.5}%` }}
                     />
                   </div>
                   <div className="dash-meter-value num">
-                    {fmtMoney(49700)} <span className="currency">AZN</span>
+                    {fmtMoney(boq.chain[3]?.amount ?? 49700)} <span className="currency">AZN</span>
                   </div>
                 </div>
 
                 {/* 5. Statutory VAT */}
                 <div className="dash-meter-item">
-                  <span className="dash-meter-name">VAT (18%)</span>
+                  <span className="dash-meter-name">VAT ({pct(markups.vat, 0)})</span>
                   <div className="dash-meter-bar-track">
                     <div
                       className="dash-meter-bar-fill bar-emerald"
-                      style={{ width: `${(298200 / boq.total) * 100}%` }}
+                      style={{ width: `${(boq.chain[4]?.amount ?? 298200) / boq.total * 100}%` }}
                     />
                   </div>
                   <div className="dash-meter-value num">
-                    {fmtMoney(298200)} <span className="currency">AZN</span>
+                    {fmtMoney(boq.chain[4]?.amount ?? 298200)} <span className="currency">AZN</span>
                   </div>
                 </div>
               </div>
@@ -839,6 +873,441 @@ export function OverviewPage() {
           </div>
         </div>
       </div>
+
+      {/* =========================================================================
+          1. Platform Settings Modal (Opened by Gear Icon)
+          ========================================================================= */}
+      {showSettings ? (
+        <div className="modal-backdrop" onClick={() => setShowSettings(false)}>
+          <div className="modal-dialog settings-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <div className="modal-icon-badge badge-bronze">
+                  <Settings size={18} />
+                </div>
+                <div>
+                  <h2 className="modal-title">Platform Settings</h2>
+                  <span className="modal-sub">Commercial Mark-up Tiers &amp; Working Design Parameters</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowSettings(false)}
+                title="Close settings (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body scroll">
+              {/* Live Contract Valuation Summary Banner */}
+              <div className="settings-summary-banner">
+                <div className="summary-left">
+                  <span className="summary-label">Total Contract Valuation (incl. VAT)</span>
+                  <div className="summary-val num">{fmtMoney(boq.total)} AZN</div>
+                </div>
+                <div className="summary-right">
+                  <span className="summary-sub">Direct Works Baseline:</span>
+                  <strong className="summary-works num">{fmtMoney(boq.works)} AZN</strong>
+                </div>
+              </div>
+
+              {/* Section 1: Commercial Mark-up Percentages */}
+              <div className="settings-section">
+                <div className="section-head">
+                  <Percent size={15} className="section-icon" />
+                  <h3 className="section-title">Commercial Mark-up Structure</h3>
+                  <button
+                    type="button"
+                    className="section-reset-btn"
+                    onClick={() => {
+                      setMarkup("overheads", DEFAULT_MARKUPS.overheads);
+                      setMarkup("profit", DEFAULT_MARKUPS.profit);
+                      setMarkup("contingency", DEFAULT_MARKUPS.contingency);
+                      setMarkup("vat", DEFAULT_MARKUPS.vat);
+                    }}
+                    title="Reset to default tender baseline"
+                  >
+                    <RotateCcw size={12} />
+                    <span>Reset Defaults</span>
+                  </button>
+                </div>
+
+                <div className="settings-sliders-grid">
+                  {/* Overheads */}
+                  <div className="setting-slider-item">
+                    <div className="slider-label-row">
+                      <span className="setting-name">Site Overheads &amp; Preliminaries</span>
+                      <span className="setting-pct num">{pct(markups.overheads, 1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.20"
+                      step="0.005"
+                      value={markups.overheads}
+                      onChange={(e) => setMarkup("overheads", parseFloat(e.target.value))}
+                      className="setting-range"
+                    />
+                    <div className="slider-range-limits">
+                      <span>0%</span>
+                      <span>Tender: 8.0%</span>
+                      <span>20%</span>
+                    </div>
+                  </div>
+
+                  {/* Profit */}
+                  <div className="setting-slider-item">
+                    <div className="slider-label-row">
+                      <span className="setting-name">Contractor Profit Margin</span>
+                      <span className="setting-pct num">{pct(markups.profit, 1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.15"
+                      step="0.005"
+                      value={markups.profit}
+                      onChange={(e) => setMarkup("profit", parseFloat(e.target.value))}
+                      className="setting-range"
+                    />
+                    <div className="slider-range-limits">
+                      <span>0%</span>
+                      <span>Standard: 6.0%</span>
+                      <span>15%</span>
+                    </div>
+                  </div>
+
+                  {/* Contingency */}
+                  <div className="setting-slider-item">
+                    <div className="slider-label-row">
+                      <span className="setting-name">Unforeseen Contingency Reserve</span>
+                      <span className="setting-pct num">{pct(markups.contingency, 1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.15"
+                      step="0.005"
+                      value={markups.contingency}
+                      onChange={(e) => setMarkup("contingency", parseFloat(e.target.value))}
+                      className="setting-range"
+                    />
+                    <div className="slider-range-limits">
+                      <span>0%</span>
+                      <span>Statutory: 5.0%</span>
+                      <span>15%</span>
+                    </div>
+                  </div>
+
+                  {/* VAT */}
+                  <div className="setting-slider-item">
+                    <div className="slider-label-row">
+                      <span className="setting-name">Statutory State Value Added Tax (VAT)</span>
+                      <span className="setting-pct num">{pct(markups.vat, 1)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="0.25"
+                      step="0.01"
+                      value={markups.vat}
+                      onChange={(e) => setMarkup("vat", parseFloat(e.target.value))}
+                      className="setting-range"
+                    />
+                    <div className="slider-range-limits">
+                      <span>0%</span>
+                      <span>Azerbaijan Standard: 18.0%</span>
+                      <span>25%</span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 2: Nomenclature & Localization */}
+              <div className="settings-section">
+                <div className="section-head">
+                  <Globe size={15} className="section-icon" />
+                  <h3 className="section-title">Language &amp; Nomenclature Norms</h3>
+                </div>
+
+                <div className="settings-lang-row">
+                  <div className="lang-option-card">
+                    <label className="lang-label">
+                      <input
+                        type="radio"
+                        name="lang-choice"
+                        checked={lang === "en"}
+                        onChange={() => setLang("en")}
+                      />
+                      <div className="lang-info">
+                        <strong>English Engineering Norms</strong>
+                        <span>Standard international quantity surveying terminology (Default)</span>
+                      </div>
+                    </label>
+                  </div>
+
+                  <div className="lang-option-card">
+                    <label className="lang-label">
+                      <input
+                        type="radio"
+                        name="lang-choice"
+                        checked={lang === "az"}
+                        onChange={() => setLang("az")}
+                      />
+                      <div className="lang-info">
+                        <strong>Azərbaycan Dövlət Şəhərsalma Normaları</strong>
+                        <span>Orijinal işçi layihə və smeta nomenklaturası</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </div>
+
+              {/* Section 3: Surveyor & Project Specs */}
+              <div className="settings-section">
+                <div className="section-head">
+                  <ShieldCheck size={15} className="section-icon" />
+                  <h3 className="section-title">Surveyor Profile &amp; Designer Organization</h3>
+                </div>
+
+                <div className="settings-profile-grid">
+                  <div className="profile-spec-item">
+                    <span className="spec-label">Lead Quantity Surveyor:</span>
+                    <strong className="spec-val">{user?.name || "Elmir Məmmədov"}</strong>
+                  </div>
+                  <div className="profile-spec-item">
+                    <span className="spec-label">Design Organization:</span>
+                    <strong className="spec-val">"Storm Building" MMC</strong>
+                  </div>
+                  <div className="profile-spec-item">
+                    <span className="spec-label">Chief Project Engineer:</span>
+                    <strong className="spec-val">G. Musayeva</strong>
+                  </div>
+                  <div className="profile-spec-item">
+                    <span className="spec-label">Project Stage:</span>
+                    <strong className="spec-val">İşçi Layihə (Working Design 2026)</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <span className="modal-footer-hint">Press Esc or click Done to save adjustments</span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowSettings(false)}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {/* =========================================================================
+          2. Keyboard Shortcuts & Help Cheatsheet Modal (Opened by Question Mark)
+          ========================================================================= */}
+      {showShortcuts ? (
+        <div className="modal-backdrop" onClick={() => setShowShortcuts(false)}>
+          <div className="modal-dialog shortcuts-dialog" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-group">
+                <div className="modal-icon-badge badge-obsidian">
+                  <Keyboard size={18} />
+                </div>
+                <div>
+                  <h2 className="modal-title">Keyboard Shortcuts &amp; Surveyor Guide</h2>
+                  <span className="modal-sub">Storm Takeoff Productivity Cheatsheet</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                className="modal-close-btn"
+                onClick={() => setShowShortcuts(false)}
+                title="Close guide (Esc)"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="modal-body scroll">
+              {/* Search shortcut highlight */}
+              <div className="shortcuts-hero-box">
+                <div className="hero-box-left">
+                  <Command size={18} className="hero-cmd-icon" />
+                  <div>
+                    <strong>Global Search &amp; Omnibox</strong>
+                    <span>Instantly jump to any bill line, drawing sheet, or specification</span>
+                  </div>
+                </div>
+                <div className="hero-kbd-wrap">
+                  <kbd className="kbd-key">⌘</kbd>
+                  <kbd className="kbd-key">K</kbd>
+                </div>
+              </div>
+
+              {/* Shortcuts Groups Grid */}
+              <div className="shortcuts-grid">
+                {/* 1. Navigation */}
+                <div className="shortcut-category-card">
+                  <h3 className="category-title">Quick Navigation</h3>
+                  <div className="shortcut-rows-list">
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Project Overview Dashboard</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">1</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Bill of Quantities (WBS Tree)</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">2</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Drawing Register (205 Sheets)</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">3</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Discipline Audits &amp; Conflicts</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">4</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Commercial Rates &amp; Markups</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">5</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Printable PDF &amp; Excel Reports</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">6</kbd>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 2. Surveyor Actions */}
+                <div className="shortcut-category-card">
+                  <h3 className="category-title">Surveyor Takeoff Actions</h3>
+                  <div className="shortcut-rows-list">
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Approve / Sign Off Quantity</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">A</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Apply Schedule Math Correction</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">F</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Cycle Next Bill Line in Inspector</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">→</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Cycle Previous Bill Line</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">←</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Open Keyboard Cheatsheet</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">?</kbd>
+                      </div>
+                    </div>
+                    <div className="shortcut-item">
+                      <span className="shortcut-desc">Close Modal / Inspector Drawer</span>
+                      <div className="kbd-combo">
+                        <kbd className="kbd-key">Esc</kbd>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* 3. Evidence Methodology Guide */}
+              <div className="guide-legend-section">
+                <h3 className="legend-section-title">Verification Evidence Methodology</h3>
+                <div className="legend-cards-grid">
+                  <div className="legend-card">
+                    <div className="legend-badge badge-schedule">Schedule Extraction</div>
+                    <p className="legend-desc">
+                      Values extracted directly from vector CAD schedules and tables (A500C rebar, MEP schedules).
+                    </p>
+                  </div>
+                  <div className="legend-card">
+                    <div className="legend-badge badge-derived">Parametric Takeoff</div>
+                    <p className="legend-desc">
+                      Quantities calculated using explicit engineering formulas combining dimensions and member counts.
+                    </p>
+                  </div>
+                  <div className="legend-card">
+                    <div className="legend-badge badge-image">Plan Takeoff</div>
+                    <p className="legend-desc">
+                      Measured from architectural floor plans and cross-referenced with room finish schedules.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              {/* 4. Discipline Audits Severity Guide */}
+              <div className="guide-legend-section">
+                <h3 className="legend-section-title">Discipline Audits &amp; Discrepancy Severity</h3>
+                <div className="audit-legend-list">
+                  <div className="audit-legend-item">
+                    <span className="audit-tag tag-error">Discrepancy</span>
+                    <span className="audit-text">
+                      Arithmetic math errors or overstatements printed inside the drawings (e.g. Bracing Şr-2 -400kg).
+                    </span>
+                  </div>
+                  <div className="audit-legend-item">
+                    <span className="audit-tag tag-warn">Variance</span>
+                    <span className="audit-text">
+                      Discrepancies between structural, architectural, and MEP plans (e.g. 100mm vs 150mm slab thickness).
+                    </span>
+                  </div>
+                  <div className="audit-legend-item">
+                    <span className="audit-tag tag-info">Note</span>
+                    <span className="audit-text">
+                      Engineering annotations or items requiring surveyor clarification.
+                    </span>
+                  </div>
+                  <div className="audit-legend-item">
+                    <span className="audit-tag tag-ok">Verified</span>
+                    <span className="audit-text">
+                      100% agreement confirmed between independent drawing sets and schedules.
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="modal-footer">
+              <span className="modal-footer-hint">Shortcuts are active across all drawing and takeoff views</span>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowShortcuts(false)}
+              >
+                Got It
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
