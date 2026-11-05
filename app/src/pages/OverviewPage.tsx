@@ -126,9 +126,9 @@ export function OverviewPage() {
     { stage: "MEP & Utility", direct: 994000, gross: 1481060 },
   ];
 
-  const width = 340;
-  const height = 110;
-  const padX = 20;
+  const width = 360;
+  const height = 120;
+  const padX = 22;
   const padY = 16;
   const maxVal = 1600000;
 
@@ -540,6 +540,11 @@ export function OverviewPage() {
                       </linearGradient>
                     </defs>
 
+                    {/* Horizontal Reference Grid Guides */}
+                    <line x1={padX} y1={padY} x2={width - padX} y2={padY} stroke="rgba(24, 24, 27, 0.05)" strokeDasharray="3 3" />
+                    <line x1={padX} y1={(padY + height - padY) / 2} x2={width - padX} y2={(padY + height - padY) / 2} stroke="rgba(24, 24, 27, 0.05)" strokeDasharray="3 3" />
+                    <line x1={padX} y1={height - padY} x2={width - padX} y2={height - padY} stroke="rgba(24, 24, 27, 0.08)" />
+
                     {/* Area fills */}
                     <path d={areaGross} fill="url(#obsidianGradient)" />
                     <path d={areaDirect} fill="url(#bronzeGradient)" />
@@ -616,10 +621,34 @@ export function OverviewPage() {
                   {/* X Axis Stages */}
                   <div className="dash-curve-stages">
                     {milestones.map((m) => (
-                      <span key={m.stage} className="dash-stage-label">
-                        {m.stage.slice(0, 3)}
+                      <span key={m.stage} className="dash-stage-label" title={m.stage}>
+                        {m.stage.length > 7 ? m.stage.slice(0, 6) + "…" : m.stage}
                       </span>
                     ))}
+                  </div>
+
+                  {/* Bottom Progression KPI Strip (Eliminates empty space and balances with Donut card) */}
+                  <div className="dash-curve-kpi-row">
+                    <div className="curve-kpi-item">
+                      <span className="curve-kpi-label">
+                        <span className="curve-dot dot-bronze" />
+                        {t("directBaseline", lang)}
+                      </span>
+                      <strong className="curve-kpi-val num">{fmtMoney(boq.works)} ₼</strong>
+                    </div>
+                    <div className="curve-kpi-item">
+                      <span className="curve-kpi-label">
+                        <span className="curve-dot dot-obsidian" />
+                        {t("grossTotal", lang)}
+                      </span>
+                      <strong className="curve-kpi-val num">{fmtMoney(boq.total)} ₼</strong>
+                    </div>
+                    <div className="curve-kpi-item">
+                      <span className="curve-kpi-label">{lang === "az" ? "Əlavə Həcmi" : "Markup Uplift"}</span>
+                      <strong className="curve-kpi-val num text-emerald">
+                        +{pct((boq.total - boq.works) / (boq.works || 1), 1)}
+                      </strong>
+                    </div>
                   </div>
                 </div>
               </div>
