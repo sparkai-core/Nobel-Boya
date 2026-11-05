@@ -14,7 +14,7 @@ import {
 import { buildingById, data, DISCIPLINES, docByCode, evidenceBySheet, itemById, sheetById, sheetImage } from "../data";
 import type { Box } from "../data/types";
 import { useBoq } from "../lib/boq";
-import { fmtMoney } from "../lib/format";
+import { fmtMoney, unitLabel } from "../lib/format";
 import { useApp } from "../lib/store";
 import { t } from "../lib/i18n";
 import { SheetViewer, type ViewerHandle, type ViewerMark } from "../components/SheetViewer";
@@ -513,6 +513,47 @@ export function DrawingsPage() {
             </button>
           </div>
         </header>
+
+        {/* Persistent Detected Quantities Toolbar for Immediate Verification */}
+        {evidence.length > 0 ? (
+          <div className="sheet-detected-bar">
+            <div className="detected-label-group">
+              <span className="detected-bar-title">
+                {lang === "az" ? "Aşkarlanan Smeta Həcmləri:" : "Detected Schedule Values:"}
+              </span>
+              <span className="detected-count-badge font-mono">{evidence.length}</span>
+            </div>
+            <div className="detected-chips-scroll">
+              {evidence.map(({ itemId, srcIndex }) => {
+                const it = itemById.get(itemId)!;
+                const src = it.src[srcIndex]!;
+                const line = boq.lineByItem.get(itemId);
+                const tag = line?.code || it.section || it.id;
+                const val = `${src.value ?? it.qty} ${unitLabel(it.unit, lang)}`;
+                const isApproved = Boolean(approvedMap[itemId]);
+                const isActive = itemId === activeItem && srcIndex === activeSrc;
+
+                return (
+                  <button
+                    key={`${itemId}-${srcIndex}`}
+                    type="button"
+                    className={`detected-val-chip${isActive ? " active" : ""}${isApproved ? " approved" : ""}`}
+                    onClick={() => focusItem(itemId, srcIndex)}
+                    title={`Locate on blueprint & inspect: ${line?.en || it.en}`}
+                  >
+                    <span className="chip-tag font-mono">{tag}</span>
+                    <span className="chip-val num">{val}</span>
+                    {isApproved ? (
+                      <span className="chip-status-dot approved" title="Approved" />
+                    ) : (
+                      <span className="chip-status-dot pending" title="Pending verification" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ) : null}
 
         <SheetViewer
           ref={viewer}

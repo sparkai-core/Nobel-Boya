@@ -456,14 +456,11 @@ export function OverviewPage() {
 
                     {/* Donut Hole Value */}
                     <g className="dash-donut-hole-text">
-                      <text x="65" y="60" textAnchor="middle" className="donut-hole-label">
-                        DIRECT WORKS
+                      <text x="65" y="66" textAnchor="middle" className="donut-hole-val num">
+                        {Math.round(works / 1000)}k <tspan className="donut-hole-unit">AZN</tspan>
                       </text>
-                      <text x="65" y="76" textAnchor="middle" className="donut-hole-val num">
-                        {Math.round(works / 1000)}k
-                      </text>
-                      <text x="65" y="87" textAnchor="middle" className="donut-hole-unit">
-                        AZN
+                      <text x="65" y="79" textAnchor="middle" className="donut-hole-label">
+                        {t("directWorks", lang)}
                       </text>
                     </g>
                   </svg>

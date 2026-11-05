@@ -38,7 +38,7 @@ export const I18N = {
   verifiedApprovals: { en: "Verified Approvals", az: "Təsdiqlənmiş Uyğunluqlar" },
 
   projectsOverview: { en: "Projects Overview", az: "Layihələr İcmalı" },
-  directWorks: { en: "DIRECT WORKS", az: "BİRBAŞA İŞLƏR" },
+  directWorks: { en: "Direct Works", az: "Birbaşa işlər" },
   incomeVsExpense: { en: "Commercial Progression", az: "Kommersiya Dinamikası" },
   directBaseline: { en: "Direct", az: "Birbaşa" },
   grossTotal: { en: "Gross", az: "Cəmi" },

@@ -1204,3 +1204,113 @@
   font-size: 10.5px;
   white-space: nowrap;
 }
+
+/* ==========================================================================
+   6. Detected Quantities Strip on Drawing Sheet (DrawingsPage.tsx)
+   ========================================================================== */
+
+.sheet-detected-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px;
+  background: var(--sheet);
+  border-bottom: 1px solid var(--line);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
+  z-index: 5;
+}
+
+.detected-label-group {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.detected-bar-title {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.detected-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 6px;
+  border-radius: 10px;
+  background: var(--sheet-3);
+  color: var(--graphite);
+}
+
+.detected-chips-scroll {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding: 2px 0;
+  scrollbar-width: thin;
+}
+
+.detected-val-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  background: var(--stage);
+  border: 1px solid var(--line);
+  color: var(--graphite);
+  font-size: 11.5px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.detected-val-chip:hover {
+  background: var(--sheet);
+  border-color: var(--stamp);
+  transform: translateY(-1px);
+}
+
+.detected-val-chip.active {
+  background: var(--redline-soft);
+  border-color: var(--redline);
+  color: var(--redline);
+  box-shadow: 0 0 0 2px rgba(220, 38, 38, 0.1);
+}
+
+.detected-val-chip.approved {
+  border-color: rgba(5, 150, 105, 0.3);
+}
+
+.chip-tag {
+  font-weight: 700;
+  color: var(--stamp);
+  font-size: 10.5px;
+}
+
+.detected-val-chip.active .chip-tag {
+  color: var(--redline);
+}
+
+.chip-val {
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.chip-status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.chip-status-dot.approved {
+  background: var(--emerald);
+}
+
+.chip-status-dot.pending {
+  background: var(--faint);
+}
