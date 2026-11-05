@@ -1,23 +1,24 @@
 :root {
   color-scheme: light;
 
-  /* Luminous Architectural Ground & Surfaces */
-  --paper: #f8fafc;
+  /* Architectural Ground & Surfaces (Warm Obsidian & Paper) */
+  --paper: #f4f4f1;
+  --stage: #fafaf8;
   --sheet: #ffffff;
-  --sheet-2: #f8fafc;
-  --sheet-3: #f1f5f9;
-  --graphite: #0f172a;
-  --ink-2: #1e293b;
-  --muted: #64748b;
-  --faint: #94a3b8;
-  --line: #e2e8f0;
-  --line-strong: #cbd5e1;
+  --sheet-2: #f8f8f6;
+  --sheet-3: #f1f1ee;
+  --graphite: #18181b;
+  --ink-2: #27272a;
+  --muted: #71717a;
+  --faint: #a1a1aa;
+  --line: #e4e4e7;
+  --line-strong: #d4d4d8;
 
-  /* Primary Industrial Accent (Strict 10% Ratio) */
-  --stamp: #2563eb;
-  --stamp-hover: #1d4ed8;
-  --stamp-soft: #eff6ff;
-  --stamp-line: #bfdbfe;
+  /* Primary Accent: Architectural Bronze / Warm Copper */
+  --stamp: #b45309;
+  --stamp-hover: #9a3412;
+  --stamp-soft: #fef3c7;
+  --stamp-line: #fde68a;
 
   /* Signature Redline Evidence Mark (Reserved for citations & variances) */
   --redline: #dc2626;
@@ -25,13 +26,13 @@
   --redline-line: #fecaca;
 
   /* Semantic State Colors */
-  --ok: #16a34a;
-  --ok-soft: #f0fdf4;
-  --emerald: #16a34a;
-  --emerald-soft: #dcfce7;
+  --ok: #059669;
+  --ok-soft: #ecfdf5;
+  --emerald: #059669;
+  --emerald-soft: #ecfdf5;
   --amber: #d97706;
   --amber-soft: #fffbeb;
-  --info: #64748b;
+  --info: #71717a;
 
   /* Light-Table Blueprint Stage Canvas */
   --lighttable: #1e293b;

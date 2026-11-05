@@ -375,30 +375,30 @@ export function Building3D({ className = "", showCaption = true }: Props) {
 
         const proj = verts.map(project);
 
-        // Styling based on element kind & filter state
-        let baseR = 37;
-        let baseG = 99;
-        let baseB = 235;
+        // Styling based on element kind & filter state in Obsidian & Bronze palette
+        let baseR = 180;
+        let baseG = 83;
+        let baseB = 9; // Architectural Bronze (#B45309)
         let alpha = isMatch ? 0.88 : 0.12;
 
         if (b.kind === "footing") {
-          baseR = 16;
-          baseG = 185;
-          baseB = 129; // emerald
+          baseR = 71;
+          baseG = 85;
+          baseB = 105; // Slate Foundation (#475569)
         } else if (b.kind === "truss") {
-          baseR = 245;
-          baseG = 158;
-          baseB = 11; // amber
+          baseR = 217;
+          baseG = 119;
+          baseB = 6; // Amber Structural Steel (#D97706)
         } else if (b.kind === "slab") {
-          baseR = 100;
-          baseG = 116;
-          baseB = 139; // slate
+          baseR = 148;
+          baseG = 163;
+          baseB = 184; // Neutral Concrete Slab (#94A3B8)
         }
 
         if (isHovered) {
-          baseR = 96;
-          baseG = 165;
-          baseB = 250;
+          baseR = 245;
+          baseG = 158;
+          baseB = 11; // Luminous Amber Highlight (#F59E0B)
           alpha = 1.0;
         }
 
