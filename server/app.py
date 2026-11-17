@@ -2,6 +2,7 @@
 Provides authenticated endpoints for autonomous takeoff, rates upload, and BOQ comparison.
 """
 import io
+import os
 import json
 import uuid
 import re
@@ -23,6 +24,7 @@ from db import (
     save_boq_comparison,
     get_latest_boq_comparison,
     hash_pw,
+    check_pw,
     get_db,
 )
 from takeoff_engine import process_uploaded_drawing_package
@@ -45,7 +47,8 @@ app.add_middleware(
 )
 
 # Mount public sheets static directory so any newly rasterized sheet is accessible
-PUBLIC_SHEETS = Path(__file__).resolve().parents[1] / "app" / "public" / "sheets"
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[1] / "app" / "public"))
+PUBLIC_SHEETS = DATA_DIR / "sheets"
 PUBLIC_SHEETS.mkdir(parents=True, exist_ok=True)
 app.mount("/sheets", StaticFiles(directory=str(PUBLIC_SHEETS)), name="sheets")
 
@@ -106,6 +109,10 @@ def login(payload: dict):
         conn.commit()
         conn.close()
         user = find_user_by_email(email)
+    else:
+        # Verify password for existing users
+        if not check_pw(user["password_hash"], pw or "demo"):
+            raise HTTPException(status_code=401, detail="Invalid email or password.")
 
     return {
         "token": user["id"],
@@ -318,6 +325,12 @@ def get_comparison(project_id: str, user: dict = Depends(get_current_user)):
         "summary": res["comparison"].get("summary"),
         "lines": res["comparison"].get("lines", [])
     }
+
+
+# Mount built React frontend for full-stack unified deployment on Render / VPS / Docker
+DIST_DIR = Path(__file__).resolve().parents[1] / "app" / "dist"
+if DIST_DIR.exists():
+    app.mount("/", StaticFiles(directory=str(DIST_DIR), html=True), name="frontend")
 
 
 if __name__ == "__main__":

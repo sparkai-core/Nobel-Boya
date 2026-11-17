@@ -1,8 +1,9 @@
 import { useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
-import { P } from "./data";
+import { P, setActiveDataset } from "./data";
 import { useApp } from "./lib/store";
+import { fetchProject } from "./lib/api";
 import { BillPage } from "./pages/BillPage";
 import { ChecksPage } from "./pages/ChecksPage";
 import { DrawingsPage } from "./pages/DrawingsPage";
@@ -16,9 +17,26 @@ import { SettingsPage } from "./pages/SettingsPage";
 
 export function App() {
   const lang = useApp((s) => s.lang);
+  const activeProjectId = useApp((s) => s.activeProjectId);
+  const bumpProjectRev = useApp((s) => s.bumpProjectRev);
+
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
+
+  // Hydrate active project dataset on hard browser refresh
+  useEffect(() => {
+    if (activeProjectId && activeProjectId !== "proj_qobu") {
+      fetchProject(activeProjectId)
+        .then((res) => {
+          if (res && res.data) {
+            setActiveDataset(res.data);
+            bumpProjectRev();
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeProjectId, bumpProjectRev]);
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/projects" replace />} />

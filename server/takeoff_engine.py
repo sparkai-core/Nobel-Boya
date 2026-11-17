@@ -10,10 +10,12 @@ from datetime import datetime
 from pathlib import Path
 from typing import Dict, List, Any, Optional
 
+import os
 import pymupdf
 from PIL import Image
 
-SHEETS_DIR = Path(__file__).resolve().parents[1] / "app" / "public" / "sheets"
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).resolve().parents[1] / "app" / "public"))
+SHEETS_DIR = DATA_DIR / "sheets"
 DEFAULT_RATES_PATH = Path(__file__).resolve().parents[1] / "app" / "src" / "data" / "qobu.json"
 
 

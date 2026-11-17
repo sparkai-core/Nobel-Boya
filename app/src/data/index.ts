@@ -97,7 +97,10 @@ export function sheetKind(s: { title: string; titleEn: string; discipline: strin
 }
 
 export function sheetImage(id: string, thumb = false) {
-  const base = import.meta.env.BASE_URL || "./";
+  const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
+  const base = apiUrl
+    ? apiUrl.replace(/\/+$/, "")
+    : (import.meta.env.BASE_URL || "./");
   const prefix = base.endsWith("/") ? base : `${base}/`;
   return `${prefix}sheets/${id}${thumb ? ".t" : ""}.webp`;
 }

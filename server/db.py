@@ -1,6 +1,7 @@
 """SQLite Database & Schema Manager for Storm Takeoff Platform.
 Ensures strict multi-tenant data isolation: every query is scoped to user_id.
 """
+import os
 import sqlite3
 import json
 import uuid
@@ -8,19 +9,29 @@ import hashlib
 from datetime import datetime, timezone
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "tutulan.db"
+DATA_DIR = Path(os.getenv("DATA_DIR", Path(__file__).parent))
+DATA_DIR.mkdir(parents=True, exist_ok=True)
+DB_PATH = DATA_DIR / "tutulan.db"
 QOBU_JSON_PATH = Path(__file__).resolve().parents[1] / "app" / "src" / "data" / "qobu.json"
 
 
 def get_db():
-    conn = sqlite3.connect(str(DB_PATH))
+    conn = sqlite3.connect(str(DB_PATH), timeout=10.0)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    conn.execute("PRAGMA journal_mode = WAL")
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
 def hash_pw(pw: str) -> str:
     return hashlib.sha256(pw.encode("utf-8")).hexdigest()
+
+
+def check_pw(stored_hash: str, raw_pw: str) -> bool:
+    if not stored_hash:
+        return True
+    return hash_pw(raw_pw) == stored_hash
 
 
 def init_db():

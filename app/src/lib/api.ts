@@ -1,7 +1,9 @@
 /** Client API for Storm Takeoff backend. */
 import { useApp } from "./store";
 
-const API_BASE = "/api";
+const API_BASE = import.meta.env.VITE_API_URL
+  ? `${import.meta.env.VITE_API_URL.replace(/\/+$/, "")}/api`
+  : "/api";
 
 function getHeaders(isFormData = false): Record<string, string> {
   const email = useApp.getState().userEmail || "elmir@stormtakeoff.com";
