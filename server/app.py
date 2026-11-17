@@ -281,6 +281,58 @@ async def upload_project_rates(
     }
 
 
+@app.post("/api/projects/{project_id}/rates/manual")
+def update_or_add_manual_rate(
+    project_id: str,
+    payload: dict,
+    user: dict = Depends(get_current_user)
+):
+    """Manually update or add an individual rate item in the project rate library."""
+    proj = get_project_for_user(project_id, user["id"])
+    if not proj:
+        raise HTTPException(status_code=404, detail="Project not found")
+
+    rate_val = payload.get("rate")
+    if rate_val is None:
+        raise HTTPException(status_code=400, detail="Rate value is required")
+
+    key = payload.get("key") or re.sub(r"[^a-zA-Z0-9]+", "-", payload.get("en", "rate").lower()).strip("-")
+    if not key:
+        key = f"rate-{uuid.uuid4().hex[:6]}"
+
+    p_data = proj["data"]
+    rates = p_data.get("rates", {})
+
+    existing = rates.get(key, {})
+    if isinstance(existing, dict):
+        updated_item = {
+            "rate": float(rate_val),
+            "unit": payload.get("unit") or existing.get("unit") or "m³",
+            "en": payload.get("en") or existing.get("en") or key,
+            "az": payload.get("az") or existing.get("az") or payload.get("en") or key,
+            "group": payload.get("group") or existing.get("group") or "Custom rates"
+        }
+    else:
+        updated_item = {
+            "rate": float(rate_val),
+            "unit": payload.get("unit", "m³"),
+            "en": payload.get("en", key),
+            "az": payload.get("az", payload.get("en", key)),
+            "group": payload.get("group", "Custom rates")
+        }
+
+    rates[key] = updated_item
+    p_data["rates"] = rates
+    update_project_data(project_id, user["id"], p_data)
+
+    return {
+        "success": True,
+        "key": key,
+        "rate": updated_item,
+        "all_rates": rates
+    }
+
+
 @app.post("/api/projects/{project_id}/compare")
 async def upload_comparison_boq(
     project_id: str,

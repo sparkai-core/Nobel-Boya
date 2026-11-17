@@ -10,6 +10,7 @@ import { EvidenceCrop } from "./EvidenceCrop";
 import { methodHint, MethodTag, SeverityTag } from "./ui";
 import { buildingShort, checkTitle, formulaText, noteText, sheetTitle } from "../lib/loc";
 import { useT } from "../lib/i18n";
+import { updateManualRate } from "../lib/api";
 
 export function LineInspector({ line }: { line: Line }) {
   const t = useT();
@@ -55,7 +56,13 @@ export function LineInspector({ line }: { line: Line }) {
               onChange={(e) => setRateDraft(e.target.value)}
               onBlur={() => {
                 const v = Number(String(rateDraft).replace(",", "."));
-                if (rateDraft != null && Number.isFinite(v) && v >= 0) setRate(line.rateKey, v === line.sampleRate ? null : v);
+                if (rateDraft != null && Number.isFinite(v) && v >= 0) {
+                  setRate(line.rateKey, v === line.sampleRate ? null : v);
+                  const pid = useApp.getState().activeProjectId;
+                  if (pid) {
+                    updateManualRate(pid, { key: line.rateKey, rate: v }).catch(() => {});
+                  }
+                }
                 setRateDraft(null);
               }}
               onKeyDown={(e) => {

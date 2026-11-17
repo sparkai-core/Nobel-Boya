@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
-import { setActiveDataset } from "../data";
+import { data, setActiveDataset } from "../data";
 import rawQobu from "../data/qobu.json";
 
 export type Markups = { overheads: number; profit: number; contingency: number; vat: number };
@@ -29,6 +29,7 @@ type State = {
   setGenerated: (v: boolean) => void;
   setRate: (key: string, value: number | null) => void;
   setFullRates: (rates: Record<string, number>) => void;
+  addRateItem: (key: string, item: any) => void;
   setMarkup: (key: keyof Markups, value: number) => void;
   setQty: (itemId: string, value: QtyOverride | null) => void;
   setFix: (checkId: string, on: boolean) => void;
@@ -123,6 +124,14 @@ export const useApp = create<State>()(
           rates: { ...s.rates, ...newRates },
           projectRev: s.projectRev + 1,
         })),
+      addRateItem: (key, item) => {
+        if (!data.rates) (data as any).rates = {};
+        data.rates[key] = item;
+        set((s) => ({
+          rates: { ...s.rates, [key]: item.rate },
+          projectRev: s.projectRev + 1,
+        }));
+      },
       setMarkup: (key, value) => set((s) => ({ markups: { ...s.markups, [key]: value } })),
       setQty: (itemId, value) =>
         set((s) => {

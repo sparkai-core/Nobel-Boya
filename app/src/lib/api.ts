@@ -60,6 +60,22 @@ export async function uploadRates(projectId: string, file: File) {
   return res.json();
 }
 
+export async function updateManualRate(
+  projectId: string,
+  rateData: { key?: string; rate: number; unit?: string; en?: string; az?: string; group?: string }
+) {
+  const res = await fetch(`${API_BASE}/projects/${projectId}/rates/manual`, {
+    method: "POST",
+    headers: getHeaders(false),
+    body: JSON.stringify(rateData),
+  });
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ detail: "Failed to update rate" }));
+    throw new Error(err.detail || "Failed to update rate");
+  }
+  return res.json();
+}
+
 export async function compareBoq(projectId: string, file: File) {
   const fd = new FormData();
   fd.append("boq_file", file);
