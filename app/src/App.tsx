@@ -1,8 +1,9 @@
-import { lazy, Suspense, useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
-import { P } from "./data";
+import { P, setActiveDataset } from "./data";
 import { useApp } from "./lib/store";
+import { fetchProject } from "./lib/api";
 import { BillPage } from "./pages/BillPage";
 import { ChecksPage } from "./pages/ChecksPage";
 import { DrawingsPage } from "./pages/DrawingsPage";
@@ -17,64 +18,67 @@ import { opsRoutes } from "./ops/routes";
 import { PageSkeleton } from "./components/kit/extra";
 const NewProjectPage = lazy(() => import("./pages/projects/NewProjectPage").then((m) => ({ default: m.NewProjectPage })));
 const TemplatesPage = lazy(() => import("./pages/projects/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
+const PortfolioPage = lazy(() => import("./pages/projects/PortfolioPage").then((m) => ({ default: m.PortfolioPage })));
 const VendorPortal = lazy(() => import("./pages/vendor/VendorPortal").then((m) => ({ default: m.VendorPortal })));
-
-function RequireUser({ children }: { children: ReactNode }) {
-  const user = useApp((s) => s.user);
-  return user ? <>{children}</> : <Navigate to="/login" replace />;
-}
-
-function RequireBill({ children }: { children: ReactNode }) {
-  const generated = useApp((s) => s.generated);
-  return generated ? <>{children}</> : <Navigate to={`${P}/generate`} replace />;
-}
-
-function Home() {
-  const user = useApp((s) => s.user);
-  return <Navigate to={user ? "/projects" : "/login"} replace />;
-}
 
 export function App() {
   const lang = useApp((s) => s.lang);
+  const activeProjectId = useApp((s) => s.activeProjectId);
+  const bumpProjectRev = useApp((s) => s.bumpProjectRev);
+
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
+
+  // Hydrate active project dataset on hard browser refresh
+  useEffect(() => {
+    if (activeProjectId && activeProjectId !== "proj_qobu") {
+      fetchProject(activeProjectId)
+        .then((res) => {
+          if (res && res.data) {
+            setActiveDataset(res.data);
+            bumpProjectRev();
+          }
+        })
+        .catch(() => {});
+    }
+  }, [activeProjectId, bumpProjectRev]);
   return (
     <Routes>
-      <Route path="/" element={<Home />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
       <Route path="/login" element={<LoginPage />} />
+
       <Route path="/vendor/*" element={<Suspense fallback={null}><VendorPortal /></Suspense>} />
-      <Route
-        path={`${P}/generate`}
-        element={
-          <RequireUser>
-            <GeneratePage />
-          </RequireUser>
-        }
-      />
-      <Route
-        element={
-          <RequireUser>
-            <Shell />
-          </RequireUser>
-        }
-      >
+      <Route path="/generate" element={<GeneratePage />} />
+      <Route path={`${P}/generate`} element={<GeneratePage />} />
+      <Route element={<Shell />}>
         <Route path="/projects" element={<Suspense fallback={<PageSkeleton />}><ProjectsPage /></Suspense>} />
+        <Route path="/projects/portfolio" element={<Suspense fallback={<PageSkeleton />}><PortfolioPage /></Suspense>} />
         <Route path="/projects/new" element={<Suspense fallback={<PageSkeleton />}><NewProjectPage /></Suspense>} />
         <Route path="/projects/templates" element={<Suspense fallback={<PageSkeleton />}><TemplatesPage /></Suspense>} />
         <Route path="/settings" element={<SettingsPage />} />
-        <Route path={P} element={<Navigate to={`${P}/overview`} replace />} />
-        <Route path={`${P}/bill`} element={<RequireBill><BillPage /></RequireBill>} />
-        <Route path={`${P}/drawings`} element={<RequireBill><DrawingsPage /></RequireBill>} />
-        <Route path={`${P}/drawings/:sheetId`} element={<RequireBill><DrawingsPage /></RequireBill>} />
-        <Route path={`${P}/checks`} element={<RequireBill><ChecksPage /></RequireBill>} />
-        <Route path={`${P}/checks/:checkId`} element={<RequireBill><ChecksPage /></RequireBill>} />
-        <Route path={`${P}/overview`} element={<RequireBill><OverviewPage /></RequireBill>} />
-        <Route path={`${P}/rates`} element={<RequireBill><RatesPage /></RequireBill>} />
-        <Route path={`${P}/export`} element={<RequireBill><ExportPage /></RequireBill>} />
+        <Route path="/overview" element={<OverviewPage />} />
+        <Route path="/bill" element={<BillPage />} />
+        <Route path="/drawings" element={<DrawingsPage />} />
+        <Route path="/drawings/:sheetId" element={<DrawingsPage />} />
+        <Route path="/checks" element={<ChecksPage />} />
+        <Route path="/checks/:checkId" element={<ChecksPage />} />
+        <Route path="/rates" element={<RatesPage />} />
+        <Route path="/export" element={<ExportPage />} />
+
+        <Route path={P} element={<Navigate to="/overview" replace />} />
+        <Route path={`${P}/bill`} element={<BillPage />} />
+        <Route path={`${P}/drawings`} element={<DrawingsPage />} />
+        <Route path={`${P}/drawings/:sheetId`} element={<DrawingsPage />} />
+        <Route path={`${P}/checks`} element={<ChecksPage />} />
+        <Route path={`${P}/checks/:checkId`} element={<ChecksPage />} />
+        <Route path={`${P}/overview`} element={<OverviewPage />} />
+        <Route path={`${P}/rates`} element={<RatesPage />} />
+        <Route path={`${P}/export`} element={<ExportPage />} />
         {opsRoutes()}
+
       </Route>
-      <Route path="*" element={<Home />} />
+      <Route path="*" element={<Navigate to="/projects" replace />} />
     </Routes>
   );
 }

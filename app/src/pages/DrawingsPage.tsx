@@ -23,34 +23,42 @@ export function DrawingsPage() {
   const viewer = useRef<ViewerHandle>(null);
   const listRef = useRef<HTMLDivElement>(null);
 
-  const sheet = sheetById.get(sheetId ?? "") ?? sheetById.get("AR-10")!;
+  const currentSheets = data.sheets || [];
+  const sheet = sheetById.get(sheetId ?? "") ?? currentSheets[0] ?? null;
   const activeItem = params.get("item");
   const activeSrc = Number(params.get("src") ?? 0);
   const activeCheck = params.get("check");
 
-  const evidence = evidenceBySheet.get(sheet.id) ?? [];
-  const checkHere = data.checks.filter((c) => c.sources.some((s) => s.sheet === sheet.id));
+  const evidence = sheet ? (evidenceBySheet.get(sheet.id) ?? []) : [];
+  const checkHere = sheet ? (data.checks || []).filter((c) => c.sources.some((s) => s.sheet === sheet.id)) : [];
 
   const marks: ViewerMark[] = useMemo(() => {
     const list: ViewerMark[] = evidence.map(({ itemId, srcIndex }) => {
       const it = itemById.get(itemId)!;
       const src = it.src[srcIndex]!;
+      const line = boq.lineByItem.get(itemId);
+      const valText = src.role
+        ? `${t(roleLabel(src.role))} ${src.value ?? ""}`.trim()
+        : src.value
+          ? `${src.value} ${unitLabel(it.unit, lang)}`
+          : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`;
       return {
         key: `i:${itemId}:${srcIndex}`,
         box: src.box,
         tone: "blue" as const,
         active: itemId === activeItem && srcIndex === activeSrc,
-        label: src.role ? `${t(roleLabel(src.role))} ${src.value ?? ""}`.trim() : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`,
+        tag: line?.code,
+        label: valText,
       };
     });
     if (activeCheck) {
       const c = data.checks.find((x) => x.id === activeCheck);
       c?.sources.forEach((s, i) => {
-        if (s.sheet === sheet.id) list.push({ key: `c:${c.id}:${i}`, box: s.box, tone: "red", active: i === activeSrc });
+        if (s.sheet === sheet.id) list.push({ key: `c:${c.id}:${i}`, box: s.box, tone: "red", active: i === activeSrc, tag: c.id });
       });
     }
     return list.map((m) => (m.active ? { ...m, tone: "red" as const } : m));
-  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang, t]);
+  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang, t, boq.lineByItem]);
 
   const focus: Box | null = useMemo(() => marks.find((m) => m.active)?.box ?? null, [marks]);
 
@@ -76,10 +84,12 @@ export function DrawingsPage() {
   const idx = flat.findIndex((s) => s.id === sheet.id);
 
   useEffect(() => {
-    listRef.current?.querySelector(`[data-sheet="${sheet.id}"]`)?.scrollIntoView({ block: "nearest" });
-  }, [sheet.id]);
+    if (sheet) {
+      listRef.current?.querySelector(`[data-sheet="${sheet.id}"]`)?.scrollIntoView({ block: "nearest" });
+    }
+  }, [sheet?.id]);
 
-  const open = (id: string) => navigate(`${P}/drawings/${id}`);
+  const open = (id: string) => navigate(`/drawings/${id}`);
   const focusItem = (itemId: string, srcIndex: number) => {
     const next = new URLSearchParams();
     next.set("item", itemId);
@@ -88,8 +98,8 @@ export function DrawingsPage() {
     viewer.current?.flyTo(itemById.get(itemId)!.src[srcIndex]!.box);
   };
 
-  const doc = docByCode.get(sheet.doc)!;
-  const hasText = doc.text === true || (doc.text === "partial" && evidence.some((e) => itemById.get(e.itemId)!.src[e.srcIndex]!.how === "text"));
+  const doc = docByCode.get(sheet.doc) || data.documents?.[0] || { code: "D1", file: "Drawing Package", text: true, title: "" };
+  const hasText = doc.text === true || (doc.text === "partial" && evidence.some((e) => itemById.get(e.itemId)?.src[e.srcIndex]?.how === "text"));
 
   return (
     <div className="drawings">
@@ -98,7 +108,7 @@ export function DrawingsPage() {
           <h1>{t("Drawings")}</h1>
           <div className="reg-project">
             <strong>{projectName(lang)}</strong>
-            <span>{t("4 PDF files, 205 sheets, issue {d}", { d: data.project.issued })}</span>
+            <span>{t("{f} PDF files, {s} sheets, issue {d}", { f: (data.documents || []).length, s: (data.sheets || []).length, d: data.project?.issued || "" })}</span>
           </div>
           <div className="search">
             <Search size={15} aria-hidden="true" />
@@ -187,7 +197,7 @@ export function DrawingsPage() {
         <h2>{t("Read from this sheet")}</h2>
         {!evidence.length ? (
           <p className="muted small read-empty">
-            {t("No quantities are taken from this sheet.")} {sheet.discipline === "general" ? t("It is a cover, title or general sheet.") : t("Its content is covered by the schedules on other sheets.")}
+            {t("No quantities are taken from this sheet.")} {sheet && sheet.discipline === "general" ? t("It is a cover, title or general sheet.") : t("Its content is covered by the schedules on other sheets.")}
           </p>
         ) : (
           <ul className="read-list">
@@ -217,7 +227,7 @@ export function DrawingsPage() {
                     </span>
                   </button>
                   {line ? (
-                    <Link to={`${P}/bill?line=${encodeURIComponent(line.id)}`} className="text-link small read-link">
+                    <Link to={`/bill?line=${encodeURIComponent(line.id)}`} className="text-link small read-link">
                       {t("Line {c} in the bill", { c: line.code })}
                     </Link>
                   ) : null}

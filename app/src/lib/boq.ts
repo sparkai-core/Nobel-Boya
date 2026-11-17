@@ -39,17 +39,22 @@ export type Boq = {
   methodCount: Record<Method, number>;
 };
 
-export const checksByItem = (() => {
+export const checksByItem = new Map<string, Check[]>();
+
+export function getChecksByItem(): Map<string, Check[]> {
   const map = new Map<string, Check[]>();
-  for (const c of data.checks) for (const id of c.items) map.set(id, [...(map.get(id) ?? []), c]);
+  for (const c of (data.checks || [])) {
+    for (const id of (c.items || [])) {
+      map.set(id, [...(map.get(id) ?? []), c]);
+    }
+  }
   return map;
-})();
+}
 
-const sectionOrder = new Map(data.sections.map((s, i) => [s.id, i]));
-
-export function effectiveQty(item: Item, qty: Record<string, { qty: number }>, fixes: Record<string, boolean>) {
+export function effectiveQty(item: Item, qty: Record<string, { qty: number }>, fixes: Record<string, boolean>, checksMap?: Map<string, Check[]>) {
   if (qty[item.id]) return { value: qty[item.id]!.qty, adjusted: "override" as const };
-  for (const c of checksByItem.get(item.id) ?? []) {
+  const map = checksMap ?? getChecksByItem();
+  for (const c of map.get(item.id) ?? []) {
     if (c.fix && c.fix.item === item.id && fixes[c.id]) return { value: c.fix.qty, adjusted: "fix" as const };
   }
   return { value: item.qty, adjusted: null };
@@ -62,15 +67,21 @@ export function buildBoq(rates: Record<string, number>, markups: Markups, qty: R
   const methodValue: Record<Method, number> = { schedule: 0, image: 0, derived: 0 };
   const methodCount: Record<Method, number> = { schedule: 0, image: 0, derived: 0 };
 
-  data.buildings.forEach((b) => {
-    const bItems = data.items.filter((i) => i.building === b.id);
+  const currentChecksMap = getChecksByItem();
+  checksByItem.clear();
+  currentChecksMap.forEach((v, k) => checksByItem.set(k, v));
+
+  const sectionOrder = new Map((data.sections || []).map((s, i) => [s.id, i]));
+
+  (data.buildings || []).forEach((b) => {
+    const bItems = (data.items || []).filter((i) => i.building === b.id);
     const bySection = new Map<string, Item[]>();
     for (const it of bItems) bySection.set(it.section, [...(bySection.get(it.section) ?? []), it]);
     const secIds = [...bySection.keys()].sort((a, z) => (sectionOrder.get(a) ?? 0) - (sectionOrder.get(z) ?? 0));
     const bCode = String(buildings.length + 1);
     const sections: SectionBlock[] = [];
     secIds.forEach((sid, si) => {
-      const sec = data.sections.find((s) => s.id === sid)!;
+      const sec = (data.sections || []).find((s) => s.id === sid) || { id: sid, az: sid, en: sid };
       const sCode = `${bCode}.${si + 1}`;
       const groups: Item[][] = [];
       const seen = new Map<string, Item[]>();
@@ -87,18 +98,20 @@ export function buildBoq(rates: Record<string, number>, markups: Markups, qty: R
       }
       const secLines = groups.map((group, li) => {
         const first = group[0]!;
-        const desc = first.line ? data.lineGroups[first.line]! : { az: first.az, en: first.en };
+        const desc = (first.line && data.lineGroups?.[first.line])
+          ? data.lineGroups[first.line]!
+          : { az: first.az || first.en || "", en: first.en || first.az || "" };
         let q = 0;
         let printed = 0;
         let adjusted: Line["adjusted"] = null;
         for (const it of group) {
-          const e = effectiveQty(it, qty, fixes);
+          const e = effectiveQty(it, qty, fixes, currentChecksMap);
           q += e.value;
           printed += it.qty;
           if (e.adjusted) adjusted = adjusted === "override" ? "override" : e.adjusted;
         }
         const rateKey = first.rate;
-        const sample = data.rates[rateKey]?.rate ?? 0;
+        const sample = data.rates?.[rateKey]?.rate ?? 0;
         const rate = rates[rateKey] ?? sample;
         const methods = new Set(group.map((g) => g.method));
         const method: Method = methods.size === 1 ? first.method : methods.has("image") ? "image" : "derived";
@@ -119,7 +132,7 @@ export function buildBoq(rates: Record<string, number>, markups: Markups, qty: R
           items: group,
           method,
           adjusted,
-          checks: [...new Set(group.flatMap((g) => checksByItem.get(g.id) ?? []))],
+          checks: [...new Set(group.flatMap((g) => currentChecksMap.get(g.id) ?? []))],
         };
         for (const it of group) lineByItem.set(it.id, line);
         methodValue[method] += line.amount;
@@ -155,7 +168,8 @@ export function useBoq() {
   const markups = useApp((s) => s.markups);
   const qty = useApp((s) => s.qty);
   const fixes = useApp((s) => s.fixes);
-  return useMemo(() => buildBoq(rates, markups, qty, fixes), [rates, markups, qty, fixes]);
+  const projectRev = useApp((s) => s.projectRev);
+  return useMemo(() => buildBoq(rates, markups, qty, fixes), [rates, markups, qty, fixes, projectRev]);
 }
 
 function sum(v: number[]) {

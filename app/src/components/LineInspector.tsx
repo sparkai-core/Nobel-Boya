@@ -10,6 +10,7 @@ import { EvidenceCrop } from "./EvidenceCrop";
 import { methodHint, MethodTag, SeverityTag } from "./ui";
 import { buildingShort, checkTitle, formulaText, noteText, sheetTitle } from "../lib/loc";
 import { useT } from "../lib/i18n";
+import { updateManualRate } from "../lib/api";
 
 export function LineInspector({ line }: { line: Line }) {
   const t = useT();
@@ -55,7 +56,13 @@ export function LineInspector({ line }: { line: Line }) {
               onChange={(e) => setRateDraft(e.target.value)}
               onBlur={() => {
                 const v = Number(String(rateDraft).replace(",", "."));
-                if (rateDraft != null && Number.isFinite(v) && v >= 0) setRate(line.rateKey, v === line.sampleRate ? null : v);
+                if (rateDraft != null && Number.isFinite(v) && v >= 0) {
+                  setRate(line.rateKey, v === line.sampleRate ? null : v);
+                  const pid = useApp.getState().activeProjectId;
+                  if (pid) {
+                    updateManualRate(pid, { key: line.rateKey, rate: v }).catch(() => {});
+                  }
+                }
                 setRateDraft(null);
               }}
               onKeyDown={(e) => {
@@ -188,7 +195,7 @@ export function SourceCard({ source, itemId, index, compact }: { source: Source;
   const lang = useApp((s) => s.lang);
   const sheet = sheetById.get(source.sheet);
   const doc = data.documents.find((d) => d.code === sheet?.doc);
-  const to = `${P}/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
+  const to = `/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
   return (
     <figure className={`source${compact ? " compact" : ""}`}>
       <Link to={to} className="source-crop" aria-label={t("Open {s} at the marked value", { s: source.sheet })}>

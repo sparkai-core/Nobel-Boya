@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Search } from "lucide-react";
+import { Search, Scale, Upload } from "lucide-react";
 import { data } from "../data";
 import type { Method } from "../data/types";
 import { useBoq, type Line } from "../lib/boq";
@@ -12,6 +12,8 @@ import { PageHead } from "../components/Shell";
 import { LineInspector } from "../components/LineInspector";
 import { Drawer, Empty, MethodTag, Segmented } from "../components/ui";
 import { useT } from "../lib/i18n";
+import { compareBoq, fetchComparison } from "../lib/api";
+import { BoqComparisonModal } from "../components/BoqComparisonModal";
 
 type Filter = "all" | Method | "findings" | "adjusted";
 
@@ -19,6 +21,7 @@ export function BillPage() {
   const t = useT();
   const boq = useBoq();
   const lang = useApp((s) => s.lang);
+  const activeProjectId = useApp((s) => s.activeProjectId);
   const [params, setParams] = useSearchParams();
   const [query, setQuery] = useState("");
   const [filter, setFilter] = useState<Filter>("all");
@@ -26,6 +29,43 @@ export function BillPage() {
   const selectedId = params.get("line");
   const tableRef = useRef<HTMLDivElement>(null);
   const narrow = useMedia("(max-width: 1280px)");
+
+  const [comparison, setComparison] = useState<any>(null);
+  const [showCmpModal, setShowCmpModal] = useState(false);
+  const [uploadingCmp, setUploadingCmp] = useState(false);
+
+  useEffect(() => {
+    fetchComparison(activeProjectId || "proj_qobu")
+      .then((res) => {
+        if (res && res.has_comparison) {
+          setComparison(res);
+        } else {
+          setComparison(null);
+        }
+      })
+      .catch(() => setComparison(null));
+  }, [activeProjectId]);
+
+  const handleBoqUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploadingCmp(true);
+    try {
+      const res = await compareBoq(activeProjectId || "proj_qobu", file);
+      setComparison({
+        has_comparison: true,
+        filename: res.filename,
+        summary: res.summary,
+        lines: res.lines,
+      });
+      setShowCmpModal(true);
+    } catch (err: any) {
+      alert(err.message || "Failed to compare BOQ");
+    } finally {
+      setUploadingCmp(false);
+      e.target.value = "";
+    }
+  };
 
   const setParam = (key: string, value: string | null) => {
     const next = new URLSearchParams(params);
@@ -91,6 +131,27 @@ export function BillPage() {
             {visible.length === boq.lines.length ? t("{n} lines", { n: boq.lines.length }) : t("{v} of {n} lines", { v: visible.length, n: boq.lines.length })}, {t("measured works")}{" "}
             <span className="num-inline">{fmtMoney(shownTotal)}</span> {t("AZN before mark-ups. Select a line to see the sheet it was read from.")}
           </>
+        }
+        actions={
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {comparison?.has_comparison ? (
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setShowCmpModal(true)}
+                style={{ display: "inline-flex", gap: 6, alignItems: "center" }}
+              >
+                <Scale size={15} />
+                <span>{t("Audit Client BOQ ({n} Variances)", { n: (comparison.summary?.over_measured || 0) + (comparison.summary?.under_measured || 0) + (comparison.summary?.missing_in_client_boq || 0) })}</span>
+              </button>
+            ) : null}
+
+            <label className="btn btn-outline" style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <Upload size={15} />
+              <span>{uploadingCmp ? t("Comparing...") : t("Compare Client BOQ (Excel / CSV)")}</span>
+              <input type="file" accept=".xlsx,.xls,.csv" onChange={handleBoqUpload} style={{ display: "none" }} />
+            </label>
+          </div>
         }
       />
 
@@ -206,6 +267,14 @@ export function BillPage() {
       >
         {selected ? <LineInspector key={selected.id} line={selected} /> : null}
       </Drawer>
+
+      <BoqComparisonModal
+        open={showCmpModal}
+        onClose={() => setShowCmpModal(false)}
+        filename={comparison?.filename}
+        summary={comparison?.summary}
+        lines={comparison?.lines || []}
+      />
     </div>
   );
 }

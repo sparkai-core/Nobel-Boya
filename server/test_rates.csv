@@ -1,0 +1,7 @@
+code,description,unit,rate
+conc-b25-frame,Reinforced Concrete Columns and Frame,m³,285.00
+conc-b25-sub,High Performance Concrete C40,m³,240.00
+rebar-a500,High Tensile Rebar Grade 60,kg,2.15
+steel-struct,Heavy Structural Steelwork,kg,4.50
+conc_col,Reinforced Concrete Columns and Frame,m³,285.00
+rebar_a500,High Tensile Rebar Grade 60,kg,2.15

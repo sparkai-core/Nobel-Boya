@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronsLeft, ChevronsRight, ExternalLink, FolderKanban, LogOut, Menu, Search, Settings, X } from "lucide-react";
-import { data, P } from "../data";
+import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
 import { useT } from "../lib/i18n";
@@ -23,17 +23,18 @@ export function Shell() {
   const user = useApp((s) => s.user);
   const signOut = useApp((s) => s.signOut);
   const generated = useApp((s) => s.generated);
+  const activeProjectId = useApp((s) => s.activeProjectId);
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
-  const inProject = pathname.startsWith(P) && generated;
+  const inProject = Boolean(activeProjectId || generated);
   const mod = MODULES.find((m) => m.key !== "estimate" && m.match(pathname)) ?? MODULES[0]!;
 
   const approvals = useOps((s) => s.approvals.filter((a) => a.status === "PENDING").length);
   const exceptions = useOps((s) => s.exceptions.filter((e) => e.status === "open" || e.status === "assigned").length);
   const delays = useOps((s) => s.delays.filter((d) => d.status === "OPEN" || d.status === "CONFIRMED" || d.status === "UNDER_REVIEW").length);
   const rfis = useOps((s) => s.rfis.filter((r) => r.status === "OPEN" && r.dueAt < TODAY).length);
-  const checks = data.checks.filter((c) => c.severity === "error" || c.severity === "warn").length;
+  const checks = (data.checks || []).filter((c) => c.severity === "error" || c.severity === "warn").length;
   const invoices = useOps((s) => s.invoices.filter((i) => i.status === "MISMATCH" || i.status === "TO_MATCH").length);
   const constraints = useOps((s) => s.constraints.filter((c) => c.status === "OPEN" && c.due <= TODAY).length);
   const safety = useOps((s) => s.incidents.filter((i) => i.status !== "CLOSED").length + s.ppeChecks.filter((p) => p.status === "WAITING").length);
@@ -165,7 +166,7 @@ export function Shell() {
               <div className="rail-project">
                 <span className="rail-project-label">{t("Project")}</span>
                 <span className="rail-project-name">{projectName(lang)}</span>
-                <span className="rail-project-meta">{t("4 files, 205 sheets")}</span>
+                <span className="rail-project-meta">{t("{f} files, {s} sheets", { f: (data.documents || []).length, s: (data.sheets || []).length })}</span>
               </div>
 
               <div className="rail-modules" role="tablist" aria-label={t("Modules")}>
@@ -216,7 +217,7 @@ export function Shell() {
                 <div className="rail-total">
                   <span className="muted small">{t("Bill total incl. VAT")}</span>
                   <strong className="num">{fmtMoney(boq.total)}</strong>
-                  <span className="muted small">{t("{c}, sample rates", { c: data.project.currency })}</span>
+                  <span className="muted small">{t("{c}, sample rates", { c: data.project?.currency || "AZN" })}</span>
                 </div>
               ) : null}
             </>

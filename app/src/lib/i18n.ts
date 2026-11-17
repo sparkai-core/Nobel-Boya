@@ -38,6 +38,7 @@ const AZ: Record<string, string> = {
   "Bill total incl. VAT": "Yekun, ƏDV daxil",
   "{c}, sample rates": "{c}, nümunə qiymətlər",
   "4 files, 205 sheets": "4 fayl, 205 vərəq",
+  "{f} files, {s} sheets": "{f} fayl, {s} vərəq",
   "Close panel": "Paneli bağla",
 
   // login
