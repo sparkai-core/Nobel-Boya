@@ -97,7 +97,7 @@ export function GeneratePage() {
         <span className="brand-inline">
           <Logo size={30} />
           <span className="brand-words">
-            <strong>Storm Takeoff</strong>
+            <strong>Nobel BOQ</strong>
             <small>{tr("Quantity takeoff platform")}</small>
           </span>
         </span>

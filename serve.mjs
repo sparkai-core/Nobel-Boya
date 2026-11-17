@@ -45,5 +45,5 @@ createServer((req, res) => {
     send(res, join(root, "index.html"));
   }
 }).listen(port, "0.0.0.0", () => {
-  console.log(`Storm Takeoff listening on ${port}`);
+  console.log(`Nobel BOQ listening on ${port}`);
 });

@@ -59,16 +59,17 @@ export const useApp = create<State>()(
         const current = get().userEmail;
         if (current !== norm) {
           // Switch user workspace
+          const isLead = norm === "elmir@stormtakeoff.com" || norm === "demo@nobel.az" || norm === "elmir@nobel.az";
           set({
-            user: name,
+            user: isLead ? "Elmir Məmmədov" : name,
             userEmail: norm,
-            activeProjectId: norm === "elmir@stormtakeoff.com" ? "proj_qobu" : "",
+            activeProjectId: isLead ? "proj_qobu" : "",
             rates: {},
             qty: {},
             fixes: {},
             projectRev: get().projectRev + 1,
           });
-          if (norm === "elmir@stormtakeoff.com") {
+          if (isLead) {
             setActiveDataset(rawQobu as any);
           }
         } else {

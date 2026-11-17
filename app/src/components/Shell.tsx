@@ -1,6 +1,6 @@
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { NavLink, Outlet, useNavigate } from "react-router-dom";
 import { ClipboardCheck, FileSpreadsheet, FolderKanban, Gauge, Layers, LogOut, ReceiptText, Settings, Table2 } from "lucide-react";
-import { data, P } from "../data";
+import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
 import { useT } from "../lib/i18n";
@@ -25,9 +25,9 @@ export function Shell() {
   const user = useApp((s) => s.user);
   const signOut = useApp((s) => s.signOut);
   const generated = useApp((s) => s.generated);
+  const activeProjectId = useApp((s) => s.activeProjectId);
   const navigate = useNavigate();
-  const { pathname } = useLocation();
-  const inProject = (pathname.startsWith(P) || ["/overview", "/drawings", "/bill", "/checks", "/rates", "/export"].some((r) => pathname.startsWith(r))) && generated;
+  const inProject = Boolean(activeProjectId || generated);
   const open = (data.checks || []).filter((c) => c.severity === "error" || c.severity === "warn").length;
   const link = ({ isActive }: { isActive: boolean }) => `rail-link${isActive ? " active" : ""}`;
 
@@ -37,7 +37,7 @@ export function Shell() {
         <button type="button" className="brand" onClick={() => navigate("/projects")}>
           <Logo size={30} />
           <span>
-            <strong>Storm Takeoff</strong>
+            <strong>Nobel BOQ</strong>
             <small>{t("Quantity takeoff platform")}</small>
           </span>
         </button>

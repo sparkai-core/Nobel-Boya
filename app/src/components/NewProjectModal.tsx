@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from "react";
-import { Upload, X, FileText, CheckCircle2, AlertCircle } from "lucide-react";
+import { Upload, X, FileText, CheckCircle2, AlertCircle, ReceiptText, Table2 } from "lucide-react";
 import { useT } from "../lib/i18n";
 import { createProject, fetchProject } from "../lib/api";
 import { useApp } from "../lib/store";
@@ -77,7 +77,7 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
 
   return (
     <div className="modal-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 640 }}>
+      <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ maxWidth: 600 }}>
         <header className="modal-head">
           <div>
             <h2>{t("Create New Project")}</h2>
@@ -139,11 +139,18 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
             </label>
           </div>
 
-          {/* Drawing Package Upload */}
-          <div className="upload-box" style={{ border: "2px dashed var(--line)", padding: 16, borderRadius: 8, textAlign: "center", background: "var(--sheet-2)" }}>
-            <Upload size={24} style={{ margin: "0 auto 8px", color: "var(--muted)" }} />
-            <strong>{t("Drawing Package (PDF)")} *</strong>
-            <p className="muted small" style={{ margin: "4px 0 10px" }}>{t("Supported formats: Architectural, Structural, MEP drawings in .pdf")}</p>
+          {/* Primary Blueprint Dropzone */}
+          <div className="modal-dropzone">
+            <div className="dropzone-icon-circle">
+              <Upload size={20} strokeWidth={2} />
+            </div>
+            <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 4 }}>
+              <span style={{ fontWeight: 600, fontSize: 14, color: "var(--ink)" }}>{t("Drawing Package (PDF)")}</span>
+              <span style={{ fontSize: 10, fontWeight: 600, color: "#dc2626", background: "rgba(220, 38, 38, 0.08)", padding: "2px 6px", borderRadius: 4 }}>{t("Required")}</span>
+            </div>
+            <p className="muted small" style={{ margin: "0 0 12px", maxWidth: 420 }}>
+              {t("Supported formats: Architectural, Structural, and MEP drawings in vector PDF")}
+            </p>
             <input
               type="file"
               accept=".pdf,application/pdf"
@@ -151,22 +158,27 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
               style={{ display: "none" }}
               onChange={(e) => setDrawingFile(e.target.files?.[0] || null)}
             />
-            <label htmlFor="file-drawings" className="btn btn-outline" style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}>
-              <FileText size={15} />
+            <label htmlFor="file-drawings" className="btn btn-outline" style={{ cursor: "pointer", display: "inline-flex", gap: 8, alignItems: "center", padding: "8px 16px" }}>
+              <FileText size={16} />
               <span>{drawingFile ? drawingFile.name : t("Select PDF Drawing Package")}</span>
             </label>
             {drawingFile ? (
-              <p className="ok-text small" style={{ marginTop: 6, display: "flex", alignItems: "center", justifyContent: "center", gap: 4 }}>
-                <CheckCircle2 size={14} /> {(drawingFile.size / (1024 * 1024)).toFixed(1)} MB
+              <p className="ok-text small" style={{ marginTop: 8, display: "inline-flex", alignItems: "center", gap: 5, color: "#16a34a", fontWeight: 500 }}>
+                <CheckCircle2 size={14} /> {(drawingFile.size / (1024 * 1024)).toFixed(1)} MB {t("ready for takeoff")}
               </p>
             ) : null}
           </div>
 
-          {/* Optional Commercial Rates Upload */}
+          {/* Optional Commercial Rates & Client BOQ Upload */}
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
-            <div style={{ border: "1px solid var(--line)", padding: 12, borderRadius: 8, background: "var(--sheet)" }}>
-              <strong>{t("Custom Rates (Optional)")}</strong>
-              <p className="muted small" style={{ margin: "4px 0 8px" }}>{t("Upload .csv or .xlsx rate list")}</p>
+            <div className="modal-subcard">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <ReceiptText size={16} style={{ color: "var(--accent)" }} />
+                  <strong style={{ fontSize: 13 }}>{t("Custom Rates (Optional)")}</strong>
+                </div>
+                <p className="muted small" style={{ margin: 0 }}>{t("Upload .csv or .xlsx rate list")}</p>
+              </div>
               <input
                 type="file"
                 accept=".csv,.xlsx,.xls"
@@ -174,15 +186,29 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
                 style={{ display: "none" }}
                 onChange={(e) => setRatesFile(e.target.files?.[0] || null)}
               />
-              <label htmlFor="file-rates" className="btn btn-ghost" style={{ cursor: "pointer", fontSize: 12, padding: "4px 10px", width: "100%", justifyContent: "center" }}>
-                {ratesFile ? ratesFile.name : t("Choose Rates File")}
+              <label htmlFor="file-rates" className="btn btn-outline btn-sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", marginTop: 8 }}>
+                {ratesFile ? (
+                  <>
+                    <CheckCircle2 size={13} style={{ color: "#16a34a" }} />
+                    <span className="truncate">{ratesFile.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={13} />
+                    <span>{t("Choose Rates File")}</span>
+                  </>
+                )}
               </label>
             </div>
 
-            {/* Optional Client BOQ for Comparison */}
-            <div style={{ border: "1px solid var(--line)", padding: 12, borderRadius: 8, background: "var(--sheet)" }}>
-              <strong>{t("Client BOQ (Optional)")}</strong>
-              <p className="muted small" style={{ margin: "4px 0 8px" }}>{t("Upload .xlsx to compare variances")}</p>
+            <div className="modal-subcard">
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 4 }}>
+                  <Table2 size={16} style={{ color: "var(--accent)" }} />
+                  <strong style={{ fontSize: 13 }}>{t("Client BOQ (Optional)")}</strong>
+                </div>
+                <p className="muted small" style={{ margin: 0 }}>{t("Upload .xlsx to compare variances")}</p>
+              </div>
               <input
                 type="file"
                 accept=".xlsx,.xls,.csv"
@@ -190,8 +216,18 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
                 style={{ display: "none" }}
                 onChange={(e) => setBoqFile(e.target.files?.[0] || null)}
               />
-              <label htmlFor="file-boq" className="btn btn-ghost" style={{ cursor: "pointer", fontSize: 12, padding: "4px 10px", width: "100%", justifyContent: "center" }}>
-                {boqFile ? boqFile.name : t("Choose BOQ to Compare")}
+              <label htmlFor="file-boq" className="btn btn-outline btn-sm" style={{ cursor: "pointer", display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 6, width: "100%", marginTop: 8 }}>
+                {boqFile ? (
+                  <>
+                    <CheckCircle2 size={13} style={{ color: "#16a34a" }} />
+                    <span className="truncate">{boqFile.name}</span>
+                  </>
+                ) : (
+                  <>
+                    <Upload size={13} />
+                    <span>{t("Choose BOQ to Compare")}</span>
+                  </>
+                )}
               </label>
             </div>
           </div>
