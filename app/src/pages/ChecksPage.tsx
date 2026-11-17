@@ -1,6 +1,6 @@
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { Check as CheckIcon, Undo2 } from "lucide-react";
-import { data, itemById, P } from "../data";
+import { data, itemById } from "../data";
 import type { Check } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, unitLabel } from "../lib/format";
@@ -33,13 +33,13 @@ export function ChecksPage() {
   const setFix = useApp((s) => s.setFix);
   const lang = useApp((s) => s.lang);
   const boq = useBoq();
-  const check = data.checks.find((c) => c.id === checkId) ?? data.checks[0]!;
+  const check = (data.checks || []).find((c) => c.id === checkId) ?? (data.checks || [])[0] ?? null;
 
-  const lines = [...new Set(check.items.map((id) => boq.lineByItem.get(id)).filter(Boolean))];
-  const fixItem = check.fix ? itemById.get(check.fix.item) : null;
-  const fixLine = check.fix ? boq.lineByItem.get(check.fix.item) : null;
-  const delta = check.fix && fixItem && fixLine ? (check.fix.qty - fixItem.qty) * fixLine.rate : 0;
-  const applied = Boolean(fixes[check.id]);
+  const lines = check ? [...new Set(check.items.map((id) => boq.lineByItem.get(id)).filter(Boolean))] : [];
+  const fixItem = check?.fix ? itemById.get(check.fix.item) : null;
+  const fixLine = check?.fix ? boq.lineByItem.get(check.fix.item) : null;
+  const delta = check?.fix && fixItem && fixLine ? (check.fix.qty - fixItem.qty) * fixLine.rate : 0;
+  const applied = check ? Boolean(fixes[check.id]) : false;
 
   return (
     <div className="checks">
@@ -58,7 +58,7 @@ export function ChecksPage() {
               <ul>
                 {list.map((c) => (
                   <li key={c.id}>
-                    <button type="button" className={`check-row${c.id === check.id ? " active" : ""}`} onClick={() => navigate(`${P}/checks/${c.id}`)}>
+                    <button type="button" className={`check-row${check && c.id === check.id ? " active" : ""}`} onClick={() => navigate(`/checks/${c.id}`)}>
                       <SeverityTag severity={c.severity} kind={c.kind} />
                       <span className="check-row-title">{checkTitle(c, lang)}</span>
                       <span className="check-row-meta muted small">
@@ -146,7 +146,7 @@ export function ChecksPage() {
                     <tr key={l!.id}>
                       <td className="num code">{l!.code}</td>
                       <td>
-                        <Link to={`${P}/bill?line=${encodeURIComponent(l!.id)}`} className="text-link">
+                        <Link to={`/bill?line=${encodeURIComponent(l!.id)}`} className="text-link">
                           {lang === "az" ? l!.az : l!.en}
                         </Link>
                       </td>
@@ -168,7 +168,7 @@ function SourceCardForCheck({ checkId, index, source }: { checkId: string; index
   return (
     <div className="check-source">
       <SourceCard source={source} />
-      <Link to={`${P}/drawings/${source.sheet}?check=${checkId}&src=${index}`} className="text-link small">
+      <Link to={`/drawings/${source.sheet}?check=${checkId}&src=${index}`} className="text-link small">
         {t("Open on the sheet")}
       </Link>
     </div>

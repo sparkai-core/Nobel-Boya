@@ -9,12 +9,12 @@ import { useApp } from "../lib/store";
 import { Logo } from "./ui";
 
 const NAV = [
-  { to: `${P}/overview`, label: "Overview", icon: Gauge },
-  { to: `${P}/drawings`, label: "Drawings", icon: Layers },
-  { to: `${P}/bill`, label: "Bill of quantities", icon: Table2 },
-  { to: `${P}/checks`, label: "Checks", icon: ClipboardCheck },
-  { to: `${P}/rates`, label: "Rates and mark-ups", icon: ReceiptText },
-  { to: `${P}/export`, label: "Export", icon: FileSpreadsheet },
+  { to: `/overview`, label: "Overview", icon: Gauge },
+  { to: `/drawings`, label: "Drawings", icon: Layers },
+  { to: `/bill`, label: "Bill of quantities", icon: Table2 },
+  { to: `/checks`, label: "Checks", icon: ClipboardCheck },
+  { to: `/rates`, label: "Rates and mark-ups", icon: ReceiptText },
+  { to: `/export`, label: "Export", icon: FileSpreadsheet },
 ];
 
 export function Shell() {
@@ -27,8 +27,8 @@ export function Shell() {
   const generated = useApp((s) => s.generated);
   const navigate = useNavigate();
   const { pathname } = useLocation();
-  const inProject = pathname.startsWith(P) && generated;
-  const open = data.checks.filter((c) => c.severity === "error" || c.severity === "warn").length;
+  const inProject = (pathname.startsWith(P) || ["/overview", "/drawings", "/bill", "/checks", "/rates", "/export"].some((r) => pathname.startsWith(r))) && generated;
+  const open = (data.checks || []).filter((c) => c.severity === "error" || c.severity === "warn").length;
   const link = ({ isActive }: { isActive: boolean }) => `rail-link${isActive ? " active" : ""}`;
 
   return (
@@ -54,7 +54,7 @@ export function Shell() {
             <div className="rail-project">
               <span className="rail-project-label">{t("Project")}</span>
               <span className="rail-project-name">{projectName(lang)}</span>
-              <span className="rail-project-meta">{t("4 files, 205 sheets")}</span>
+              <span className="rail-project-meta">{t("{f} files, {s} sheets", { f: (data.documents || []).length, s: (data.sheets || []).length })}</span>
             </div>
             <nav className="rail-nav">
               {NAV.map(({ to, label, icon: Icon }) => (
@@ -68,7 +68,7 @@ export function Shell() {
             <div className="rail-total">
               <span className="muted small">{t("Bill total incl. VAT")}</span>
               <strong className="num">{fmtMoney(boq.total)}</strong>
-              <span className="muted small">{t("{c}, sample rates", { c: data.project.currency })}</span>
+              <span className="muted small">{t("{c}, sample rates", { c: data.project?.currency || "AZN" })}</span>
             </div>
           </>
         ) : (

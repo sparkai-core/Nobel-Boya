@@ -1,5 +1,5 @@
 import { Fragment, useMemo, useState } from "react";
-import { RotateCcw } from "lucide-react";
+import { RotateCcw, Upload, CheckCircle2 } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
@@ -7,6 +7,7 @@ import { DEFAULT_MARKUPS, useApp, type Markups } from "../lib/store";
 import { PageHead } from "../components/Shell";
 import { chainLabel, rateDesc, rateGroup } from "../lib/loc";
 import { useT } from "../lib/i18n";
+import { uploadRates } from "../lib/api";
 
 const MARKUP_LABEL: Record<keyof Markups, string> = {
   overheads: "Overheads",
@@ -19,6 +20,8 @@ export function RatesPage() {
   const t = useT();
   const boq = useBoq();
   const rates = useApp((s) => s.rates);
+  const activeProjectId = useApp((s) => s.activeProjectId);
+  const setFullRates = useApp((s) => s.setFullRates);
   const lang = useApp((s) => s.lang);
   const markups = useApp((s) => s.markups);
   const setRate = useApp((s) => s.setRate);
@@ -26,6 +29,30 @@ export function RatesPage() {
   const resetPricing = useApp((s) => s.resetPricing);
   const edited = Object.keys(rates).length;
   const markupEdited = (Object.keys(markups) as (keyof Markups)[]).some((k) => markups[k] !== DEFAULT_MARKUPS[k]);
+
+  const [uploadMsg, setUploadMsg] = useState<string | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const handleRatesUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    setUploadMsg(null);
+    try {
+      const res = await uploadRates(activeProjectId || "proj_qobu", file);
+      const rateNumbers: Record<string, number> = {};
+      for (const [k, v] of Object.entries((res.rates || {}) as Record<string, any>)) {
+        rateNumbers[k] = typeof v === "object" ? v.rate : Number(v);
+      }
+      setFullRates(rateNumbers);
+      setUploadMsg(t("Imported {n} rates from {f}", { n: res.updated_rates_count, f: file.name }));
+    } catch (err: any) {
+      alert(err.message || "Failed to upload rates");
+    } finally {
+      setUploading(false);
+      e.target.value = "";
+    }
+  };
 
   const rows = useMemo(() => {
     const usage = new Map<string, { qty: number; amount: number; lines: number }>();
@@ -37,7 +64,7 @@ export function RatesPage() {
       usage.set(l.rateKey, u);
     }
     const groups = new Map<string, { key: string; en: string; unit: string; sample: number; usage: { qty: number; amount: number; lines: number } }[]>();
-    for (const [key, r] of Object.entries(data.rates)) {
+    for (const [key, r] of Object.entries(data.rates || {})) {
       const u = usage.get(key);
       if (!u) continue;
       const list = groups.get(r.group) ?? [];
@@ -53,11 +80,23 @@ export function RatesPage() {
         title={t("Rates and mark-ups")}
         lead={t("The package has no prices. These are sample AZN rates so the bill can be totalled. Edit any rate and every line that uses it updates. Changes stay in this browser.")}
         actions={
-          edited || markupEdited ? (
-            <button type="button" className="btn btn-ghost" onClick={resetPricing}>
-              <RotateCcw size={15} /> {t("Reset to sample rates")}
-            </button>
-          ) : null
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <label className="btn btn-outline" style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center" }}>
+              <Upload size={15} />
+              <span>{uploading ? t("Importing...") : t("Upload Rates (CSV / Excel)")}</span>
+              <input type="file" accept=".csv,.xlsx,.xls" onChange={handleRatesUpload} style={{ display: "none" }} />
+            </label>
+            {uploadMsg ? (
+              <span className="ok-text small" style={{ display: "inline-flex", alignItems: "center", gap: 4, background: "rgba(16, 185, 129, 0.1)", padding: "4px 8px", borderRadius: 4, color: "#059669" }}>
+                <CheckCircle2 size={14} /> {uploadMsg}
+              </span>
+            ) : null}
+            {edited || markupEdited ? (
+              <button type="button" className="btn btn-ghost" onClick={resetPricing}>
+                <RotateCcw size={15} /> {t("Reset to sample rates")}
+              </button>
+            ) : null}
+          </div>
         }
       />
 

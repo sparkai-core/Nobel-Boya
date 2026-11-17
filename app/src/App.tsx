@@ -21,7 +21,7 @@ export function App() {
   }, [lang]);
   return (
     <Routes>
-      <Route path="/" element={<Navigate to={`${P}/overview`} replace />} />
+      <Route path="/" element={<Navigate to="/projects" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path={`${P}/generate`} element={<GeneratePage />} />
       <Route element={<Shell />}>
@@ -36,7 +36,7 @@ export function App() {
         <Route path="/rates" element={<RatesPage />} />
         <Route path="/export" element={<ExportPage />} />
 
-        <Route path={P} element={<Navigate to={`${P}/overview`} replace />} />
+        <Route path={P} element={<Navigate to="/overview" replace />} />
         <Route path={`${P}/bill`} element={<BillPage />} />
         <Route path={`${P}/drawings`} element={<DrawingsPage />} />
         <Route path={`${P}/drawings/:sheetId`} element={<DrawingsPage />} />
@@ -46,7 +46,7 @@ export function App() {
         <Route path={`${P}/rates`} element={<RatesPage />} />
         <Route path={`${P}/export`} element={<ExportPage />} />
       </Route>
-      <Route path="*" element={<Navigate to={`${P}/overview`} replace />} />
+      <Route path="*" element={<Navigate to="/projects" replace />} />
     </Routes>
   );
 }

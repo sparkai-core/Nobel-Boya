@@ -1,6 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowUpRight } from "lucide-react";
-import { COVER_SHEETS, data, P, sheetImage } from "../data";
+import { COVER_SHEETS, data, sheetImage } from "../data";
 import type { Method } from "../data/types";
 import { useBoq } from "../lib/boq";
 import { fmtMoney, pct } from "../lib/format";
@@ -20,7 +20,7 @@ export function OverviewPage() {
   const lang = useApp((s) => s.lang);
   const works = boq.works || 1;
   const markups = boq.total - boq.works;
-  const sheetsUsed = new Set(data.items.flatMap((i) => i.src.map((s) => s.sheet))).size;
+  const sheetsUsed = new Set((data.items || []).flatMap((i) => (i.src || []).map((s) => s.sheet))).size;
 
   const trades = new Map<string, { az: string; en: string; total: number; lines: number }>();
   for (const b of boq.buildings)
@@ -32,9 +32,9 @@ export function OverviewPage() {
     }
   const tradeList = [...trades.entries()].sort((a, z) => z[1].total - a[1].total);
   const maxTrade = tradeList[0]?.[1].total || 1;
-  const findings = data.checks.filter((c) => c.severity !== "ok");
-  const open = data.checks.filter((c) => c.severity === "error" || c.severity === "warn").length;
-  const agreements = data.checks.filter((c) => c.severity === "ok").length;
+  const findings = (data.checks || []).filter((c) => c.severity !== "ok");
+  const open = (data.checks || []).filter((c) => c.severity === "error" || c.severity === "warn").length;
+  const agreements = (data.checks || []).filter((c) => c.severity === "ok").length;
 
   let acc = 0;
   const R = 46;
@@ -74,20 +74,20 @@ export function OverviewPage() {
             <div>
               <dt>{t("Sheets used")}</dt>
               <dd className="num-inline">
-                {sheetsUsed} <span className="muted">{t("of 205")}</span>
+                {sheetsUsed} <span className="muted">{t("of {n}", { n: (data.sheets || []).length })}</span>
               </dd>
             </div>
           </dl>
           <div className="ov-actions">
-            <button type="button" className="btn btn-primary" onClick={() => navigate(`${P}/bill`)}>
+            <button type="button" className="btn btn-primary" onClick={() => navigate(`/bill`)}>
               {t("Open the bill")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => navigate(`${P}/checks`)}>
+            <button type="button" className="btn btn-ghost" onClick={() => navigate(`/checks`)}>
               {t("Review {n} findings", { n: open })}
             </button>
           </div>
         </div>
-        <button type="button" className="ov-hero-art project-cover" onClick={() => navigate(`${P}/drawings`)} aria-label={t("Open the drawings")}>
+        <button type="button" className="ov-hero-art project-cover" onClick={() => navigate(`/drawings`)} aria-label={t("Open the drawings")}>
           {COVER_SHEETS.map((id) => (
             <img key={id} src={sheetImage(id, true)} alt="" loading="lazy" />
           ))}
@@ -103,7 +103,7 @@ export function OverviewPage() {
           <table className="collection-table">
             <tbody>
               {boq.buildings.map((b) => (
-                <tr key={b.id} className="clickable" onClick={() => navigate(`${P}/bill?b=${b.id}`)}>
+                <tr key={b.id} className="clickable" onClick={() => navigate(`/bill?b=${b.id}`)}>
                   <td className="code num-inline">{b.code}</td>
                   <td>
                     <div className="coll-name">{buildingName(b.id, lang)}</div>
@@ -183,14 +183,14 @@ export function OverviewPage() {
           <section className="card">
             <header className="card-head">
               <h2>{t("Findings in the drawings")}</h2>
-              <Link to={`${P}/checks`} className="text-link small">
+              <Link to={`/checks`} className="text-link small">
                 {t("All checks")}
               </Link>
             </header>
             <ul className="finding-list">
               {findings.slice(0, 5).map((c) => (
                 <li key={c.id}>
-                  <Link to={`${P}/checks/${c.id}`}>
+                  <Link to={`/checks/${c.id}`}>
                     <SeverityTag severity={c.severity} kind={c.kind} />
                     <span className="finding-title">{checkTitle(c, lang)}</span>
                     {fixes[c.id] ? <span className="applied">{t("Applied")}</span> : <ArrowUpRight size={14} className="faint" />}

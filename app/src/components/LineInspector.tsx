@@ -188,7 +188,7 @@ export function SourceCard({ source, itemId, index, compact }: { source: Source;
   const lang = useApp((s) => s.lang);
   const sheet = sheetById.get(source.sheet);
   const doc = data.documents.find((d) => d.code === sheet?.doc);
-  const to = `${P}/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
+  const to = `/drawings/${source.sheet}${itemId != null ? `?item=${itemId}&src=${index ?? 0}` : ""}`;
   return (
     <figure className={`source${compact ? " compact" : ""}`}>
       <Link to={to} className="source-crop" aria-label={t("Open {s} at the marked value", { s: source.sheet })}>
