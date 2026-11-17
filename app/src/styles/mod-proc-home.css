@@ -1,0 +1,622 @@
+/* Procurement dashboard (ph-) and material requests list (mr-). Reference pages for the ops modules. */
+
+/* ---------- the chain right now ---------- */
+.ph-chain {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+}
+.ph-stage {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 14px 14px 12px;
+  border-radius: var(--r-3);
+  background: var(--sheet);
+  box-shadow: var(--shadow-card);
+  color: inherit;
+  text-decoration: none;
+  min-width: 0;
+  animation: k-rise var(--d-3) var(--ease-out) backwards;
+  transition: box-shadow var(--d-2) var(--ease), transform var(--d-2) var(--ease);
+}
+.ph-stage:hover {
+  box-shadow: var(--shadow-raised);
+  transform: translateY(-2px);
+}
+.ph-stage-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 24px;
+}
+.ph-stage-top .k-badge {
+  flex: none;
+  margin-left: auto;
+  height: 19px;
+  padding: 0 7px;
+  font-size: 11px;
+}
+.ph-stage-icon {
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+  background: var(--stamp-soft);
+  color: var(--stamp-text);
+  flex: none;
+}
+.ph-pay-meta {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 2px;
+}
+.ph-pay-meta .k-badge {
+  height: 18px;
+  padding: 0 7px;
+  font-size: 10.5px;
+}
+.ph-stage-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-stage-count {
+  font-size: 23px;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin-top: 4px;
+}
+.ph-stage-value {
+  font-size: 12.5px;
+  color: var(--muted);
+}
+.ph-stage-bar {
+  display: block;
+  height: 4px;
+  margin: 6px 0 2px;
+  border-radius: 2px;
+  background: var(--sheet-3);
+  overflow: hidden;
+}
+.ph-stage-bar i {
+  display: block;
+  height: 100%;
+  border-radius: 2px;
+  background: linear-gradient(90deg, #b7a6e6, var(--stamp));
+  animation: k-grow-x 800ms var(--ease-out) both;
+  transform-origin: left;
+}
+.ph-stage-note {
+  font-size: 11.5px;
+  color: var(--muted);
+  line-height: 1.35;
+}
+.ph-stage-arrow {
+  position: absolute;
+  top: 50%;
+  right: -12px;
+  z-index: 1;
+  padding: 2px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--paper);
+  color: var(--faint);
+}
+
+/* ---------- needs you ---------- */
+.ph-queue {
+  margin: 0;
+  padding: 4px 0 6px;
+  list-style: none;
+}
+.ph-queue li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-top: 1px solid var(--line);
+}
+.ph-queue li:first-child {
+  border-top: 0;
+}
+.ph-queue li.first {
+  margin: 4px 10px 6px;
+  padding: 14px 12px;
+  border: 0;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #fbfaff, var(--stamp-soft));
+  box-shadow: inset 0 0 0 1px var(--stamp-line);
+}
+.ph-queue li.first + li {
+  border-top: 0;
+}
+.ph-queue-icon {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  background: var(--tb);
+  color: var(--tc);
+  flex: none;
+}
+.ph-queue-text {
+  flex: 1;
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+.ph-queue-text strong {
+  font-size: var(--t-13);
+  font-weight: 500;
+  color: var(--graphite);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ph-queue li.first .ph-queue-text strong {
+  font-size: var(--t-14);
+  font-weight: 600;
+  white-space: normal;
+}
+.ph-queue-text small {
+  font-size: 12px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---------- budget by trade ---------- */
+.ph-trades {
+  display: grid;
+  gap: 9px;
+}
+.ph-trade {
+  display: grid;
+  grid-template-columns: 170px minmax(0, 1fr) 120px;
+  align-items: center;
+  gap: 12px;
+  font-size: var(--t-13);
+}
+.ph-trade-name {
+  color: var(--ink-2);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.ph-trade-track {
+  position: relative;
+  height: 12px;
+}
+.ph-trade-track i {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 6px;
+}
+.ph-trade-budget {
+  background: var(--sheet-3);
+}
+.ph-trade-committed {
+  top: 2px !important;
+  bottom: 2px !important;
+  background: #b7a6e6;
+}
+.ph-trade-paid {
+  top: 2px !important;
+  bottom: 2px !important;
+  background: var(--stamp);
+}
+.ph-trade-fig {
+  text-align: right;
+  font-weight: 500;
+}
+.ph-trade-fig small {
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* ---------- deliveries ---------- */
+.ph-deliv {
+  display: grid;
+  gap: 8px;
+}
+.ph-deliv-axis {
+  position: relative;
+  height: 18px;
+  margin: 16px 30px 0 0;
+  border-bottom: 1px solid var(--line);
+}
+.ph-deliv-axis span {
+  position: absolute;
+  bottom: 3px;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.ph-deliv-today {
+  position: absolute;
+  top: -18px;
+  bottom: -110px;
+  display: flex;
+  align-items: flex-start;
+  border-left: 1.5px dashed var(--redline);
+  padding: 0 0 0 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: var(--redline);
+  z-index: 0;
+}
+.ph-deliv-lane {
+  position: relative;
+  height: 100px;
+  margin-right: 70px;
+}
+.ph-truck {
+  position: absolute;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: var(--sheet);
+  box-shadow: inset 0 0 0 1.5px var(--stamp-line);
+  color: var(--stamp-text);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  text-decoration: none;
+  white-space: nowrap;
+  z-index: 1;
+  animation: k-pop 400ms var(--ease-out) both;
+  transition: transform var(--d-1) var(--ease);
+}
+.ph-truck:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1.5px var(--stamp);
+}
+.ph-truck.on {
+  background: var(--stamp);
+  color: #fff;
+  box-shadow: none;
+}
+.ph-truck.late {
+  background: var(--redline-soft);
+  color: var(--redline);
+  box-shadow: inset 0 0 0 1.5px var(--redline-line);
+}
+
+/* ---------- feed ---------- */
+.ph-feed {
+  display: grid;
+  gap: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.ph-feed li {
+  position: relative;
+  display: flex;
+  gap: 11px;
+  padding-bottom: 12px;
+}
+.ph-feed li:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  left: 4px;
+  top: 12px;
+  bottom: 0;
+  width: 1.5px;
+  background: var(--line);
+}
+.ph-feed-dot {
+  width: 10px;
+  height: 10px;
+  margin-top: 4px;
+  border-radius: 50%;
+  background: var(--stamp);
+  flex: none;
+  box-shadow: 0 0 0 3px var(--stamp-soft);
+}
+.ph-feed-dot.vendor {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+.ph-feed li > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+.ph-feed a,
+.ph-feed span {
+  font-size: var(--t-13);
+  color: var(--graphite);
+  text-decoration: none;
+}
+.ph-feed a:hover {
+  color: var(--stamp-text);
+  text-decoration: underline;
+}
+.ph-feed small {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ph-feed small .k-badge {
+  height: 18px;
+  padding: 0 6px;
+  font-size: 10.5px;
+}
+
+/* ---------- vendors and payments lists ---------- */
+.ph-vendors,
+.ph-pays {
+  margin: 0;
+  padding: 0 0 6px;
+  list-style: none;
+}
+.ph-vendors a,
+.ph-pays a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 20px;
+  color: inherit;
+  text-decoration: none;
+  transition: background var(--d-1) var(--ease);
+}
+.ph-vendors a:hover,
+.ph-pays a:hover {
+  background: var(--sheet-2);
+}
+.ph-vendor-name {
+  flex: 1;
+  display: grid;
+  min-width: 0;
+}
+.ph-vendor-name strong {
+  font-size: var(--t-13);
+  font-weight: 500;
+}
+.ph-vendor-name small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.ph-vendor-score {
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 22px;
+  border-radius: 6px;
+  background: var(--stamp-soft);
+  color: var(--stamp-text);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.ph-vendor-value {
+  min-width: 52px;
+  text-align: right;
+  font-weight: 500;
+  font-size: var(--t-13);
+}
+.ph-pay-date {
+  display: grid;
+  width: 64px;
+  flex: none;
+}
+.ph-pay-date b {
+  font-size: var(--t-13);
+  font-weight: 600;
+}
+.ph-pay-date small {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+/* ---------- material requests: needed-by band ---------- */
+.mr-band {
+  padding: 16px 20px 14px;
+  border-radius: var(--r-3);
+  background: var(--sheet);
+  box-shadow: var(--shadow-card);
+}
+.mr-band-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.mr-band-head h2 {
+  font-size: 15px;
+}
+.mr-band-head p {
+  font-size: var(--t-13);
+  color: var(--ink-2);
+}
+.mr-band-head p b {
+  color: var(--redline);
+}
+.mr-weeks {
+  display: grid;
+  grid-template-columns: 1.2fr repeat(5, minmax(0, 1fr));
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+.mr-week {
+  position: relative;
+  min-height: 112px;
+  padding: 8px 8px 10px;
+  border-left: 1px solid var(--line);
+}
+.mr-week:first-child {
+  border-left: 0;
+  background: repeating-linear-gradient(-45deg, var(--redline-soft) 0 6px, #fff6f4 6px 12px);
+}
+.mr-week:nth-child(2) {
+  border-left: 2px solid var(--redline);
+}
+.mr-week-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+.mr-week:first-child .mr-week-label {
+  color: var(--redline);
+}
+.mr-week-label b {
+  font-variant-numeric: tabular-nums;
+  color: var(--graphite);
+}
+.mr-marks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+.mr-mark {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 24px;
+  max-width: 100%;
+  padding: 0 8px 0 6px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--sheet);
+  box-shadow: inset 0 0 0 1px var(--line-strong), 0 1px 2px rgba(17, 17, 24, 0.05);
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11px;
+  color: var(--graphite);
+  cursor: pointer;
+  animation: k-pop 360ms var(--ease-out) both;
+  transition: transform var(--d-1) var(--ease), box-shadow var(--d-1) var(--ease);
+}
+.mr-mark:hover {
+  transform: translateY(-1px);
+  box-shadow: inset 0 0 0 1.5px var(--stamp), var(--shadow-raised);
+}
+.mr-mark i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: none;
+  background: var(--faint);
+}
+.mr-mark.p-URGENT i {
+  background: var(--redline);
+}
+.mr-mark.p-HIGH i {
+  background: var(--amber);
+}
+.mr-mark.p-MEDIUM i {
+  background: var(--stamp);
+}
+.mr-key {
+  display: flex;
+  gap: 14px;
+  margin-top: 10px;
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.mr-key span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.mr-key i {
+  width: 8px;
+  height: 8px;
+  border-radius: 2px;
+}
+
+.mr-row-stage {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.mr-rfqs {
+  font-size: 11.5px;
+  color: var(--muted);
+  white-space: nowrap;
+}
+.mr-need {
+  display: grid;
+}
+.mr-need small {
+  font-size: 11.5px;
+  color: var(--muted);
+}
+.mr-need.late b,
+.mr-need.late small {
+  color: var(--redline);
+}
+.mr-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 4px;
+}
+.mr-activity {
+  font-family: ui-monospace, Menlo, Consolas, monospace;
+  font-size: 11.5px;
+  color: var(--stamp-text);
+  text-decoration: none;
+}
+.mr-activity:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 1280px) {
+  .ph-chain {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  .ph-stage-arrow {
+    display: none;
+  }
+}
+@media (max-width: 900px) {
+  .ph-chain {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .ph-trade {
+    grid-template-columns: 110px minmax(0, 1fr) 90px;
+  }
+  .mr-weeks {
+    grid-template-columns: 1fr 1fr;
+  }
+  .mr-week {
+    min-height: 0;
+    border-top: 1px solid var(--line);
+  }
+}
+@media (max-width: 520px) {
+  .ph-trade {
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .ph-trade-track {
+    grid-column: 1 / -1;
+    grid-row: 2;
+  }
+}

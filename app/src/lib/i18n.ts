@@ -1,5 +1,18 @@
 import { useCallback } from "react";
 import { useApp } from "./store";
+import OPS_AZ from "./dict/ops-common";
+import PROC_SOURCING_AZ from "./dict/proc-sourcing";
+import PROC_ORDERS_AZ from "./dict/proc-orders";
+import PM_SCHEDULE_AZ from "./dict/pm-schedule";
+import PM_CONTROL_AZ from "./dict/pm-control";
+import PM_RECORDS_AZ from "./dict/pm-records";
+import VENDOR_AZ from "./dict/vendor";
+import PM_PLANNING_AZ from "./dict/pm-planning";
+import PM_PROGRESS_AZ from "./dict/pm-progress";
+import PM_SITE_AZ from "./dict/pm-site";
+import PROC_MONEY_AZ from "./dict/proc-money";
+import PROC_PLAN_AZ from "./dict/proc-plan";
+import PROC_PURCHASING_AZ from "./dict/proc-purchasing";
 
 export type Lang = "az" | "en";
 type Vars = Record<string, string | number>;
@@ -273,8 +286,11 @@ const AZ: Record<string, string> = {
     "Miqdarlar Qobu paketinin dörd PDF faylından götürülüb. Qiymətlər nümunə AZN siyahısıdır, paketə daxil deyil.",
 };
 
+/** Module dictionaries (one file per area, so parallel work never edits the same file). */
+const ALL_AZ: Record<string, string> = { ...OPS_AZ, ...PROC_SOURCING_AZ, ...PROC_ORDERS_AZ, ...PM_SCHEDULE_AZ, ...PM_CONTROL_AZ, ...PM_RECORDS_AZ, ...VENDOR_AZ, ...PM_PLANNING_AZ, ...PM_PROGRESS_AZ, ...PM_SITE_AZ, ...PROC_MONEY_AZ, ...PROC_PLAN_AZ, ...PROC_PURCHASING_AZ, ...AZ };
+
 export function translate(lang: Lang, en: string, vars?: Vars) {
-  let s = lang === "az" ? (AZ[en] ?? en) : en;
+  let s = lang === "az" ? (ALL_AZ[en] ?? en) : en;
   if (vars) for (const [k, v] of Object.entries(vars)) s = s.split(`{${k}}`).join(String(v));
   return s;
 }

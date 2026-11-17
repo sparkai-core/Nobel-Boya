@@ -1,4 +1,4 @@
-import { useEffect, type ReactNode } from "react";
+import { lazy, Suspense, useEffect, type ReactNode } from "react";
 import { Navigate, Route, Routes } from "react-router-dom";
 import { Shell } from "./components/Shell";
 import { P } from "./data";
@@ -10,9 +10,14 @@ import { ExportPage } from "./pages/ExportPage";
 import { GeneratePage } from "./pages/GeneratePage";
 import { LoginPage } from "./pages/LoginPage";
 import { OverviewPage } from "./pages/OverviewPage";
-import { ProjectsPage } from "./pages/ProjectsPage";
+const ProjectsPage = lazy(() => import("./pages/ProjectsPage").then((m) => ({ default: m.ProjectsPage })));
 import { RatesPage } from "./pages/RatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
+import { opsRoutes } from "./ops/routes";
+import { PageSkeleton } from "./components/kit/extra";
+const NewProjectPage = lazy(() => import("./pages/projects/NewProjectPage").then((m) => ({ default: m.NewProjectPage })));
+const TemplatesPage = lazy(() => import("./pages/projects/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
+const VendorPortal = lazy(() => import("./pages/vendor/VendorPortal").then((m) => ({ default: m.VendorPortal })));
 
 function RequireUser({ children }: { children: ReactNode }) {
   const user = useApp((s) => s.user);
@@ -38,6 +43,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Home />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/vendor/*" element={<Suspense fallback={null}><VendorPortal /></Suspense>} />
       <Route
         path={`${P}/generate`}
         element={
@@ -53,7 +59,9 @@ export function App() {
           </RequireUser>
         }
       >
-        <Route path="/projects" element={<ProjectsPage />} />
+        <Route path="/projects" element={<Suspense fallback={<PageSkeleton />}><ProjectsPage /></Suspense>} />
+        <Route path="/projects/new" element={<Suspense fallback={<PageSkeleton />}><NewProjectPage /></Suspense>} />
+        <Route path="/projects/templates" element={<Suspense fallback={<PageSkeleton />}><TemplatesPage /></Suspense>} />
         <Route path="/settings" element={<SettingsPage />} />
         <Route path={P} element={<Navigate to={`${P}/overview`} replace />} />
         <Route path={`${P}/bill`} element={<RequireBill><BillPage /></RequireBill>} />
@@ -64,6 +72,7 @@ export function App() {
         <Route path={`${P}/overview`} element={<RequireBill><OverviewPage /></RequireBill>} />
         <Route path={`${P}/rates`} element={<RequireBill><RatesPage /></RequireBill>} />
         <Route path={`${P}/export`} element={<RequireBill><ExportPage /></RequireBill>} />
+        {opsRoutes()}
       </Route>
       <Route path="*" element={<Home />} />
     </Routes>

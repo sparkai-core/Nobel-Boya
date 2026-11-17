@@ -5,6 +5,8 @@ import { P } from "../data";
 import { useT } from "../lib/i18n";
 import { DEFAULT_MARKUPS, useApp } from "../lib/store";
 import { PageHead } from "../components/Shell";
+import { useOps } from "../ops/store";
+import { usePlanExtras } from "../ops/ext/planning-p2";
 
 export function SettingsPage() {
   const t = useT();
@@ -18,6 +20,8 @@ export function SettingsPage() {
   const fixes = useApp((s) => s.fixes);
   const markups = useApp((s) => s.markups);
   const [done, setDone] = useState(false);
+  const resetDemo = useOps((s) => s.resetDemo);
+  const [opsDone, setOpsDone] = useState(false);
 
   const nRates = Object.keys(rates).length;
   const nQty = Object.keys(qty).length;
@@ -91,6 +95,34 @@ export function SettingsPage() {
           <p className="muted small">{t("Plays the generation sequence and opens the project.")}</p>
           <button type="button" className="btn btn-ghost" onClick={() => navigate(`${P}/generate`)}>
             {t("Run the generation again")}
+          </button>
+        </div>
+      </section>
+
+      <section className="card settings-card">
+        <header className="card-head">
+          <h2>{t("Project management and procurement demo")}</h2>
+        </header>
+        <div className="settings-row">
+          <div>
+            <p className="muted small">{t("Requests, orders, deliveries, payments, the programme, site reports and vendor portal activity are kept in this browser. Reset returns every record to the starting demo data.")}</p>
+            {opsDone ? <p className="ok-text small">{t("Demo data was reset.")}</p> : null}
+          </div>
+          <button
+            type="button"
+            className="btn btn-ghost"
+            onClick={() => {
+              resetDemo();
+              usePlanExtras.setState({ constraints: {} });
+              try {
+                localStorage.removeItem("nobel.ops.seen");
+              } catch {
+                /* storage blocked */
+              }
+              setOpsDone(true);
+            }}
+          >
+            <RotateCcw size={15} /> {t("Reset demo data")}
           </button>
         </div>
       </section>

@@ -1,0 +1,572 @@
+/* =====================================================================================
+   Polish pass (loaded last). Construction-OS scale:
+   thin bars · regular-weight badges · compact headers · sidebar type · thin scrollbars.
+   No coloured left accent lines anywhere.
+   ===================================================================================== */
+
+/* ---------- scrollbars: Chrome draws the custom thin bar only when scrollbar-width is auto ---------- */
+* {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+*::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+*::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 24, 0.18);
+  border-radius: 999px;
+}
+*::-webkit-scrollbar-thumb:hover {
+  background: rgba(17, 17, 24, 0.32);
+}
+*::-webkit-scrollbar-track,
+*::-webkit-scrollbar-corner {
+  background: transparent;
+}
+.rail-scroll,
+.k-gantt-scroll,
+.kp-list {
+  scrollbar-width: auto;
+  scrollbar-color: auto;
+}
+.rail-scroll::-webkit-scrollbar {
+  width: 3px;
+}
+.rail-scroll::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 24, 0.14);
+}
+.rail-scroll:hover::-webkit-scrollbar-thumb {
+  background: rgba(17, 17, 24, 0.26);
+}
+.app.rail-collapsed .rail-scroll {
+  scrollbar-width: none;
+}
+.app.rail-collapsed .rail-scroll::-webkit-scrollbar {
+  display: none;
+}
+@supports not selector(::-webkit-scrollbar) {
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: rgba(17, 17, 24, 0.2) transparent;
+  }
+}
+
+/* ---------- badges, chips, tags: regular weight; only their counts stay bold ---------- */
+.k-badge,
+.kp-status,
+.k-chip,
+.k-stage-chip,
+.k-stage span,
+[class*="-chip"]:not([class*="-chips"]),
+[class*="-badge"]:not([class*="-badges"]),
+[class*="-pill"],
+[class*="-tag"]:not([class*="-tags"]) {
+  font-weight: 400;
+}
+.k-chip b,
+.k-stage b,
+[class*="-chip"] b,
+[class*="-badge"] b {
+  font-weight: 600;
+}
+
+/* ---------- thin progress bars and meters ---------- */
+.k-meter,
+.k-meter > i {
+  height: 4px;
+  border-radius: 2px;
+}
+.k-bar-track {
+  height: 6px;
+}
+.ph-trade-track {
+  height: 8px;
+}
+.ph-stage-bar {
+  height: 3px;
+}
+.st-strip {
+  height: 6px;
+  gap: 2px;
+}
+.st-strip i {
+  border-radius: 3px;
+}
+.st-strip-key i {
+  width: 8px !important;
+  height: 8px !important;
+  border-radius: 2px;
+}
+.st-people {
+  gap: 4px !important;
+}
+.st-person-dot {
+  width: 10px !important;
+  height: 10px !important;
+}
+.st-hire-bar,
+.pg-qty-track,
+.pmn-owe-bar,
+.ppl-bul-track {
+  height: 6px !important;
+  border-radius: 3px;
+}
+.ppl-seg {
+  max-height: 8px;
+}
+
+/* ---------- compact page header: height follows the text, art never pads it out ---------- */
+.k-hero {
+  align-items: center;
+  padding: 16px 20px;
+}
+.k-hero.has-art {
+  grid-template-columns: minmax(0, 1fr) 170px;
+}
+.k-hero-art {
+  width: 170px;
+  align-self: center;
+}
+.k-hero-art .k-art {
+  max-height: 76px;
+}
+@media (max-width: 1100px) {
+  .k-hero.has-art {
+    grid-template-columns: minmax(0, 1fr) 150px;
+  }
+  .k-hero-art {
+    width: 150px;
+  }
+}
+@media (max-width: 900px) {
+  .k-hero.has-art {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ---------- sidebar type (Construction-OS: 13px items, 10.5px group labels) ---------- */
+.brand strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+.brand small {
+  font-size: 11px;
+}
+.rail-link {
+  font-size: 13px;
+  font-weight: 500;
+}
+.rail-group .rail-link {
+  height: 32px;
+}
+.rail-link svg {
+  width: 16px;
+  height: 16px;
+}
+.rail-group-label,
+button.rail-group-label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.rail-project {
+  padding: 9px 11px;
+}
+.rail-project-label {
+  font-size: 10.5px;
+}
+.rail-project-name {
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.rail-project-meta {
+  font-size: 11.5px;
+}
+.rail-modules button {
+  font-size: 10.5px;
+  font-weight: 500;
+}
+.rail-search kbd {
+  font-size: 10px;
+}
+.rail-user-email {
+  font-size: 12px;
+}
+.rail-badge {
+  font-size: 10.5px;
+  font-weight: 600;
+}
+
+/* ---------- rail labels: one line, no bold, slide right-to-left on hover when cut off ---------- */
+.rail-link {
+  gap: 10px;
+  padding: 0 10px;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.rail-link.active {
+  font-weight: 400;
+}
+.rail-label {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.rail-label > span {
+  display: inline-block;
+  white-space: nowrap;
+  transform: translateX(0);
+  transition: transform 300ms var(--ease);
+}
+.rail-label.cut {
+  -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+  mask-image: linear-gradient(90deg, #000 calc(100% - 18px), transparent);
+}
+.rail-link:hover .rail-label.cut,
+.rail-link:focus-visible .rail-label.cut {
+  -webkit-mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+  mask-image: linear-gradient(90deg, transparent, #000 14px, #000 calc(100% - 14px), transparent);
+}
+.rail-link:hover .rail-label.cut > span,
+.rail-link:focus-visible .rail-label.cut > span {
+  transform: translateX(var(--slide, 0px));
+  transition: transform var(--slide-ms, 900ms) linear 250ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  .rail-label > span {
+    transition: none !important;
+  }
+}
+.rail-group-label,
+button.rail-group-label,
+.rail-modules button,
+.brand strong,
+.rail-project-name {
+  font-weight: 500;
+}
+
+/* =====================================================================================
+   Sidebar motion: hover, press, active, group open, module switch, collapse/expand.
+   All under 300ms, eased; switched off for prefers-reduced-motion.
+   ===================================================================================== */
+
+/* hover: soft fill, icon nudges right, label brightens */
+.rail-link {
+  transition:
+    background-color 160ms var(--ease),
+    color 160ms var(--ease),
+    transform 120ms var(--ease),
+    box-shadow 160ms var(--ease);
+}
+.rail-link svg {
+  transition: transform 200ms var(--ease-out), color 160ms var(--ease);
+}
+.rail-link:hover svg {
+  transform: translateX(2px);
+}
+.rail-link:hover {
+  background: var(--sheet-3);
+}
+/* press */
+.rail-link:active {
+  transform: scale(0.975);
+}
+/* active item: the tinted pill settles in (no side stripe) */
+.rail-link.active {
+  animation: rail-active-in 280ms var(--ease-out);
+}
+.rail-link.active svg {
+  transform: none;
+}
+@keyframes rail-active-in {
+  from {
+    background-color: transparent;
+    transform: scale(0.97);
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* items mount (module switch, group opened): short staggered rise */
+.rail-group .rail-link {
+  animation: rail-item-in 220ms var(--ease-out) both;
+}
+.rail-group .rail-link:nth-of-type(2) { animation-delay: 15ms; }
+.rail-group .rail-link:nth-of-type(3) { animation-delay: 30ms; }
+.rail-group .rail-link:nth-of-type(4) { animation-delay: 45ms; }
+.rail-group .rail-link:nth-of-type(5) { animation-delay: 60ms; }
+.rail-group .rail-link:nth-of-type(6) { animation-delay: 75ms; }
+.rail-group .rail-link:nth-of-type(7) { animation-delay: 90ms; }
+.rail-group .rail-link.active {
+  animation: rail-item-in 220ms var(--ease-out) both, rail-active-in 280ms var(--ease-out);
+}
+@keyframes rail-item-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* group header chevron and module tabs */
+button.rail-group-label svg {
+  transition: transform 220ms var(--ease-out);
+}
+.rail-modules button {
+  transition: background-color 180ms var(--ease), color 180ms var(--ease), box-shadow 180ms var(--ease), transform 120ms var(--ease);
+}
+.rail-modules button:active {
+  transform: scale(0.95);
+}
+.rail-modules button.on {
+  animation: rail-tab-in 240ms var(--ease-out);
+}
+@keyframes rail-tab-in {
+  from {
+    transform: scale(0.92);
+    box-shadow: none;
+  }
+  to {
+    transform: none;
+  }
+}
+
+/* collapse / expand: rail width glides, the edge button travels with it, labels fade in */
+.app {
+  transition: grid-template-columns 280ms var(--ease-out);
+}
+.rail-edge {
+  transition:
+    left 280ms var(--ease-out),
+    width var(--d-2) var(--ease),
+    background var(--d-2) var(--ease),
+    color var(--d-2) var(--ease);
+}
+.rail-edge svg {
+  animation: rail-chev 260ms var(--ease-out);
+}
+@keyframes rail-chev {
+  from {
+    transform: rotate(180deg) scale(0.6);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+.app:not(.rail-collapsed) .rail-link > .rail-label,
+.app:not(.rail-collapsed) .rail-group-label > span,
+.app:not(.rail-collapsed) .brand span,
+.app:not(.rail-collapsed) .rail-project,
+.app:not(.rail-collapsed) .rail-modules button span,
+.app:not(.rail-collapsed) .rail-user-email {
+  animation: rail-label-in 260ms var(--ease-out) 60ms both;
+}
+@keyframes rail-label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.app.rail-collapsed .rail-link svg {
+  animation: rail-icon-in 240ms var(--ease-out);
+}
+@keyframes rail-icon-in {
+  from {
+    transform: translateX(6px);
+    opacity: 0.4;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* narrow screens: the opened rail slides in over the page, scrim fades */
+@media (min-width: 821px) and (max-width: 1280px) {
+  .app.rail-expanded .rail {
+    animation: rail-overlay-in 260ms var(--ease-out);
+  }
+  .app.rail-expanded .rail-edge-scrim {
+    animation: k-fade 200ms var(--ease) both;
+  }
+}
+@keyframes rail-overlay-in {
+  from {
+    transform: translateX(-24px);
+    opacity: 0.6;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+
+/* menus from the rail */
+.rail-menu,
+.k-bell-pop {
+  transform-origin: bottom left;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .app,
+  .rail,
+  .rail-edge,
+  .rail-edge svg,
+  .rail-link,
+  .rail-link svg,
+  .rail-label,
+  .rail-label > span,
+  .rail-modules button,
+  .rail-group-label,
+  .rail-project,
+  .brand span,
+  .rail-user-email {
+    animation: none !important;
+    transition: none !important;
+  }
+}
+
+/* =====================================================================================
+   Weight pass: controls are never bold. Bold is kept for titles and key figures only.
+   ===================================================================================== */
+.btn,
+.btn *:not(.pp-tool),
+a.btn,
+.segmented button,
+.segmented button *,
+[role="tab"],
+[role="tab"] *,
+.k-tabs button,
+.k-subnav a,
+.k-link-btn,
+select.input,
+.k-th-sort,
+.k-table th,
+th {
+  font-weight: 400 !important;
+}
+/* counts inside controls: medium, not bold */
+.k-count,
+.k-chip b,
+.k-chip .num-inline,
+.k-stage b,
+.k-stage .num-inline,
+.k-stage-chip b,
+.k-stage-chip .num-inline,
+[class*="-chip"] b,
+[class*="-chip"] .num-inline,
+.segmented .count,
+.btn .k-count,
+[role="tab"] .k-count {
+  font-weight: 500 !important;
+}
+/* small things that were heavier than they need to be */
+.pp-tool {
+  font-weight: 600;
+}
+.vp-switch-btn,
+.vp-switch-btn * {
+  font-weight: 500 !important;
+}
+.ps-fold-head strong,
+.ps-strip-label {
+  font-weight: 500 !important;
+}
+.st-bubble i {
+  font-weight: 500;
+}
+/* labels above form fields */
+.k-field-label {
+  font-weight: 500;
+}
+.rail-search kbd,
+.st-today-attn strong,
+.pp-lane-name,
+.pp-module strong,
+#root button:not(.k-stat):not(.ps-ringbtn) > strong {
+  font-weight: 500 !important;
+}
+.pp-lane .k-text-bad {
+  font-weight: 600 !important;
+}
+.lang button {
+  font-weight: 500 !important;
+}
+
+/* =====================================================================================
+   No coloured lines (underlines, top stripes, side stripes) on any page.
+   Active tabs are shown with a soft pill instead of a coloured underline.
+   ===================================================================================== */
+.k-tabs {
+  gap: 2px;
+  padding: 3px 0;
+  align-items: center;
+}
+.k-tabs button {
+  height: 32px;
+  padding: 0 12px;
+  margin-bottom: 0;
+  border-bottom: 0 !important;
+  border-radius: 8px;
+  transition: background-color 160ms var(--ease), color 160ms var(--ease);
+}
+.k-tabs button:hover {
+  background: var(--sheet-2);
+}
+.k-tabs button.on {
+  background: var(--sheet-3);
+  color: var(--graphite);
+  border-bottom-color: transparent !important;
+}
+.ps-ticket,
+.ps-qhead {
+  border-top: 0 !important;
+}
+.ps-letter-head {
+  border-bottom: 1px solid var(--line) !important;
+}
+.ps-grid thead th.top {
+  box-shadow: none !important;
+}
+.pmn-paper-lines tr.amber td {
+  box-shadow: 0 0 0 2px var(--amber-soft) !important;
+}
+
+/* planning strip: tabs and actions share one centre line */
+.pp-strip {
+  align-items: center !important;
+  padding: 8px 14px !important;
+}
+.pp-strip .k-tabs button {
+  height: 34px !important;
+}
+.pp-strip-end {
+  padding: 0 !important;
+}
+.pg-upd-row::before,
+.pg-card::before {
+  display: none !important;
+}
+/* top stripes on lanes / buckets / side cards, and the vendor portal's active-link stripe */
+.po-lane,
+.pmn-lane,
+.pmn-side-card,
+.pmn-bucket {
+  box-shadow: var(--shadow-card) !important;
+}
+.vp-link::before {
+  display: none !important;
+}
