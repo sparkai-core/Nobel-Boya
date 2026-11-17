@@ -1,4 +1,4 @@
-# Multi-stage build for Storm Takeoff (Production Ready)
+# Multi-stage build for Nobel BOQ
 # ----------------------------------------------------
 # Stage 1: Build React Frontend
 FROM node:22-alpine AS frontend-builder
@@ -27,6 +27,8 @@ COPY server/ ./server/
 
 # Copy built frontend assets to app/dist for full-stack static serving
 COPY --from=frontend-builder /app/dist ./app/dist
+# Sample project and default rate library used by the server
+COPY app/src/data/qobu.json ./app/src/data/qobu.json
 
 # Mountable persistent storage directory for SQLite database & blueprint WebP sheets
 ENV DATA_DIR=/data
@@ -35,4 +37,8 @@ RUN mkdir -p /data/sheets
 
 EXPOSE 8090
 
-CMD ["sh", "-c", "uvicorn server.app:app --host 0.0.0.0 --port ${PORT:-8090}"]
+# Run as an unprivileged user
+RUN useradd --create-home --uid 10001 nobel && chown -R nobel /data
+USER nobel
+
+CMD ["sh", "-c", "uvicorn app:app --app-dir server --host 0.0.0.0 --port ${PORT:-8090} --proxy-headers"]

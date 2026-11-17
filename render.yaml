@@ -14,3 +14,12 @@ services:
         value: /data
       - key: PORT
         value: "8090"
+      # Signs session tokens. Render generates a random value once and keeps it.
+      - key: SECRET_KEY
+        generateValue: true
+      # Set to 0 in production to stop creating the demo accounts (password "demo").
+      - key: SEED_DEMO
+        value: "1"
+      # Set to 0 to allow only administrator-created accounts.
+      - key: ALLOW_SIGNUP
+        value: "1"

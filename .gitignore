@@ -63,3 +63,8 @@ ehthumbs.db
 audit_*.png
 real_*.png
 
+
+# Server secrets and per-project sheet images written at runtime
+.secret_key
+server/.secret_key
+app/public/sheets/*/
