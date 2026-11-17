@@ -41,6 +41,7 @@ export function App() {
     <Routes>
       <Route path="/" element={<Navigate to="/projects" replace />} />
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/generate" element={<GeneratePage />} />
       <Route path={`${P}/generate`} element={<GeneratePage />} />
       <Route element={<Shell />}>
         <Route path="/projects" element={<ProjectsPage />} />

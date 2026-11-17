@@ -67,7 +67,7 @@ export function NewProjectModal({ open, onClose, onCreated }: Props) {
       setActiveProject(res.project_id, proj.data);
       onCreated();
       onClose();
-      navigate(`/overview`);
+      navigate("/generate");
     } catch (err: any) {
       setError(err.message || t("Failed to create project. Please ensure drawing is a valid PDF."));
     } finally {

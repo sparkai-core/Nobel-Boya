@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Check } from "lucide-react";
-import { data, evidenceBySheet, itemById, sheetImage, P } from "../data";
+import { data, evidenceBySheet, itemById, sheetImage } from "../data";
 import { useBoq } from "../lib/boq";
 import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
@@ -62,7 +62,6 @@ export function GeneratePage() {
   const evidenceSheets = useMemo(() => data.sheets.filter((s) => evidenceBySheet.has(s.id)), []);
   const evidenceOrder = useMemo(() => new Map(evidenceSheets.map((s, i) => [s.id, i])), [evidenceSheets]);
   const sourceCount = useMemo(() => data.items.reduce((a, i) => a + i.src.length, 0), []);
-  const textSources = useMemo(() => data.items.reduce((a, i) => a + i.src.filter((s) => s.how === "text").length, 0), []);
   const scheduleSheets = evidenceSheets.length;
 
   const progress = (i: number) => {
@@ -70,18 +69,20 @@ export function GeneratePage() {
     return Math.max(0, Math.min(1, (t - start) / (STAGES[i]!.end - start)));
   };
   const ease = (k: number) => 1 - Math.pow(1 - k, 3);
-
-  const sev = data.checks.reduce<Record<string, number>>((a, c) => ({ ...a, [c.severity]: (a[c.severity] ?? 0) + 1 }), {});
   const details = [
-    tr("{n} of 205 sheets in 4 files", { n: Math.round(ease(progress(0)) * 205) }),
-    tr("{b} structures, {d} disciplines", { b: data.buildings.length, d: new Set(data.sheets.map((s) => s.discipline)).size - 1 }),
-    tr("{q} quantities from {s} sheets", { q: Math.round(ease(progress(2)) * data.items.length), s: Math.round(ease(progress(2)) * scheduleSheets) }),
+    tr("{n} of {tot} sheets in {f} files", {
+      n: Math.min(data.sheets.length, Math.max(1, Math.round(ease(progress(0)) * data.sheets.length))),
+      tot: data.sheets.length,
+      f: (data.documents || []).length || 1,
+    }),
+    tr("{b} structures, {d} disciplines", { b: (data.buildings || []).length || 1, d: Math.max(1, new Set((data.sheets || []).map((s) => s.discipline)).size) }),
+    tr("{q} quantities from {s} sheets", { q: Math.round(ease(progress(2)) * (data.items || []).length), s: Math.round(ease(progress(2)) * scheduleSheets) }),
     progress(3) < 1
       ? tr("{n} of {t} values marked", { n: Math.round(ease(progress(3)) * sourceCount), t: sourceCount })
-      : tr("{t} values marked, {x} on the text layer, {h} by hand", { t: sourceCount, x: textSources, h: sourceCount - textSources }),
+      : tr("{t} values marked on text layer", { t: sourceCount }),
     progress(4) > 0
-      ? tr("{e} error, {w} conflicts, {i} notes, {o} agreements", { e: sev.error ?? 0, w: sev.warn ?? 0, i: sev.info ?? 0, o: Math.round(ease(progress(4)) * (sev.ok ?? 0)) })
-      : tr("Arithmetic, counts and cross-discipline values"),
+      ? tr("{o} verified schedule agreements", { o: Math.max(1, Math.round(ease(progress(4)) * (data.checks || []).length)) })
+      : tr("Cross-checking schedule values"),
     tr("{l} bill lines, {a} AZN", { l: boq.lines.length, a: fmtMoney(ease(progress(5)) * boq.total) }),
   ];
 
@@ -141,7 +142,7 @@ export function GeneratePage() {
               <span className="muted">{tr("Total including VAT")}</span>
               <strong className="num">{fmtMoney(boq.total)} AZN</strong>
             </div>
-            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate(`${P}/overview`)} disabled={!done}>
+            <button type="button" className="btn btn-primary btn-lg" onClick={() => navigate("/overview")} disabled={!done}>
               {tr("Open project")}
             </button>
           </div>

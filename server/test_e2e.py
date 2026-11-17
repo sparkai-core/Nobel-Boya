@@ -57,11 +57,23 @@ def run_e2e():
         # 4. Submit & Wait for Takeoff OCR Engine
         print("\nStep 3: Submitting project for autonomous takeoff & schedule OCR...", flush=True)
         page.click("button[type='submit']")
-        
-        # Wait for navigation to /overview
-        print("Waiting for PyMuPDF rasterization & BOQ generation...", flush=True)
-        page.wait_for_url("**/overview", timeout=45000)
+
+        # Wait for navigation to /generate pipeline animation
+        print("Waiting for generation pipeline animation...", flush=True)
+        page.wait_for_url("**/generate", timeout=45000)
         time.sleep(2)
+
+        shot_anim = ARTIFACTS_DIR / "shot_e2e_gathering_animation.png"
+        page.screenshot(path=str(shot_anim))
+        print(f"Gathering animation active. Screenshot: {shot_anim}", flush=True)
+
+        # Wait for animation completion and click 'Open project'
+        print("Waiting for pipeline completion...", flush=True)
+        page.wait_for_selector("button:has-text('Open project'):not([disabled])", timeout=15000)
+        time.sleep(1)
+        page.click("button:has-text('Open project')")
+        page.wait_for_url("**/overview", timeout=10000)
+        time.sleep(1.5)
 
         shot3 = ARTIFACTS_DIR / "shot_e2e_overview.png"
         page.screenshot(path=str(shot3))
