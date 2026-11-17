@@ -158,12 +158,41 @@ def list_user_projects(user_id: str):
     conn = get_db()
     cur = conn.cursor()
     cur.execute("""
-        SELECT id, code, title, title_en, client, designer, issued, place, status, created_at, updated_at
+        SELECT id, code, title, title_en, client, designer, issued, place, status, data_json, created_at, updated_at
         FROM projects
         WHERE user_id = ?
         ORDER BY created_at DESC
     """, (user_id,))
-    rows = [dict(r) for r in cur.fetchall()]
+    rows = []
+    for r in cur.fetchall():
+        d = dict(r)
+        raw_json = d.pop("data_json", "{}")
+        try:
+            p_data = json.loads(raw_json)
+            sheets = [s.get("id") for s in p_data.get("sheets", []) if s.get("id")]
+            d["cover_sheets"] = sheets[:4] if sheets else (["BP-7", "AR-10", "KS-7", "MEP-24"] if d["id"] == "proj_qobu" else [])
+            d["sheets_count"] = len(sheets) or len(p_data.get("sheets", []))
+            d["documents_count"] = len(p_data.get("documents", []))
+            # Calculate total bill
+            items = p_data.get("items", [])
+            rates = p_data.get("rates", {})
+            works = 0.0
+            for it in items:
+                q = float(it.get("qty", 0) or 0)
+                rk = it.get("rate", "")
+                r_val = rates.get(rk, {})
+                rate_num = float(r_val.get("rate", 0) if isinstance(r_val, dict) else (r_val or 0))
+                works += q * rate_num
+            # Total with standard markups (8% overhead, 6% profit, 5% contingency, 18% VAT) = works * 1.418
+            d["total_amount"] = round(works * 1.41804, 2)
+            d["documents"] = p_data.get("documents", [])
+        except Exception as e:
+            d["cover_sheets"] = ["BP-7", "AR-10", "KS-7", "MEP-24"] if d["id"] == "proj_qobu" else []
+            d["sheets_count"] = 1
+            d["documents_count"] = 1
+            d["total_amount"] = 0
+            d["documents"] = []
+        rows.append(d)
     conn.close()
     return rows
 

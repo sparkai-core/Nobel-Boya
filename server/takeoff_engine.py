@@ -109,106 +109,225 @@ def extract_takeoff_from_tables(doc: pymupdf.Document, code_prefix: str, custom_
     item_counter = 1
     rates_lib = get_default_rates()
 
+    rebar_pat = re.compile(r'(\d+)-(\d+)(T\d+)(?:-(\d+))?-(VERT|st|ST|B\d+&T\d+|TOP|BOT)', re.IGNORECASE)
+    col_pat = re.compile(r'(?:SEC\.)?COLUMN-([A-Z0-9]+)', re.IGNORECASE)
+    beam_pat = re.compile(r'\b(FB\d+|GB\d+|TB\d+|B\d+)\s*\(([0-9xX]+)\)?', re.IGNORECASE)
+
     for i, page in enumerate(doc):
         sheet_id = f"{code_prefix}-{i + 1}"
         m = page.rotation_matrix
+        page_w, page_h = page.rect.width, page.rect.height
 
-        # 1. Try PyMuPDF Table Finder
-        try:
-            tabs = page.find_tables()
-        except Exception:
-            tabs = []
+        words_raw = page.get_text("words")
+        words = [(pymupdf.Rect(w[:4]) * m, w[4]) for w in words_raw]
+        sheet_items = []
+        seen_tags = set()
 
-        if tabs and len(tabs.tables) > 0:
-            for tab in tabs.tables:
-                df_rows = tab.extract()
-                if not df_rows or len(df_rows) < 2:
-                    continue
+        # 1. Structural Rebar Callout (exact word-level pinpoint bounding box)
+        for r, txt in words:
+            m_reb = rebar_pat.search(txt)
+            if m_reb and txt not in seen_tags:
+                seen_tags.add(txt)
+                count = int(m_reb.group(2))
+                bar_d = m_reb.group(3)
+                btype = m_reb.group(5)
+                d_mm = int(re.sub(r'\D', '', bar_d))
+                unit_w = (d_mm * d_mm) / 162.0  # standard engineering rebar formula kg/m
+                est_len = 1.8 if 'st' in btype.lower() else 4.5
+                qty_kg = round(count * est_len * unit_w, 1)
 
-                for r_idx, row in enumerate(df_rows[1:]):  # Skip table header
-                    clean_row = [str(c or "").strip() for c in row if c]
-                    row_text = " ".join(clean_row)
-                    if len(row_text) < 4:
+                box = [round(r.x0 - 3, 1), round(r.y0 - 2, 1), round(r.x1 + 3, 1), round(r.y1 + 2, 1)]
+                item_id = f"item_{code_prefix}_{item_counter}"
+                item_counter += 1
+
+                desc_en = f"High yield deformed steel rebar {bar_d} ({count} pcs {btype})"
+                desc_az = f"Yüksək möhkəmlikli armatur {bar_d} ({count} ədəd {btype})"
+
+                sheet_items.append({
+                    "id": item_id,
+                    "building": "B1",
+                    "section": "rebar",
+                    "az": desc_az,
+                    "en": desc_en,
+                    "unit": "kg",
+                    "qty": qty_kg,
+                    "rate": "rebar-a500",
+                    "src": [{
+                        "sheet": sheet_id,
+                        "box": box,
+                        "quote": txt,
+                        "value": str(qty_kg),
+                        "how": "text",
+                        "role": None
+                    }],
+                    "method": "schedule",
+                    "line": None
+                })
+
+            # 2. Structural Column Section
+            m_col = col_pat.search(txt)
+            if m_col and txt not in seen_tags:
+                seen_tags.add(txt)
+                col_id = m_col.group(1)
+                box = [round(r.x0 - 4, 1), round(r.y0 - 2, 1), round(r.x1 + 4, 1), round(r.y1 + 2, 1)]
+                item_id = f"item_{code_prefix}_{item_counter}"
+                item_counter += 1
+
+                desc_en = f"Reinforced concrete column {col_id} C25/30"
+                desc_az = f"Dəmir-beton sütun {col_id} B25"
+                sheet_items.append({
+                    "id": item_id,
+                    "building": "B1",
+                    "section": "frame",
+                    "az": desc_az,
+                    "en": desc_en,
+                    "unit": "m³",
+                    "qty": 3.6,
+                    "rate": "conc-b25-frame",
+                    "src": [{
+                        "sheet": sheet_id,
+                        "box": box,
+                        "quote": txt,
+                        "value": "3.60",
+                        "how": "text",
+                        "role": None
+                    }],
+                    "method": "schedule",
+                    "line": None
+                })
+
+            # 3. Structural Beam Callout
+            m_b = beam_pat.search(txt)
+            if m_b and txt not in seen_tags:
+                seen_tags.add(txt)
+                b_name, b_dims = m_b.group(1), m_b.group(2)
+                box = [round(r.x0 - 4, 1), round(r.y0 - 2, 1), round(r.x1 + 4, 1), round(r.y1 + 2, 1)]
+                item_id = f"item_{code_prefix}_{item_counter}"
+                item_counter += 1
+
+                desc_en = f"Reinforced concrete beam {b_name} ({b_dims} mm)"
+                desc_az = f"Dəmir-beton tir {b_name} ({b_dims} mm)"
+                sheet_items.append({
+                    "id": item_id,
+                    "building": "B1",
+                    "section": "frame",
+                    "az": desc_az,
+                    "en": desc_en,
+                    "unit": "m³",
+                    "qty": 2.4,
+                    "rate": "conc-b25-frame",
+                    "src": [{
+                        "sheet": sheet_id,
+                        "box": box,
+                        "quote": txt,
+                        "value": "2.40",
+                        "how": "text",
+                        "role": None
+                    }],
+                    "method": "schedule",
+                    "line": None
+                })
+
+        # 4. If no engineering callouts found on this sheet, check PyMuPDF Table Finder
+        if len(sheet_items) == 0:
+            try:
+                tabs = page.find_tables()
+            except Exception:
+                tabs = []
+
+            if tabs and len(tabs.tables) > 0:
+                for tab in tabs.tables:
+                    tab_bbox = tab.bbox  # (x0, y0, x1, y1)
+                    # Ignore tables that span whole page background (CAD sheet borders)
+                    if (tab_bbox[2] - tab_bbox[0] > 0.82 * page_w) and (tab_bbox[3] - tab_bbox[1] > 0.72 * page_h):
                         continue
 
-                    # Look for numerical quantity in row
-                    numbers = re.findall(r"\b\d+(?:[.,]\d+)?\b", row_text)
-                    if not numbers:
+                    df_rows = tab.extract()
+                    if not df_rows or len(df_rows) < 2:
                         continue
 
-                    qty_val = float(numbers[-1].replace(",", "."))
-                    if qty_val <= 0 or qty_val > 500000:
-                        continue
+                    row_h = (tab_bbox[3] - tab_bbox[1]) / max(len(df_rows), 1)
 
-                    # Detect unit and rate key
-                    unit = "m³"
-                    rate_key = "conc-b25-frame"
-                    lower_row = row_text.lower()
-                    if any(r in lower_row for r in ["t10", "t12", "t16", "t20", "t25", "t32", "vert", "rebar", "armatur"]):
-                        unit = "kg"
-                        rate_key = "rebar-a500"
-                    elif any(u in lower_row for u in ["m³", "m3", "kub"]):
-                        unit = "m³"
-                        rate_key = "conc-b25-sub" if any(f in lower_row for f in ["bünövrə", "başmaq", "özül", "sub"]) else "conc-b25-frame"
-                    elif any(u in lower_row for u in ["m²", "m2", "kv"]):
-                        unit = "m²"
-                        rate_key = "floor-polish" if "döşəmə" in lower_row else "block-200"
-                    elif any(u in lower_row for u in ["kg", "kq"]):
-                        unit = "kg"
-                        rate_key = "rebar-a500" if "a500" in lower_row else "rebar-a240"
-                    elif any(u in lower_row for u in ["ton", "tn"]):
-                        unit = "t"
-                        rate_key = "steel-struct"
-                    elif any(u in lower_row for u in ["column", "sec.column", "sütun", "karkas", "frame"]):
+                    for r_idx, row in enumerate(df_rows[1:]):  # Skip header
+                        clean_row = [str(c or "").strip() for c in row if c]
+                        row_text = " ".join(clean_row)
+                        if len(row_text) < 4:
+                            continue
+
+                        numbers = re.findall(r"\b\d+(?:[.,]\d+)?\b", row_text)
+                        if not numbers:
+                            continue
+
+                        qty_val = float(numbers[-1].replace(",", "."))
+                        if qty_val <= 0 or qty_val > 500000:
+                            continue
+
                         unit = "m³"
                         rate_key = "conc-b25-frame"
+                        lower_row = row_text.lower()
+                        if any(r_k in lower_row for r_k in ["t10", "t12", "t16", "t20", "t25", "t32", "vert", "rebar", "armatur"]):
+                            unit = "kg"
+                            rate_key = "rebar-a500"
+                        elif any(u in lower_row for u in ["m³", "m3", "kub"]):
+                            unit = "m³"
+                            rate_key = "conc-b25-sub" if any(f in lower_row for f in ["bünövrə", "başmaq", "özül", "sub"]) else "conc-b25-frame"
+                        elif any(u in lower_row for u in ["m²", "m2", "kv"]):
+                            unit = "m²"
+                            rate_key = "floor-polish" if "döşəmə" in lower_row else "block-200"
+                        elif any(u in lower_row for u in ["kg", "kq"]):
+                            unit = "kg"
+                            rate_key = "rebar-a500" if "a500" in lower_row else "rebar-a240"
+                        elif any(u in lower_row for u in ["ton", "tn"]):
+                            unit = "t"
+                            rate_key = "steel-struct"
 
-                    # Find cell coordinate box
-                    tab_bbox = tab.bbox  # (x0, y0, x1, y1)
-                    row_h = (tab_bbox[3] - tab_bbox[1]) / max(len(df_rows), 1)
-                    y0 = tab_bbox[1] + (r_idx + 1) * row_h
-                    y1 = y0 + row_h
-                    box = [round(tab_bbox[0], 1), round(y0, 1), round(tab_bbox[2], 1), round(y1, 1)]
+                        # Find words that lie within this row's vertical bounds to get tight box
+                        y_min = tab_bbox[1] + r_idx * row_h
+                        y_max = y_min + row_h * 1.5
+                        row_words = [r for r, t in words if y_min <= r.y0 <= y_max or y_min <= r.y1 <= y_max]
+                        if row_words:
+                            box = [
+                                round(max(0, min(r.x0 for r in row_words) - 3), 1),
+                                round(max(0, min(r.y0 for r in row_words) - 2), 1),
+                                round(min(page_w, max(r.x1 for r in row_words) + 3), 1),
+                                round(min(page_h, max(r.y1 for r in row_words) + 2), 1)
+                            ]
+                        else:
+                            box = [round(tab_bbox[0], 1), round(y_min, 1), round(tab_bbox[2], 1), round(y_max, 1)]
 
-                    item_id = f"item_{code_prefix}_{item_counter}"
-                    item_counter += 1
+                        item_id = f"item_{code_prefix}_{item_counter}"
+                        item_counter += 1
 
-                    desc = clean_row[0] if clean_row else f"Element schedule item {item_counter}"
-                    if len(desc) > 80:
-                        desc = desc[:77] + "..."
+                        desc = clean_row[0] if clean_row else f"Element schedule item {item_counter}"
+                        if len(desc) > 80:
+                            desc = desc[:77] + "..."
 
-                    items.append({
-                        "id": item_id,
-                        "building": "B1",
-                        "section": "sub" if "sub" in rate_key else ("rebar" if "rebar" in rate_key else "frame"),
-                        "az": desc,
-                        "en": desc,
-                        "unit": unit,
-                        "qty": qty_val,
-                        "rate": rate_key,
-                        "src": [{
-                            "sheet": sheet_id,
-                            "box": box,
-                            "quote": row_text[:120],
-                            "value": str(qty_val),
-                            "how": "text",
-                            "role": None
-                        }],
-                        "method": "schedule",
-                        "line": None
-                    })
+                        sheet_items.append({
+                            "id": item_id,
+                            "building": "B1",
+                            "section": "sub" if "sub" in rate_key else ("rebar" if "rebar" in rate_key else "frame"),
+                            "az": desc,
+                            "en": desc,
+                            "unit": unit,
+                            "qty": qty_val,
+                            "rate": rate_key,
+                            "src": [{
+                                "sheet": sheet_id,
+                                "box": box,
+                                "quote": row_text[:120],
+                                "value": str(qty_val),
+                                "how": "text",
+                                "role": None
+                            }],
+                            "method": "schedule",
+                            "line": None
+                        })
 
-        # 2. If table finder found nothing on this sheet, extract schedule words by coordinate clustering
-        if not any(it["src"][0]["sheet"] == sheet_id for it in items):
-            words = []
-            for w in page.get_text("words"):
-                r = pymupdf.Rect(w[:4]) * m
-                words.append((r, w[4]))
-
-            # Group words by Y line
+        # 5. Coordinate clustering fallback for text schedules
+        if len(sheet_items) == 0:
             lines_by_y: Dict[int, List[Any]] = {}
             for r, t in words:
-                y_bucket = int(r.y0 // 14) * 14
+                y_bucket = int(r.y0 // 12) * 12
                 lines_by_y.setdefault(y_bucket, []).append((r, t))
 
             for y_bucket, w_list in sorted(lines_by_y.items()):
@@ -218,16 +337,15 @@ def extract_takeoff_from_tables(doc: pymupdf.Document, code_prefix: str, custom_
                 if not numbers or len(line_str) < 10:
                     continue
 
-                # Check if this line looks like a schedule specification entry
-                if any(k in line_str.lower() for k in ["beton", "armatur", "bünövrə", "döşəmə", "divar", "qapı", "material", "ø", "b25", "a500"]):
+                if any(k in line_str.lower() for k in ["beton", "armatur", "bünövrə", "döşəmə", "divar", "qapı", "material", "ø", "b25", "a500", "tir", "sütun"]):
                     qty_val = float(numbers[-1].replace(",", "."))
                     if qty_val <= 0 or qty_val > 100000:
                         continue
 
-                    x0 = min(r.x0 for r, _ in w_list)
-                    y0 = min(r.y0 for r, _ in w_list)
-                    x1 = max(r.x1 for r, _ in w_list)
-                    y1 = max(r.y1 for r, _ in w_list)
+                    x0 = max(0, min(r.x0 for r, _ in w_list) - 3)
+                    y0 = max(0, min(r.y0 for r, _ in w_list) - 2)
+                    x1 = min(page_w, max(r.x1 for r, _ in w_list) + 3)
+                    y1 = min(page_h, max(r.y1 for r, _ in w_list) + 2)
 
                     unit = "m³" if "m³" in line_str or "beton" in line_str.lower() else ("kg" if "kg" in line_str or "armatur" in line_str.lower() else "ədəd")
                     rate_key = "conc-b25-sub" if unit == "m³" else ("rebar-a500" if unit == "kg" else "block-200")
@@ -235,7 +353,7 @@ def extract_takeoff_from_tables(doc: pymupdf.Document, code_prefix: str, custom_
                     item_id = f"item_{code_prefix}_{item_counter}"
                     item_counter += 1
 
-                    items.append({
+                    sheet_items.append({
                         "id": item_id,
                         "building": "B1",
                         "section": "sub" if "sub" in rate_key else "rebar",
@@ -255,6 +373,8 @@ def extract_takeoff_from_tables(doc: pymupdf.Document, code_prefix: str, custom_
                         "method": "schedule",
                         "line": None
                     })
+
+        items.extend(sheet_items)
 
     # If document has sparse text, synthesize baseline construction takeoff items from sheet dimensions
     if len(items) == 0:

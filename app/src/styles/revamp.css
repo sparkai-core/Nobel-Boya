@@ -1060,6 +1060,18 @@ h3 {
   cursor: pointer;
   align-content: center;
 }
+.project-cover.single-sheet {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  min-height: 220px;
+}
+.project-cover.single-sheet img {
+  width: 100%;
+  max-height: 280px;
+  object-fit: contain;
+}
 .project-cover img {
   width: 100%;
   aspect-ratio: 1191 / 842;

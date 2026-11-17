@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useRef, useState } from "react";
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Maximize2, Minus, Plus } from "lucide-react";
 import { sheetImage } from "../data";
 import type { Box, Sheet } from "../data/types";
@@ -263,6 +263,11 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
   const vb = `${view.x} ${view.y} ${size.w * view.s} ${size.h * view.s}`;
   const zoomPct = Math.round((1 / view.s) * 100 / 2) * 2;
 
+  // Sort marks so active mark is rendered last (on top of all other SVG layers)
+  const sortedMarks = useMemo(() => {
+    return [...marks].sort((a, b) => (a.active === b.active ? 0 : a.active ? 1 : -1));
+  }, [marks]);
+
   return (
     <div
       ref={host}
@@ -321,21 +326,22 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
         />
 
         {/* Interactive Element Tags & Evidence Highlights */}
-        {marks.map((m) => {
+        {sortedMarks.map((m) => {
           const x0 = isFinite(m.box[0]) ? m.box[0] : 0;
           const y0 = isFinite(m.box[1]) ? m.box[1] : 0;
           const x1 = isFinite(m.box[2]) ? m.box[2] : 50;
           const y1 = isFinite(m.box[3]) ? m.box[3] : 30;
-          const bw = Math.max(x1 - x0, 10);
-          const bh = Math.max(y1 - y0, 10);
+          const bw = Math.max(x1 - x0, 8);
+          const bh = Math.max(y1 - y0, 6);
           const pillText = m.tag ? `${m.tag}${m.label ? ` • ${m.label}` : ""}` : m.label;
-          const pillW = pillText ? Math.max(52, pillText.length * 6.6 + 16) : 0;
+          const pillW = pillText ? Math.max(28, pillText.length * 4.4 + 8) : 0;
+          const pillH = 9.5;
 
           // Clamp badge vertically: if box is near top edge, place badge below the box
-          const pinBelow = y0 < 28;
-          const pinY = pinBelow ? y1 + 18 : Math.max(16, y0 - 4);
+          const pinBelow = y0 < 16;
+          const pinY = pinBelow ? y1 + 11 : Math.max(10, y0 - 2.5);
           // Clamp badge horizontally: ensure it never renders outside the sheet width
-          const pinX = Math.max(4, Math.min(sheet.w - pillW - 4, x0));
+          const pinX = Math.max(2, Math.min(sheet.w - pillW - 2, x0));
 
           return (
             <g
@@ -364,13 +370,13 @@ export const SheetViewer = forwardRef<ViewerHandle, Props>(function SheetViewer(
                 <g className="vmark-pin">
                   <rect
                     x={pinX}
-                    y={pinY - 14}
+                    y={pinY - pillH}
                     width={pillW}
-                    height={15}
-                    rx={3}
+                    height={pillH}
+                    rx={2.5}
                     className="vmark-pin-bg"
                   />
-                  <text x={pinX + 8} y={pinY - 3} className="vmark-pin-text">
+                  <text x={pinX + pillW / 2} y={pinY - 2.2} textAnchor="middle" className="vmark-pin-text">
                     {pillText}
                   </text>
                 </g>

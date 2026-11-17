@@ -20,6 +20,11 @@ type ProjectSummary = {
   designer: string;
   place: string;
   created_at: string;
+  cover_sheets?: string[];
+  sheets_count?: number;
+  documents_count?: number;
+  total_amount?: number;
+  documents?: any[];
 };
 
 export function ProjectsPage() {
@@ -118,16 +123,19 @@ export function ProjectsPage() {
           const p = isCurrent ? data.project : { client: proj.client, designer: proj.designer, issued: proj.created_at.slice(0, 10) };
           const pTitle = isCurrent ? projectName(lang) : proj.title;
           const pPlace = isCurrent ? projectPlace(lang) : proj.place;
+          const covers = (proj.cover_sheets && proj.cover_sheets.length > 0)
+            ? proj.cover_sheets
+            : (isCurrent ? COVER_SHEETS : ["DXBTWBWM-1"]);
 
           return (
             <article key={proj.id} className="project-card card">
               <button
                 type="button"
-                className="project-cover"
+                className={`project-cover${covers.length === 1 ? " single-sheet" : ""}`}
                 onClick={() => handleOpenDrawings(proj.id)}
                 aria-label={t("Open the drawings of this project")}
               >
-                {COVER_SHEETS.map((id) => (
+                {covers.map((id) => (
                   <img key={id} src={sheetImage(id, true)} alt="" loading="lazy" />
                 ))}
               </button>
@@ -154,31 +162,37 @@ export function ProjectsPage() {
                   <div>
                     <dt>{t("Bill total incl. VAT")}</dt>
                     <dd className="num-inline">
-                      {isCurrent ? `${fmtMoney(boq.total)} AZN` : t("Calculated")}
+                      {fmtMoney(isCurrent ? boq.total : (proj.total_amount || 0))} AZN
                     </dd>
                   </div>
                 </dl>
 
-                {isCurrent && data.documents ? (
-                  <div className="project-files">
-                    <div className="project-files-head">
-                      <strong>{t("Drawing package")}</strong>
-                      <span className="muted small num-inline">
-                        {t("{f} files, {s} sheets", { f: data.documents.length, s: data.sheets.length })}
-                      </span>
-                    </div>
-                    <ul>
-                      {data.documents.map((d) => (
-                        <li key={d.code}>
-                          <FileText size={15} aria-hidden="true" />
-                          <span className="truncate">{d.file}</span>
-                          <span className="muted num-inline">{data.sheets.filter((s) => s.doc === d.code).length}</span>
-                          <span className={`layer layer-${String(d.text)}`}>{t(TEXT_LABEL[String(d.text) as "true" | "false" | "partial"])}</span>
-                        </li>
-                      ))}
-                    </ul>
+                <div className="project-files">
+                  <div className="project-files-head">
+                    <strong>{t("Drawing package")}</strong>
+                    <span className="muted small num-inline">
+                      {t("{f} files, {s} sheets", {
+                        f: proj.documents_count || (isCurrent ? (data.documents || []).length : 1),
+                        s: proj.sheets_count || (isCurrent ? (data.sheets || []).length : 1),
+                      })}
+                    </span>
                   </div>
-                ) : null}
+                  <ul>
+                    {(proj.documents && proj.documents.length > 0
+                      ? proj.documents
+                      : (isCurrent && data.documents ? data.documents : [{ code: "D1", file: `${proj.title}.pdf`, text: true }])
+                    ).map((d) => (
+                      <li key={d.code}>
+                        <FileText size={15} aria-hidden="true" />
+                        <span className="truncate">{d.file}</span>
+                        <span className="muted num-inline">{d.pages || proj.sheets_count || 1}</span>
+                        <span className={`layer layer-${String(d.text ?? true)}`}>
+                          {t(TEXT_LABEL[String(d.text ?? true) as "true" | "false" | "partial"])}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
 
                 <div className="project-actions">
                   <button type="button" className="btn btn-primary" onClick={() => handleOpenProject(proj.id)}>
