@@ -30,8 +30,8 @@ export const useApp = create<State>()(
   persist(
     (set) => ({
       lang: "en",
-      user: null,
-      generated: false,
+      user: "Elmir Məmmədov",
+      generated: true,
       rates: {},
       markups: DEFAULT_MARKUPS,
       qty: {},

@@ -35,22 +35,29 @@ export function DrawingsPage() {
     const list: ViewerMark[] = evidence.map(({ itemId, srcIndex }) => {
       const it = itemById.get(itemId)!;
       const src = it.src[srcIndex]!;
+      const line = boq.lineByItem.get(itemId);
+      const valText = src.role
+        ? `${t(roleLabel(src.role))} ${src.value ?? ""}`.trim()
+        : src.value
+          ? `${src.value} ${unitLabel(it.unit, lang)}`
+          : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`;
       return {
         key: `i:${itemId}:${srcIndex}`,
         box: src.box,
         tone: "blue" as const,
         active: itemId === activeItem && srcIndex === activeSrc,
-        label: src.role ? `${t(roleLabel(src.role))} ${src.value ?? ""}`.trim() : `${fmtQty(it.qty, it.unit)} ${unitLabel(it.unit, lang)}`,
+        tag: line?.code,
+        label: valText,
       };
     });
     if (activeCheck) {
       const c = data.checks.find((x) => x.id === activeCheck);
       c?.sources.forEach((s, i) => {
-        if (s.sheet === sheet.id) list.push({ key: `c:${c.id}:${i}`, box: s.box, tone: "red", active: i === activeSrc });
+        if (s.sheet === sheet.id) list.push({ key: `c:${c.id}:${i}`, box: s.box, tone: "red", active: i === activeSrc, tag: c.id });
       });
     }
     return list.map((m) => (m.active ? { ...m, tone: "red" as const } : m));
-  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang, t]);
+  }, [evidence, activeItem, activeSrc, activeCheck, sheet.id, lang, t, boq.lineByItem]);
 
   const focus: Box | null = useMemo(() => marks.find((m) => m.active)?.box ?? null, [marks]);
 

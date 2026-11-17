@@ -410,38 +410,114 @@
   fill: rgba(0, 0, 0, 0.32);
 }
 .sheet-img {
-  opacity: 0;
-  transition: opacity var(--d-3) var(--ease);
+  opacity: 1;
+  display: block;
 }
 .sheet-img.ready {
   opacity: 1;
 }
-.vmark rect {
-  fill: rgba(45, 74, 154, 0.07);
-  stroke: var(--stamp);
+.vmark {
+  cursor: pointer;
+}
+.vmark > rect.vmark-rect,
+.vmark-rect {
+  fill: rgba(37, 99, 235, 0.08);
+  stroke: #2563eb;
   stroke-width: 1.5;
   cursor: pointer;
   transition: stroke-width var(--d-1) var(--ease), fill var(--d-1) var(--ease);
 }
-.vmark:hover rect {
+.vmark:hover > rect.vmark-rect,
+.vmark:hover .vmark-rect {
   stroke-width: 2.5;
-  fill: rgba(45, 74, 154, 0.14);
+  fill: rgba(37, 99, 235, 0.16);
 }
-.vmark-red rect {
-  stroke: var(--redline);
-  fill: rgba(214, 63, 40, 0.08);
+.vmark-red > rect.vmark-rect,
+.vmark-red .vmark-rect {
+  stroke: #dc2626;
+  fill: rgba(220, 38, 38, 0.08);
 }
-.vmark.active rect {
-  stroke: var(--redline);
+.vmark.active > rect.vmark-rect,
+.vmark.active .vmark-rect {
+  stroke: #dc2626;
   stroke-width: 2.5;
-  fill: rgba(214, 63, 40, 0.1);
-  animation: mark-flash 900ms var(--ease) 560ms 2;
+  fill: rgba(220, 38, 38, 0.12);
 }
-@keyframes mark-flash {
-  50% {
-    stroke-width: 5;
-    fill: rgba(214, 63, 40, 0.2);
-  }
+
+/* Tag pin badges on drawing canvas */
+.vmark-pin {
+  pointer-events: none;
+}
+.vmark-pin rect.vmark-pin-bg,
+.vmark-pin-bg {
+  fill: #0f172a;
+  stroke: rgba(255, 255, 255, 0.35);
+  stroke-width: 0.8;
+  filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.35));
+  transition: fill var(--d-1) var(--ease), stroke var(--d-1) var(--ease);
+}
+.vmark-pin text.vmark-pin-text,
+.vmark-pin-text {
+  fill: #ffffff;
+  font-family: var(--font-num), var(--font);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  user-select: none;
+  pointer-events: none;
+}
+.vmark:hover .vmark-pin rect.vmark-pin-bg,
+.vmark:hover .vmark-pin-bg {
+  fill: #2563eb;
+  stroke: #ffffff;
+  stroke-width: 1.2;
+}
+.vmark.active .vmark-pin rect.vmark-pin-bg,
+.vmark.active .vmark-pin-bg {
+  fill: #dc2626;
+  stroke: #ffffff;
+  stroke-width: 1.4;
+}
+
+/* Bottom metadata pill */
+.viewer-meta-pill {
+  position: absolute;
+  left: 16px;
+  bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: 8px;
+  background: rgba(15, 23, 42, 0.88);
+  backdrop-filter: blur(8px);
+  color: #ffffff;
+  font-size: var(--t-12);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  user-select: none;
+  z-index: 5;
+}
+.viewer-meta-pill .pill-code {
+  font-family: var(--font-num);
+  font-weight: 700;
+  color: #60a5fa;
+  padding: 1px 6px;
+  background: rgba(59, 130, 246, 0.25);
+  border-radius: 4px;
+}
+.viewer-meta-pill .pill-title {
+  font-weight: 500;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.viewer-meta-pill .pill-count {
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 11px;
+  border-left: 1px solid rgba(255, 255, 255, 0.2);
+  padding-left: 8px;
 }
 .viewer-loading {
   position: absolute;

@@ -37,7 +37,7 @@ export function Shell() {
         <button type="button" className="brand" onClick={() => navigate("/projects")}>
           <Logo size={30} />
           <span>
-            <strong>Nobel BOQ</strong>
+            <strong>Storm Takeoff</strong>
             <small>{t("Quantity takeoff platform")}</small>
           </span>
         </button>

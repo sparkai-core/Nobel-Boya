@@ -40,7 +40,9 @@ export function sheetKind(s: { title: string; titleEn: string; discipline: strin
 }
 
 export function sheetImage(id: string, thumb = false) {
-  return `./sheets/${id}${thumb ? ".t" : ""}.webp`;
+  const base = import.meta.env.BASE_URL || "./";
+  const prefix = base.endsWith("/") ? base : `${base}/`;
+  return `${prefix}sheets/${id}${thumb ? ".t" : ""}.webp`;
 }
 
 /** Every evidence box printed on a sheet, keyed back to the takeoff item that cites it. */
