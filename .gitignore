@@ -59,3 +59,7 @@ ehthumbs.db
 *.sublime-project
 *.sublime-workspace
 
+# Temporary visual audit screenshots
+audit_*.png
+real_*.png
+
