@@ -67,7 +67,7 @@ export function ExportPage() {
             }}
           >
             {state === "busy" ? <span className="spinner light" /> : <Download size={18} />}
-            {state === "busy" ? t("Building the workbook") : t("Download {f}", { f: "Qobu-BOQ-Nobel.xlsx" })}
+            {state === "busy" ? t("Building the workbook") : t("Download {f}", { f: "Qobu-BOQ-Storm-Takeoff.xlsx" })}
           </button>
           <button type="button" className="btn btn-ghost btn-lg" onClick={() => printBill(boq, lang)}>
             <Printer size={18} /> {t("Print or save the bill as PDF")}

@@ -5,7 +5,7 @@ import { Logo } from "../components/ui";
 import { useApp } from "../lib/store";
 import { useT } from "../lib/i18n";
 
-const DEMO_EMAIL = "demo@nobel.az";
+const DEMO_EMAIL = "demo@stormtakeoff.com";
 
 export function LoginPage() {
   const t = useT();
@@ -20,7 +20,7 @@ export function LoginPage() {
   const submit = (e: FormEvent) => {
     e.preventDefault();
     if (!/^\S+@\S+\.\S+$/.test(email.trim())) {
-      setError(t("Enter an email address, for example demo@nobel.az."));
+      setError(t("Enter an email address, for example demo@stormtakeoff.com."));
       return;
     }
     if (!password) {
@@ -37,7 +37,7 @@ export function LoginPage() {
         <span className="brand-inline">
           <Logo size={34} />
           <span className="brand-words">
-            <strong>Nobel BOQ</strong>
+            <strong>Storm Takeoff</strong>
             <small>{t("Quantity takeoff platform")}</small>
           </span>
         </span>
@@ -69,7 +69,7 @@ export function LoginPage() {
           <p className="faint small">{t("Demo workspace. The demo account is filled in; any password works.")}</p>
         </form>
 
-        <p className="faint small login-foot">{t("Nobel BOQ demo")}</p>
+        <p className="faint small login-foot">{t("Storm Takeoff Platform")}</p>
       </section>
 
       <section className="login-art" aria-hidden="true">
