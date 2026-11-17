@@ -24,15 +24,16 @@ const VendorPortal = lazy(() => import("./pages/vendor/VendorPortal").then((m) =
 export function App() {
   const lang = useApp((s) => s.lang);
   const activeProjectId = useApp((s) => s.activeProjectId);
+  const token = useApp((s) => s.token);
   const bumpProjectRev = useApp((s) => s.bumpProjectRev);
 
   useEffect(() => {
     document.documentElement.lang = lang;
   }, [lang]);
 
-  // Hydrate active project dataset on hard browser refresh
+  // Load the saved project from the server after a browser refresh
   useEffect(() => {
-    if (activeProjectId && activeProjectId !== "proj_qobu") {
+    if (activeProjectId && token) {
       fetchProject(activeProjectId)
         .then((res) => {
           if (res && res.data) {
@@ -42,7 +43,7 @@ export function App() {
         })
         .catch(() => {});
     }
-  }, [activeProjectId, bumpProjectRev]);
+  }, [activeProjectId, token, bumpProjectRev]);
   return (
     <Routes>
       <Route path="/" element={<Navigate to="/projects" replace />} />

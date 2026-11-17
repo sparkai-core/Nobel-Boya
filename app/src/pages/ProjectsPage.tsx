@@ -21,6 +21,7 @@ type ProjectSummary = {
   place: string;
   created_at: string;
   cover_sheets?: string[];
+  cover_images?: string[];
   sheets_count?: number;
   documents_count?: number;
   total_amount?: number;
@@ -47,23 +48,8 @@ export function ProjectsPage() {
       const res = await fetchProjects();
       setProjects(res.projects || []);
     } catch (e) {
-      console.warn("Failed to load projects from API, falling back to local workspace:", e);
-      // Fallback for default demo user
-      if (userEmail === "elmir@stormtakeoff.com") {
-        setProjects([
-          {
-            id: "proj_qobu",
-            code: "qobu",
-            title: "Qobu Logistics Center",
-            client: "Qobu Logistics LLC",
-            designer: "AS Architecture & Engineering",
-            place: "Qobu settlement, Absheron district, Azerbaijan",
-            created_at: "2026-11-01T00:00:00",
-          },
-        ]);
-      } else {
-        setProjects([]);
-      }
+      console.warn("Failed to load projects:", e);
+      setProjects([]);
     } finally {
       setLoading(false);
     }
@@ -123,9 +109,10 @@ export function ProjectsPage() {
           const p = isCurrent ? data.project : { client: proj.client, designer: proj.designer, issued: proj.created_at.slice(0, 10) };
           const pTitle = isCurrent ? projectName(lang) : proj.title;
           const pPlace = isCurrent ? projectPlace(lang) : proj.place;
-          const covers = (proj.cover_sheets && proj.cover_sheets.length > 0)
-            ? proj.cover_sheets
-            : (isCurrent ? COVER_SHEETS : ["DXBTWBWM-1"]);
+          // cover_images are image paths from the server (project folder + sheet id)
+          const covers = (proj.cover_images && proj.cover_images.length > 0)
+            ? proj.cover_images
+            : (isCurrent ? COVER_SHEETS : []);
 
           return (
             <article key={proj.id} className="project-card card">

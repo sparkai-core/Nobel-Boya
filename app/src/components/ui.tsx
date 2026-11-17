@@ -52,6 +52,7 @@ const SEVERITY_LABEL_AZ: Record<Check["severity"], string> = { error: "Xəta", w
 
 export function severityLabel(check: Pick<Check, "severity" | "kind">, lang: Lang = "en") {
   if (check.severity === "warn" && check.kind === "missing") return lang === "az" ? "Çatışmır" : "Missing";
+  if (check.kind === "review" && check.severity !== "error") return lang === "az" ? "Yoxlanmalı" : "Review";
   return (lang === "az" ? SEVERITY_LABEL_AZ : SEVERITY_LABEL)[check.severity];
 }
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Download, Printer } from "lucide-react";
 import { data } from "../data";
 import { useBoq } from "../lib/boq";
-import { exportWorkbook } from "../lib/exportXlsx";
+import { exportFileName, exportWorkbook } from "../lib/exportXlsx";
 import { printBill } from "../lib/printReport";
 import { fmtMoney } from "../lib/format";
 import { useApp } from "../lib/store";
@@ -67,7 +67,7 @@ export function ExportPage() {
             }}
           >
             {state === "busy" ? <span className="spinner light" /> : <Download size={18} />}
-            {state === "busy" ? t("Building the workbook") : t("Download {f}", { f: "Qobu-BOQ-Nobel.xlsx" })}
+            {state === "busy" ? t("Building the workbook") : t("Download {f}", { f: exportFileName() })}
           </button>
           <button type="button" className="btn btn-ghost btn-lg" onClick={() => printBill(boq, lang)}>
             <Printer size={18} /> {t("Print or save the bill as PDF")}

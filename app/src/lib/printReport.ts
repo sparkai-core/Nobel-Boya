@@ -56,7 +56,7 @@ tr{page-break-inside:avoid}
 <header><div><h1>${esc(projectName(lang))}</h1><div class="meta">${esc(tr("Bill of quantities"))}<br>${esc(projectPlace(lang))}<br>${esc(tr("Client"))}: ${esc(p.client)}. ${esc(tr("Designer"))}: ${esc(p.designer)}. ${esc(tr("Issue"))}: ${esc(p.issued)}.</div></div><img src="${logo}" alt="Nobel"></header>
 <table class="summary"><tbody>${chain}<tr><td>${esc(tr("Total including VAT, AZN"))}</td><td class="n">${fmtMoney(boq.total)}</td></tr></tbody></table>
 <table><thead><tr><th>${tr("Code")}</th><th>${tr("Description")}</th><th>${tr("Unit")}</th><th class="n">${tr("Quantity")}</th><th class="n">${tr("Rate")}</th><th class="n">${tr("Amount")}</th></tr></thead><tbody>${rows}</tbody></table>
-<p class="note">${esc(tr("Quantities come from the four PDF files of the Qobu package. Rates are a sample AZN library, not part of the package."))} Nobel BOQ.</p>
+<p class="note">${esc(tr("Quantities are read from the drawing package; each line cites its sheet. Rates come from the project rate library."))} Nobel BOQ.</p>
 <script>window.onload=function(){setTimeout(function(){window.print()},300)}</script>
 </body></html>`);
   win.document.close();

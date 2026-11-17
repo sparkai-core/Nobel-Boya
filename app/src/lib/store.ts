@@ -1,7 +1,6 @@
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { data, setActiveDataset } from "../data";
-import rawQobu from "../data/qobu.json";
 
 export type Markups = { overheads: number; profit: number; contingency: number; vat: number };
 
@@ -9,10 +8,18 @@ export const DEFAULT_MARKUPS: Markups = { overheads: 0.08, profit: 0.06, conting
 
 type QtyOverride = { qty: number; reason: string };
 
+export type Session = {
+  token: string;
+  expires_at: number;
+  user: { id: string; email: string; name: string; role: string };
+};
+
 type State = {
   lang: "az" | "en";
   user: string | null;
   userEmail: string;
+  token: string | null;
+  tokenExpires: number;
   activeProjectId: string;
   activeProjectTitle: string;
   projectRev: number;
@@ -22,7 +29,7 @@ type State = {
   qty: Record<string, QtyOverride>;
   fixes: Record<string, boolean>;
   setLang: (l: "az" | "en") => void;
-  signIn: (email: string) => void;
+  signIn: (session: Session) => void;
   signOut: () => void;
   setActiveProject: (id: string, dataset?: any) => void;
   bumpProjectRev: () => void;
@@ -30,6 +37,7 @@ type State = {
   setRate: (key: string, value: number | null) => void;
   setFullRates: (rates: Record<string, number>) => void;
   addRateItem: (key: string, item: any) => void;
+  mergeServerRates: (rates: Record<string, any>) => void;
   setMarkup: (key: keyof Markups, value: number) => void;
   setQty: (itemId: string, value: QtyOverride | null) => void;
   setFix: (checkId: string, on: boolean) => void;
@@ -40,10 +48,12 @@ export const useApp = create<State>()(
   persist(
     (set, get) => ({
       lang: "en",
-      user: "Elmir Məmmədov",
-      userEmail: "elmir@stormtakeoff.com",
-      activeProjectId: "proj_qobu",
-      activeProjectTitle: "Qobu Logistics Center",
+      user: null,
+      userEmail: "",
+      token: null,
+      tokenExpires: 0,
+      activeProjectId: "",
+      activeProjectTitle: "",
       projectRev: 0,
       generated: true,
       rates: {},
@@ -51,36 +61,27 @@ export const useApp = create<State>()(
       qty: {},
       fixes: {},
       setLang: (lang) => set({ lang }),
-      signIn: (email) => {
-        const norm = email.trim().toLowerCase();
-        const name = norm.includes("@")
-          ? norm.split("@")[0]!.replace(".", " ").replace(/\b\w/g, (c) => c.toUpperCase())
-          : norm;
-        const current = get().userEmail;
-        if (current !== norm) {
-          // Switch user workspace
-          const isLead = norm === "elmir@stormtakeoff.com" || norm === "demo@nobel.az" || norm === "elmir@nobel.az";
-          set({
-            user: isLead ? "Elmir Məmmədov" : name,
-            userEmail: norm,
-            activeProjectId: isLead ? "proj_qobu" : "",
-            rates: {},
-            qty: {},
-            fixes: {},
-            projectRev: get().projectRev + 1,
-          });
-          if (isLead) {
-            setActiveDataset(rawQobu as any);
-          }
-        } else {
-          set({ user: name, userEmail: norm });
-        }
+      signIn: (session) => {
+        const email = session.user.email.toLowerCase();
+        const sameUser = get().userEmail === email;
+        set((s) => ({
+          user: session.user.name || email,
+          userEmail: email,
+          token: session.token,
+          tokenExpires: session.expires_at,
+          // a different account never inherits the previous account's open project or edits
+          ...(sameUser ? {} : { activeProjectId: "", activeProjectTitle: "", rates: {}, qty: {}, fixes: {} }),
+          projectRev: s.projectRev + 1,
+        }));
       },
       signOut: () =>
         set({
           user: null,
           userEmail: "",
+          token: null,
+          tokenExpires: 0,
           activeProjectId: "",
+          activeProjectTitle: "",
           rates: {},
           qty: {},
           fixes: {},
@@ -92,16 +93,6 @@ export const useApp = create<State>()(
           set((s) => ({
             activeProjectId,
             activeProjectTitle: dataset.project?.name || activeProjectId,
-            projectRev: s.projectRev + 1,
-            rates: {},
-            qty: {},
-            fixes: {},
-          }));
-        } else if (activeProjectId === "proj_qobu" || activeProjectId === "qobu") {
-          setActiveDataset(rawQobu as any);
-          set((s) => ({
-            activeProjectId: "proj_qobu",
-            activeProjectTitle: "Qobu Logistics Center",
             projectRev: s.projectRev + 1,
             rates: {},
             qty: {},
@@ -133,6 +124,15 @@ export const useApp = create<State>()(
           projectRev: s.projectRev + 1,
         }));
       },
+      mergeServerRates: (serverRates) => {
+        // the server copy is the saved library; replace it and drop local overrides for the same keys
+        (data as any).rates = { ...(data.rates || {}), ...serverRates };
+        set((s) => {
+          const rates = { ...s.rates };
+          for (const k of Object.keys(serverRates)) delete rates[k];
+          return { rates, projectRev: s.projectRev + 1 };
+        });
+      },
       setMarkup: (key, value) => set((s) => ({ markups: { ...s.markups, [key]: value } })),
       setQty: (itemId, value) =>
         set((s) => {
@@ -144,6 +144,6 @@ export const useApp = create<State>()(
       setFix: (checkId, on) => set((s) => ({ fixes: { ...s.fixes, [checkId]: on } })),
       resetPricing: () => set({ rates: {}, markups: DEFAULT_MARKUPS }),
     }),
-    { name: "nobel.boq.v1" },
+    { name: "nobel.boq.v2" },
   ),
 );

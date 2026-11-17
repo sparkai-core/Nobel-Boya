@@ -60,7 +60,7 @@ export function LineInspector({ line }: { line: Line }) {
                   setRate(line.rateKey, v === line.sampleRate ? null : v);
                   const pid = useApp.getState().activeProjectId;
                   if (pid) {
-                    updateManualRate(pid, { key: line.rateKey, rate: v }).catch(() => {});
+                    updateManualRate(pid, { key: line.rateKey, rate: v }).catch((err) => alert(err.message || "The rate was not saved."));
                   }
                 }
                 setRateDraft(null);

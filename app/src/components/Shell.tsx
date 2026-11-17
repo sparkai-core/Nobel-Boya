@@ -27,6 +27,14 @@ export function Shell() {
   const navigate = useNavigate();
   const { pathname } = useLocation();
   const [open, setOpen] = useState(false);
+  const token = useApp((s) => s.token);
+  const tokenExpires = useApp((s) => s.tokenExpires);
+  useEffect(() => {
+    if (!token || tokenExpires * 1000 < Date.now()) {
+      signOut();
+      navigate("/login", { replace: true });
+    }
+  }, [token, tokenExpires, navigate, signOut]);
   const inProject = Boolean(activeProjectId || generated);
   const mod = MODULES.find((m) => m.key !== "estimate" && m.match(pathname)) ?? MODULES[0]!;
 

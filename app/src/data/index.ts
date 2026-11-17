@@ -96,11 +96,13 @@ export function sheetKind(s: { title: string; titleEn: string; discipline: strin
   return "drawing";
 }
 
+/** Image path for a sheet id, or for a project-scoped image path ("<folder>/<id>") from the API. */
 export function sheetImage(id: string, thumb = false) {
+  const path = sheetById.get(id)?.img ?? id;
   const apiUrl = import.meta.env.VITE_API_URL as string | undefined;
   const base = apiUrl
     ? apiUrl.replace(/\/+$/, "")
     : (import.meta.env.BASE_URL || "./");
   const prefix = base.endsWith("/") ? base : `${base}/`;
-  return `${prefix}sheets/${id}${thumb ? ".t" : ""}.webp`;
+  return `${prefix}sheets/${path}${thumb ? ".t" : ""}.webp`;
 }

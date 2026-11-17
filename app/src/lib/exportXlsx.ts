@@ -39,7 +39,7 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   sum.getCell("A1").font = { ...font, size: 14, bold: true };
   sum.getCell("A2").value = `${data.project.name}. ${data.project.place}.`;
   sum.getCell("A3").value = `Client: ${data.project.client}. Designer: ${data.project.designer}. Working design issued ${data.project.issued}.`;
-  sum.getCell("A4").value = "Quantities from the four PDF files of the package. Rates are a sample AZN library, not part of the package.";
+  sum.getCell("A4").value = `Quantities read from ${(data.documents || []).length} drawing file(s); each line cites its sheet. Rates come from the project rate library.`;
   sum.getCell("A4").font = { ...font, italic: true, color: { argb: "FF6A6E74" } };
   sum.getRow(6).values = ["Code", "Structure (AZ)", "Structure (EN)", "Amount, AZN"];
   header(sum, 6);
@@ -173,7 +173,7 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   for (const c of data.checks) {
     const rr = ck.addRow([
       c.id,
-      { error: "Error", warn: "Conflict", info: "Note", ok: "Agrees" }[c.severity],
+      c.kind === "review" && c.severity !== "error" ? "Review" : { error: "Error", warn: "Conflict", info: "Note", ok: "Agrees" }[c.severity],
       buildingById.get(c.building)?.short ?? "",
       c.title,
       c.detail,
@@ -214,9 +214,19 @@ export async function exportWorkbook(boq: Boq, fixes: Record<string, boolean>) {
   const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
   const a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
-  a.download = "Qobu-BOQ-Nobel.xlsx";
+  a.download = exportFileName();
   document.body.appendChild(a);
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+}
+
+/** "<project name>-BOQ.xlsx", with characters that are not allowed in file names removed. */
+export function exportFileName(): string {
+  const name = (data.project?.nameEn || data.project?.name || "Project")
+    .replace(/[\\/:*?"<>|]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 80);
+  return `${name || "Project"}-BOQ.xlsx`;
 }

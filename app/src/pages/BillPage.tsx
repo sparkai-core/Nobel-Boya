@@ -35,7 +35,11 @@ export function BillPage() {
   const [uploadingCmp, setUploadingCmp] = useState(false);
 
   useEffect(() => {
-    fetchComparison(activeProjectId || "proj_qobu")
+    if (!activeProjectId) {
+      setComparison(null);
+      return;
+    }
+    fetchComparison(activeProjectId)
       .then((res) => {
         if (res && res.has_comparison) {
           setComparison(res);
@@ -48,10 +52,10 @@ export function BillPage() {
 
   const handleBoqUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file) return;
+    if (!file || !activeProjectId) return;
     setUploadingCmp(true);
     try {
-      const res = await compareBoq(activeProjectId || "proj_qobu", file);
+      const res = await compareBoq(activeProjectId, file);
       setComparison({
         has_comparison: true,
         filename: res.filename,
@@ -288,7 +292,7 @@ function LineRow({ line, lang, compact, selected, onSelect }: { line: Line; lang
       <td className="num code">{line.code}</td>
       <td className="desc">
         <span>{lang === "az" ? line.az : line.en}</span>
-        {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? t("Error") : t("Conflict")}</span> : null}
+        {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? t("Error") : finding.kind === "review" ? t("Review") : finding.kind === "missing" ? t("Missing") : t("Conflict")}</span> : null}
         {line.adjusted ? <span className="flag flag-adjusted">{line.adjusted === "fix" ? t("Corrected") : t("Overridden")}</span> : null}
       </td>
       {compact ? null : <td className="unit">{unitLabel(line.unit, lang)}</td>}

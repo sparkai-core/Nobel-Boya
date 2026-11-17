@@ -21,7 +21,7 @@ export function RatesPage() {
   const boq = useBoq();
   const rates = useApp((s) => s.rates);
   const activeProjectId = useApp((s) => s.activeProjectId);
-  const setFullRates = useApp((s) => s.setFullRates);
+  const mergeServerRates = useApp((s) => s.mergeServerRates);
   const addRateItem = useApp((s) => s.addRateItem);
   const lang = useApp((s) => s.lang);
   const markups = useApp((s) => s.markups);
@@ -42,13 +42,22 @@ export function RatesPage() {
     setUploading(true);
     setUploadMsg(null);
     try {
-      const res = await uploadRates(activeProjectId || "proj_qobu", file);
-      const rateNumbers: Record<string, number> = {};
-      for (const [k, v] of Object.entries((res.rates || {}) as Record<string, any>)) {
-        rateNumbers[k] = typeof v === "object" ? v.rate : Number(v);
-      }
-      setFullRates(rateNumbers);
-      setUploadMsg(t("Imported {n} rates from {f}", { n: res.updated_rates_count, f: file.name }));
+      if (!activeProjectId) throw new Error(t("Open a project first."));
+      const res = await uploadRates(activeProjectId, file);
+      mergeServerRates(res.rates || {});
+      const rep = res.report || {};
+      const parts = [
+        t("{n} updated", { n: (rep.updated || []).length }),
+        t("{n} added", { n: (rep.added || []).length }),
+      ];
+      if (rep.unchanged) parts.push(t("{n} unchanged", { n: rep.unchanged }));
+      if ((rep.skipped || []).length) parts.push(t("{n} rows skipped", { n: rep.skipped.length }));
+      if ((rep.conflicts || []).length) parts.push(t("{n} unit conflicts not applied", { n: rep.conflicts.length }));
+      const detail = [...(rep.skipped || []), ...(rep.conflicts || [])]
+        .slice(0, 3)
+        .map((x: any) => t("row {r}: {why}", { r: x.row, why: x.reason }))
+        .join("; ");
+      setUploadMsg(`${file.name}: ${parts.join(", ")}${detail ? ` (${detail})` : ""}`);
     } catch (err: any) {
       alert(err.message || "Failed to upload rates");
     } finally {
@@ -87,7 +96,7 @@ export function RatesPage() {
     <div className="page">
       <PageHead
         title={t("Rates and mark-ups")}
-        lead={t("The package has no prices. These are sample AZN rates so the bill can be totalled. Edit any rate and every line that uses it updates. Changes stay in this browser.")}
+        lead={t("Rates come from the project rate library: the sample AZN rates, plus any rate schedule you upload. Lines read from the drawings that match no rate show 0.00 until you price them. Edits are saved to the project.")}
         actions={
           <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
             <button
@@ -214,7 +223,7 @@ export function RatesPage() {
                         onChange={(v) => {
                           setRate(r.key, v === r.sample ? null : v);
                           if (activeProjectId) {
-                            updateManualRate(activeProjectId, { key: r.key, rate: v }).catch(() => {});
+                            updateManualRate(activeProjectId, { key: r.key, rate: v }).catch((err) => alert(err.message || "The rate was not saved."));
                           }
                         }}
                       />
@@ -275,7 +284,7 @@ function AddRateModal({
     setSaving(true);
     setError("");
     try {
-      const res = await updateManualRate(activeProjectId || "proj_qobu", {
+      const res = await updateManualRate(activeProjectId, {
         en: desc.trim(),
         az: desc.trim(),
         group,

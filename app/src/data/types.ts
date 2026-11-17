@@ -38,6 +38,7 @@ export type Sheet = {
   building: string;
   discipline: string;
   no: string | null;
+  img?: string;
 };
 
 export type Rate = { unit: string; rate: number; en: string; group: string };
