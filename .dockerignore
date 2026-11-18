@@ -1,0 +1,36 @@
+# Keep the image small and free of local data and secrets.
+.git
+**/node_modules
+app/dist
+dist
+**/__pycache__
+**/*.pyc
+.pytest_cache
+.venv
+venv
+
+# Local database, signing key and runtime sheet images: production keeps these on the Render disk
+server/*.db
+server/*.db-*
+server/.secret_key
+.secret_key
+# runtime per-project image folders are 32-character ids; the sample sheets themselves must stay
+app/public/sheets/????????????????????????????????
+
+# Reference drawings, working files and tooling are not needed at runtime
+drawings
+work
+tools
+docs
+scripts
+server/tests
+server/test_*.py
+server/sample_client_boq.xlsx
+server/test_*.csv
+.gemini
+.claude
+*.md
+!README.md
+run-demo.*
+netlify.toml
+vercel.json

@@ -1622,7 +1622,8 @@ def process_uploaded_drawing_package(
             all_found.extend(res.found)
             page_checks.extend(res.checks)
             verified += res.verified_totals
-            if not res.text_layer:
+            # an OCR'd page that yields nothing is still an image-only page to measure by hand
+            if not res.text_layer or (meta.get("ocr") and not res.found):
                 raster_only.append((sheet_id, page.rect.width, page.rect.height))
             elif res.schedule_heading:
                 unread_schedules.append((sheet_id, res.schedule_heading[0], res.schedule_heading[1]))

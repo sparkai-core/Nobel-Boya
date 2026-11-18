@@ -1,10 +1,19 @@
-# Render.com Blueprint Configuration for Storm Takeoff Platform
+# Render Blueprint for Nobel BOQ: one Docker web service serving the app and the API,
+# with a persistent disk for the SQLite database, the session signing key and sheet images.
+#
+# Deploy: Render dashboard > New > Blueprint > pick this repository.
 services:
   - type: web
     name: storm-takeoff
-    env: docker
-    dockerfilePath: Dockerfile
-    plan: starter
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    # A persistent disk needs a paid instance. Rasterising large drawing sets is memory-heavy;
+    # see README "Deploying on Render" for sizing.
+    plan: standard
+    numInstances: 1          # SQLite: exactly one instance
+    healthCheckPath: /api/health
+    autoDeploy: true
     disk:
       name: storm-takeoff-data
       mountPath: /data
@@ -14,12 +23,24 @@ services:
         value: /data
       - key: PORT
         value: "8090"
-      # Signs session tokens. Render generates a random value once and keeps it.
+      # Signs session tokens. Render generates it once and keeps it across deploys.
       - key: SECRET_KEY
         generateValue: true
-      # Set to 0 in production to stop creating the demo accounts (password "demo").
+      # 1 creates the demo accounts (password "demo") with the sample project. Set 0 for real use.
       - key: SEED_DEMO
         value: "1"
-      # Set to 0 to allow only administrator-created accounts.
+      # 0 lets only existing accounts sign in (no self-registration).
       - key: ALLOW_SIGNUP
+        value: "1"
+      # Drawing sets processed at the same time. Each one can use several hundred MB.
+      - key: MAX_CONCURRENT_TAKEOFFS
+        value: "1"
+      - key: MAX_PDF_MB
+        value: "200"
+      - key: MAX_PDF_PAGES
+        value: "500"
+      - key: TOKEN_TTL_HOURS
+        value: "12"
+      # OCR of image-only sheets. Off: measured 7 min for 37 scanned sheets with no usable quantities.
+      - key: OCR_DISABLED
         value: "1"
