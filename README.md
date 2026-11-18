@@ -139,9 +139,70 @@ Unit-compatible (kg and t convert), one-to-one matching. Different element types
 
 ### 4.1 Render (production: the Estimate module works fully)
 
-1. Render dashboard → **New → Blueprint** → select this repository. `render.yaml` creates one Docker web service with a 10 GB disk at `/data` and generates `SECRET_KEY`.
-2. Wait for the health check (`/api/health`) to pass, then open the service URL.
-3. For real use, set `SEED_DEMO=0`, so no demo accounts with password `demo` are created, and decide on `ALLOW_SIGNUP`.
+#### Go live: step by step
+
+**Before you start**
+- A Render account with a payment method. The persistent disk requires a paid instance; `render.yaml` uses the **Standard** plan (2 GB RAM).
+- Access to this GitHub repository from Render (Render asks to connect GitHub the first time).
+- Decide whether the live site should have the **demo accounts** (`demo@nobel.az`, `elmir@stormtakeoff.com`, `rashad@stormtakeoff.com`, all with password `demo`, plus a copy of the sample project). For real use: no. This must be decided **before the first deploy** (step 3). Turning it off later does not delete accounts that already exist.
+
+**1. Create the service from the Blueprint**
+1. Render dashboard → **New** → **Blueprint**.
+2. Select the `Nobel-Boya` repository and the `main` branch.
+3. Render reads `render.yaml` and shows one web service, `storm-takeoff`, with a 10 GB disk `storm-takeoff-data` at `/data`.
+
+**2. Check the settings Render will use**
+- Instance type **Standard**, 1 instance. Do not add instances: the database is SQLite.
+- `SECRET_KEY` is generated automatically. Do not change it later: that signs everyone out.
+- All variables are listed in the table below.
+
+**3. Set the demo and sign-up switches before deploying**
+- `SEED_DEMO`: `0` for a real site, `1` for a demo/pilot site.
+- `ALLOW_SIGNUP`: keep `1` for now, so you can create your own account in step 5.
+
+**4. Deploy and wait for "Live"**
+1. Click **Apply**. The first build takes about 5–10 minutes (frontend build + Python image).
+2. The service turns **Live** when `/api/health` answers.
+3. Open `https://<service-name>.onrender.com/api/health`. It must show `{"ok":true,"ocr":false}`.
+
+**5. First sign-in**
+1. Open `https://<service-name>.onrender.com`.
+2. **Create account** with your email and a password of 8+ characters (or sign in with `demo@nobel.az` / `demo` if `SEED_DEMO=1`).
+3. If only your team should have accounts: create everyone's accounts first, then set `ALLOW_SIGNUP=0` (Environment tab → Save; Render restarts the service).
+
+**6. Verify the estimation module on the live site**
+1. **New Project** → upload a drawing PDF (optionally a rate list .xlsx/.csv and a client BOQ). You should reach the bill within seconds to a minute for text-based PDFs.
+2. **Bill of quantities** → click a line → **open it on the drawing**. The printed value is boxed.
+3. **Rates and mark-ups** → **Upload Rates**: the message lists updated, added and skipped rows.
+4. **Bill** → **Compare Client BOQ**: the variance table opens.
+5. **Export**: the Excel file is named after the project.
+6. Sign out, sign in again: the project and its rates are still there (this proves the disk is working).
+
+**7. Keep it running**
+- **Updates:** `autoDeploy` is on. Every push to `main` rebuilds and redeploys; data on the disk is kept.
+- **Rollback:** Render → service → **Events** → pick an earlier deploy → **Rollback**.
+- **Backups:** turn on disk snapshots (Render → service → **Disks**). For an extra copy, run this in the Render **Shell**:
+  `python -c "import sqlite3; s=sqlite3.connect('/data/tutulan.db'); d=sqlite3.connect('/data/backup.db'); s.backup(d)"`
+  Then download `/data/backup.db`. Do not copy `tutulan.db` directly while the app runs (WAL mode).
+- **Logs:** Render → service → **Logs**. Server errors are logged with a traceback; users only see a short message.
+
+**If demo accounts were created by mistake** (deployed with `SEED_DEMO=1`):
+1. Set `SEED_DEMO=0`, so they are not re-created.
+2. Run this in the Render **Shell**:
+   `python -c "import sqlite3; c=sqlite3.connect('/data/tutulan.db'); c.execute('PRAGMA foreign_keys=ON'); c.execute(\"DELETE FROM users WHERE email IN ('demo@nobel.az','elmir@stormtakeoff.com','rashad@stormtakeoff.com')\"); c.commit()"`
+   Their projects are deleted with them.
+
+**Troubleshooting**
+
+| Symptom | Cause / fix |
+|---|---|
+| Deploy fails at "disk" or "plan" | The free plan has no disk. Choose Standard (or at least a paid plan) |
+| Service restarts during a large upload | Out of memory. Stay on Standard (2 GB); keep `MAX_CONCURRENT_TAKEOFFS=1` |
+| Everyone was signed out | `SECRET_KEY` changed, or a new service was created. Sign in again |
+| "Too many failed attempts" for every user | `FORWARDED_ALLOW_IPS` missing (the Dockerfile sets it); redeploy from `main` |
+| Projects vanished after a deploy | `DATA_DIR` not pointing at the disk. Must be `/data` with the disk mounted at `/data` |
+| Upload says "image-only sheets" | Scanned PDF without a text layer. Those sheets need manual takeoff (OCR is off, see 3.1) |
+| Vercel site shows only the demo | Expected: Vercel has no server. Use the Render URL, or see 4.2 |
 
 | Variable | Default | Meaning |
 |---|---|---|
