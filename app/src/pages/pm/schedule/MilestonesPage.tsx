@@ -1,11 +1,12 @@
-import { useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ArrowRight, Coins, Flag, GitBranch } from "lucide-react";
-import { Badge, FilterChips, KeyVals, Money, PageHero, Panel, StatusBadge, useL } from "../../../components/kit";
+import { ArrowRight, Coins, Flag, GitBranch, Pencil, Plus } from "lucide-react";
+import { Badge, Empty, FilterChips, KeyVals, Money, PageHero, Panel, StatusBadge, useL } from "../../../components/kit";
 import { addDays, diffDays, monthShort, PROJECT_FINISH, TODAY, toDate } from "../../../ops/dates";
 import { R, statusMeta, type MilestoneState } from "../../../ops/select";
 import { milestoneRows, MS_TONE, useSchedule } from "./model";
 import { ProjectRunStrip } from "./ProjectRunStrip";
+import { MilestoneDialog } from "./MilestoneDialog";
 
 const STATES: MilestoneState[] = ["DONE", "ON_TRACK", "WATCH", "AT_RISK", "LATE"];
 
@@ -16,7 +17,16 @@ const STATES: MilestoneState[] = ["DONE", "ON_TRACK", "WATCH", "AT_RISK", "LATE"
 export function MilestonesPage() {
   const { t, x, d, lang } = useL();
   const [params, setParams] = useSearchParams();
-  const { activities, milestones, links, cp, byId } = useSchedule();
+  const { activities, milestones, links, cp, byId, outlook } = useSchedule();
+  const [dialog, setDialog] = useState<{ id: string | null } | null>(null);
+  useEffect(() => {
+    if (params.get("new")) {
+      setDialog({ id: null });
+      const p = new URLSearchParams(params);
+      p.delete("new");
+      setParams(p, { replace: true });
+    }
+  }, [params, setParams]);
   const rows = useMemo(() => milestoneRows(milestones, activities).sort((a, b) => a.m.target.localeCompare(b.m.target)), [milestones, activities]);
   const state = params.get("state") as MilestoneState | null;
   const picked = params.get("m") ?? rows.find((r) => !r.f.done)?.m.id ?? rows[0]?.m.id ?? null;
@@ -32,7 +42,7 @@ export function MilestonesPage() {
   // Axis: whole months around every date on the chart.
   const allDates = rows.flatMap((r) => [r.m.target, r.f.forecast]);
   const first = [TODAY, ...allDates].sort()[0]!;
-  const last = [PROJECT_FINISH, ...allDates].sort().slice(-1)[0]!;
+  const last = [outlook.contractKnown ? PROJECT_FINISH : TODAY, ...allDates].sort().slice(-1)[0]!;
   const from = `${first.slice(0, 7)}-01`;
   const lastMonth = toDate(addDays(last, 31));
   const to = `${lastMonth.getUTCFullYear()}-${String(lastMonth.getUTCMonth() + 1).padStart(2, "0")}-01`;
@@ -58,10 +68,31 @@ export function MilestonesPage() {
         subtitle={t("The dates the client and the payment schedule care about, forecast live from the activities that drive them.")}
         flow={["Target", "Forecast from drivers", "Slip", "Payment"]}
         art="milestone"
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => setDialog({ id: null })}>
+            <Plus size={15} />
+            {t("Add milestone")}
+          </button>
+        }
       />
 
       <ProjectRunStrip />
 
+      {!rows.length ? (
+        <div className="k-panel">
+          <Empty
+            icon={<Flag size={20} />}
+            title={t("No milestones yet")}
+            action={
+              <button type="button" className="btn btn-primary" onClick={() => setDialog({ id: null })}>
+                <Plus size={15} /> {t("Add milestone")}
+              </button>
+            }
+          >
+            {t("Add the dates the client and the payment schedule care about. Milestones in an imported P6 / MS Project file come in on their own.")}
+          </Empty>
+        </div>
+      ) : (
       <section className="pms-slip-panel">
         <header className="pms-slip-head">
           <div>
@@ -99,9 +130,11 @@ export function MilestonesPage() {
                 <b className="today" style={{ left: `${pos(TODAY)}%` }}>
                   <span>{t("Today")}</span>
                 </b>
-                <b className="contract" style={{ left: `${pos(PROJECT_FINISH)}%` }}>
-                  <span>{t("Contract completion")}</span>
-                </b>
+                {outlook.contractKnown ? (
+                  <b className="contract" style={{ left: `${pos(PROJECT_FINISH)}%` }}>
+                    <span>{t("Contract completion")}</span>
+                  </b>
+                ) : null}
               </div>
               {shown.length ? (
                 shown.map(({ m, f }, i) => {
@@ -132,6 +165,7 @@ export function MilestonesPage() {
           </div>
         </div>
       </section>
+      )}
 
       {sel ? (
         <Panel
@@ -141,7 +175,14 @@ export function MilestonesPage() {
             </>
           }
           icon={<Flag size={15} />}
-          actions={<StatusBadge kind="milestone" status={sel.f.state} />}
+          actions={
+            <>
+              <StatusBadge kind="milestone" status={sel.f.state} />
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDialog({ id: sel.m.id })}>
+                <Pencil size={13} /> {t("Edit")}
+              </button>
+            </>
+          }
           className="pms-ms-detail"
         >
           <div className="k-grid-2">
@@ -150,7 +191,7 @@ export function MilestonesPage() {
                 cols={4}
                 items={[
                   { k: t("Target"), v: d(sel.m.target) },
-                  { k: t("Baseline"), v: d(sel.m.baseline) },
+                  { k: t("Baseline"), v: d(sel.m.baseline || null) },
                   { k: sel.f.done ? t("Actual") : t("Forecast"), v: <span className={`k-text-${MS_TONE[sel.f.state]}`}>{d(sel.f.done ? (sel.m.actual ?? sel.f.forecast) : sel.f.forecast)}</span> },
                   { k: t("Slip"), v: <span className={sel.f.slip > 0 ? "k-text-bad" : "k-text-ok"}>{sel.f.slip > 0 ? t("{n} days late", { n: sel.f.slip }) : sel.f.slip < 0 ? t("{n} days early", { n: -sel.f.slip }) : t("On time")}</span> },
                 ]}
@@ -176,6 +217,7 @@ export function MilestonesPage() {
             <div className="k-stack">
               <div>
                 <h3 className="pms-h3">{t("What drives this date")}</h3>
+                {!sel.m.drivers.some((id) => byId.has(id)) ? <p className="muted small">{t("No activities are linked. The forecast is the target date until it passes. Edit the milestone to link the activities that drive it.")}</p> : null}
                 <ul className="pms-drivers-list">
                   {sel.m.drivers.map((id) => {
                     const a = byId.get(id);
@@ -217,6 +259,7 @@ export function MilestonesPage() {
           </div>
         </Panel>
       ) : null}
+      <MilestoneDialog open={!!dialog} milestone={dialog?.id ? (milestones.find((m) => m.id === dialog.id) ?? null) : null} onClose={() => setDialog(null)} onSaved={(id) => setParam("m", id)} />
     </div>
   );
 
@@ -224,7 +267,8 @@ export function MilestonesPage() {
     const drivers = r.m.drivers.map((id) => byId.get(id)).filter(Boolean) as NonNullable<ReturnType<typeof byId.get>>[];
     const last = drivers.find((a) => a.end === r.f.forecast) ?? drivers[0];
     const name = last ? `${last.code} ${x(last.name)}` : "";
-    if (r.f.done) return t("Every driving activity is complete. It was reached on {date}.", { date: d(r.m.actual ?? r.f.forecast) });
+    if (r.f.done) return r.m.actual ? t("Marked as reached on {date}.", { date: d(r.m.actual) }) : t("Every driving activity is complete. It was reached on {date}.", { date: d(r.f.forecast) });
+    if (!drivers.length) return r.f.slip > 0 ? t("The target date {date} has passed and the milestone is not marked as reached.", { date: d(r.m.target) }) : t("No activities drive it: it stays on its target date until that passes.");
     if (r.f.slip <= 0) return t("{name} finishes {date}, on or before the target. It stays on track while that holds.", { name, date: d(r.f.forecast) });
     // Look upstream from the driving activity for anything blocked.
     const seen = new Set<string>();

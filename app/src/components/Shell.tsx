@@ -13,7 +13,6 @@ import { useOps } from "../ops/store";
 import { TODAY } from "../ops/dates";
 import { Logo } from "./ui";
 import { CommandPalette, NotificationBell, openPalette, Toaster } from "./kit";
-import { fmtDate } from "../ops/dates";
 
 export function Shell() {
   const boq = useBoq();
@@ -21,6 +20,8 @@ export function Shell() {
   const lang = useApp((s) => s.lang);
   const setLang = useApp((s) => s.setLang);
   const user = useApp((s) => s.user);
+  const userEmail = useApp((s) => s.userEmail);
+  const company = useOps((s) => s.setup.company);
   const signOut = useApp((s) => s.signOut);
   const generated = useApp((s) => s.generated);
   const activeProjectId = useApp((s) => s.activeProjectId);
@@ -252,13 +253,8 @@ export function Shell() {
                 </span>
                 <span className="truncate">
                   <strong className="truncate">{user}</strong>
-                  <small>{t("Demo workspace")}</small>
+                  <small className="truncate">{company || userEmail}</small>
                 </span>
-              </div>
-              <div className="rail-menu-row" title={t("The demo runs on a fixed date so the story always reads the same way.")}>
-                <span className="rail-demo-dot" aria-hidden="true" />
-                <span>{t("Demo date")}</span>
-                <b>{fmtDate(TODAY, lang)}</b>
               </div>
               <div className="rail-menu-row">
                 <span>{t("Language")}</span>

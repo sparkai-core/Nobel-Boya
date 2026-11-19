@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { ArrowRight, GitBranch, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
+import { ArrowRight, CalendarRange, GitBranch, Sparkles } from "lucide-react";
 import { Badge, Dialog, Field, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { diffDays, same, TODAY } from "../../../ops/dates";
+import { R } from "../../../ops/select";
 import type { DelayCause } from "../../../ops/types";
 import { CAUSE_LABEL, CAUSES, previewImpact, severityFor, signed, type ImpactPreview } from "./shared";
 
@@ -87,12 +89,23 @@ export function DelayDialog({ open, onClose, initial, onSaved }: { open: boolean
           <button type="button" className="btn btn-ghost" onClick={onClose}>
             {t("Cancel")}
           </button>
-          <button type="button" className="btn btn-primary" onClick={save}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={!choices.length}>
             {t("Save delay")}
           </button>
         </>
       }
     >
+      {!choices.length ? (
+        <div className="k-callout k-tone-info" style={{ marginBottom: 12 }}>
+          <CalendarRange size={18} />
+          <span>
+            {t("A delay is logged against an activity of the programme. The programme has no open activities yet.")}{" "}
+            <Link to={R.programme()} className="k-link-btn" onClick={onClose}>
+              {t("Open the programme")}
+            </Link>
+          </span>
+        </div>
+      ) : null}
       <div className="k-form">
         <Field label={t("What happened")} wide error={tried && !title.trim() ? t("Say what happened.") : undefined}>
           <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("e.g. Concrete pump broke down mid-pour")} autoFocus />
@@ -124,7 +137,6 @@ export function DelayDialog({ open, onClose, initial, onSaved }: { open: boolean
         <Field label={t("Responsible party")}>
           <input className="input" list="pmc-parties" value={party} onChange={(e) => setParty(e.target.value)} placeholder={t("Who carries it")} />
           <datalist id="pmc-parties">
-            <option value="Neutral" />
             {subs.map((s) => (
               <option key={s.id} value={s.name} />
             ))}

@@ -1,11 +1,12 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { Plus, SlidersHorizontal, Trophy } from "lucide-react";
-import { Avatar, Badge, FilterChips, Money, PageHero, Register, SearchBox, StatusBadge, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
+import { Avatar, Badge, Empty, FilterChips, Money, PageHero, Register, SearchBox, StatusBadge, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { initials, R, statusMeta, tradeName, vendorStats } from "../../../ops/select";
 import type { Risk, Trade, Vendor, VendorStatus } from "../../../ops/types";
 import { VisualHead } from "./shared";
+import { hasScore } from "../../../ops/ext/proc-client";
 
 type Part = "quality" | "price" | "delivery" | "reliability";
 const PARTS: { key: Part; label: string }[] = [
@@ -27,7 +28,9 @@ export function VendorsPage() {
   const [q, setQ] = useState("");
   const [w, setW] = useState(DEFAULT_W);
   const trades = useMemo(() => [...new Set(s.vendors.map((v) => v.trade))].sort(), [s.vendors]);
-  const [rankTrade, setRankTrade] = useState<Trade>("Steel");
+  const [rankPick, setRankTrade] = useState<Trade | null>(null);
+  const rankTrade: Trade | null = rankPick && trades.includes(rankPick) ? rankPick : (trades[0] ?? null);
+  const scoredVendors = s.vendors.filter(hasScore);
 
   const matches = (v: Vendor) => (!status || v.status === status) && (!risk || v.risk === risk) && (!trade || v.trade === trade || v.trades.includes(trade));
   const filtered = s.vendors.filter(matches);
@@ -36,7 +39,7 @@ export function VendorsPage() {
 
   // Score line: stack blocks that would overlap.
   const placed = useMemo(() => {
-    const sorted = [...s.vendors].sort((a, b) => a.overall - b.overall);
+    const sorted = s.vendors.filter(hasScore).sort((a, b) => a.overall - b.overall);
     const levels: number[][] = [];
     return sorted.map((v) => {
       const pos = v.overall / 10;
@@ -51,8 +54,8 @@ export function VendorsPage() {
   const wsum = PARTS.reduce((a, p) => a + w[p.key], 0) || 1;
   const ranking = useMemo(
     () =>
-      s.vendors
-        .filter((v) => v.trade === rankTrade || v.trades.includes(rankTrade))
+      scoredVendors
+        .filter((v) => v.trade === rankTrade || (rankTrade != null && v.trades.includes(rankTrade)))
         .map((v) => {
           const score = PARTS.reduce((a, p) => a + v.scores[p.key] * w[p.key], 0) / wsum / 10;
           const weakest = PARTS.reduce((a, p) => (v.scores[p.key] < v.scores[a.key] ? p : a), PARTS[0]!);
@@ -60,7 +63,7 @@ export function VendorsPage() {
         })
         .sort((a, b) => b.score - a.score)
         .slice(0, 5),
-    [s.vendors, rankTrade, w, wsum],
+    [scoredVendors, rankTrade, w, wsum],
   );
 
   const columns: Column<Vendor>[] = [
@@ -73,9 +76,7 @@ export function VendorsPage() {
           <Avatar name={v.name} size={30} />
           <span className="k-cell-title">
             <strong className="truncate">{v.name}</strong>
-            <small>
-              {tradeName(v.trade, lang)} · {v.city}
-            </small>
+            <small>{[tradeName(v.trade, lang), v.city].filter(Boolean).join(" · ")}</small>
           </span>
         </span>
       ),
@@ -84,7 +85,7 @@ export function VendorsPage() {
       key: "score",
       header: t("Score"),
       sort: (v) => v.overall,
-      render: (v) => (
+      render: (v) => !hasScore(v) ? <span className="muted small">{t("Not scored")}</span> : (
         <span className="po-vscore">
           <b className={`num-inline po-vscore-n ${v.overall >= 8 ? "hi" : v.overall >= 6.5 ? "mid" : "lo"}`}>{v.overall.toFixed(1)}</b>
           <span className="po-minibars" aria-hidden="true">
@@ -103,9 +104,13 @@ export function VendorsPage() {
       hideBelow: 1100,
       render: (v) => (
         <span className="k-cell-title">
-          <small className="k-mono">
-            {t("TRN")} {v.trn}
-          </small>
+          {v.trn ? (
+            <small className="k-mono">
+              {t("TRN")} {v.trn}
+            </small>
+          ) : (
+            <small className="muted">{t("No TRN")}</small>
+          )}
           {v.licence ? <small className="k-mono">{v.licence}</small> : <Badge tone="bad">{t("No licence")}</Badge>}
         </span>
       ),
@@ -146,7 +151,7 @@ export function VendorsPage() {
       <PageHero
         eyebrow={t("Procurement · Vendors")}
         title={t("Vendor intelligence")}
-        subtitle={t("Every supplier scored on reliability, quality, price and delivery from their record on Nobel projects.")}
+        subtitle={t("Every supplier you buy from, scored by you on reliability, quality, price and delivery.")}
         flow={["Registered", "Invited", "Quoted", "Ordered", "Scored"]}
         art="vendor"
         actions={
@@ -157,9 +162,23 @@ export function VendorsPage() {
         }
       />
 
+      {!s.vendors.length ? (
+        <Empty
+          title={t("No vendors yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => navigate(R.newVendor)}>
+              <Plus size={15} />
+              {t("Add vendor")}
+            </button>
+          }
+        >
+          {t("Add the suppliers you buy from. They can then be invited to RFQs, receive orders and use the vendor portal.")}
+        </Empty>
+      ) : (
+      <>
       <div className="po-vtop">
         <section className="po-visual" aria-label={t("Score line")}>
-          <VisualHead title={t("Score line")} sentence={t("{a} of {b} vendors match the filters. Highlighted blocks are the ones in view.", { a: filtered.length, b: s.vendors.length })} />
+          <VisualHead title={t("Score line")} sentence={scoredVendors.length ? t("{a} of {b} vendors match the filters. Highlighted blocks are the ones in view.", { a: filtered.length, b: s.vendors.length }) : t("No vendor has been scored yet. Score a vendor on its page.")} />
           <div className="po-sline-scroll">
             <div className="po-scoreline" style={{ height: 70 + (maxLv + 1) * 34 }}>
               <span className="po-band lo" style={{ left: 0, width: "65%" }}>
@@ -190,7 +209,7 @@ export function VendorsPage() {
 
         <section className="po-visual po-rank" aria-label={t("Ranking")}>
           <VisualHead title={t("Top 5 in the trade")} sentence={t("Move the weights and the ranking re-sorts.")}>
-            <select className="input select po-rank-trade" value={rankTrade} onChange={(e) => setRankTrade(e.target.value as Trade)} aria-label={t("Trade")}>
+            <select className="input select po-rank-trade" value={rankTrade ?? ""} onChange={(e) => setRankTrade(e.target.value as Trade)} aria-label={t("Trade")}>
               {trades.map((tr) => (
                 <option key={tr} value={tr}>
                   {tradeName(tr, lang)}
@@ -215,7 +234,7 @@ export function VendorsPage() {
                 <b className="num-inline">{r.score.toFixed(1)}</b>
               </li>
             ))}
-            {!ranking.length ? <li className="muted small">{t("No vendors in this trade.")}</li> : null}
+            {!ranking.length ? <li className="muted small">{t("No scored vendors in this trade.")}</li> : null}
           </ol>
           <div className="po-weights">
             <span className="po-weights-h">
@@ -267,6 +286,8 @@ export function VendorsPage() {
           </>
         }
       />
+      </>
+      )}
     </div>
   );
 }

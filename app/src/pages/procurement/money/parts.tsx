@@ -4,6 +4,7 @@ import { fmtMoney, fmtQty, unitLabel } from "../../../lib/format";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { INV_EXTRAS, INV_PATH, INV_STATUS, invNet, invTotal } from "../../../ops/ext/money-p2";
 import type { Invoice, InvoiceLine, OpsData } from "../../../ops/types";
+import { buyerLabel } from "../../../ops/ext/proc-client";
 
 export const vendorName = (s: Pick<OpsData, "vendors">, id: string) => s.vendors.find((v) => v.id === id)?.name ?? id;
 
@@ -107,7 +108,7 @@ export function InvoicePaper({
       <dl className="pmn-paper-meta">
         <div>
           <dt>{t("Bill to")}</dt>
-          <dd>Qobu Tikinti MMC</dd>
+          <dd>{buyerLabel(lang)}</dd>
         </div>
         <div>
           <dt>{t("Date")}</dt>
@@ -160,7 +161,6 @@ export function InvoicePaper({
           <dd className={`num-inline pmn-f${amber("total")}`}>{fmtMoney(total)} AZN</dd>
         </div>
       </dl>
-      <footer className="pmn-paper-foot">{t("Bank: Kapital Bank · IBAN AZ21 NABZ 0000 0000 1370 1000 1944")}</footer>
       {stamp}
     </article>
   );

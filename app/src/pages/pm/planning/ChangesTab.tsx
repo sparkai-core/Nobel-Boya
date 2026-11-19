@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Download, GitCompareArrows, History, Undo2 } from "lucide-react";
+import { Download, GitCompareArrows, History, Undo2, Upload } from "lucide-react";
 import { Badge, Dialog, Empty, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { diffDays } from "../../../ops/dates";
@@ -10,8 +10,10 @@ const KIND_LABEL: Record<ProgrammeRev["kind"], string> = { IMPORTED: "File impor
 const KIND_TONE = { IMPORTED: "brand", MANUAL: "neutral", KEPT: "muted" } as const;
 
 /** What changed since a saved point, and the list of saved points (compare / download / go back). */
-export function ChangesTab() {
+export function ChangesTab({ onImport }: { onImport: () => void }) {
   const { t, x, d, stamp } = useL();
+  const workweek = useOps((s) => s.workweek);
+  const programmes = useOps((s) => s.programmes);
   const revisions = useOps((s) => s.revisions);
   const activities = useOps((s) => s.activities);
   const links = useOps((s) => s.links);
@@ -25,8 +27,23 @@ export function ChangesTab() {
   const rev = sorted.find((r) => r.id === revId) ?? sorted[0];
   const cmp = useMemo(() => (rev ? compareWith(rev, activities) : null), [rev, activities]);
 
-  if (!rev || !cmp) return <Empty title={t("No saved points yet")}>{t("Save a point from the ⋯ menu, or import a file.")}</Empty>;
-  const move = diffDays(cmp.finishOld, cmp.finishNew);
+  if (!rev || !cmp)
+    return (
+      <div className="k-panel">
+        <Empty
+          icon={<History size={20} />}
+          title={t("No saved points yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={onImport}>
+              <Upload size={15} /> {t("Import a P6 / MS Project file")}
+            </button>
+          }
+        >
+          {t("Every import keeps a saved point, and you can save one by hand from the ⋯ menu. Then you can see what moved.")}
+        </Empty>
+      </div>
+    );
+  const move = cmp.finishOld && cmp.finishNew ? diffDays(cmp.finishOld, cmp.finishNew) : 0;
   const moved = cmp.rows.filter((r) => r.kind !== "SAME");
   const rows = all ? cmp.rows : moved.slice(0, 14);
   const maxAbs = Math.max(1, ...cmp.rows.map((r) => Math.abs(r.days)));
@@ -158,8 +175,9 @@ export function ChangesTab() {
                   aria-label={t("Download")}
                   title={t("Download")}
                   onClick={() => {
-                    const name = r.file ?? `QOBU_rev${r.rev}.xer`;
-                    download(name.endsWith(".xer") ? name : name.replace(/\.[^.]+$/, ".xer"), buildXer(x(r.label), actsFromRev(r, activities), links, wbs, dataDate));
+                    const prg = programmes.find((p) => p.id === r.programmeId);
+                    const name = r.file ? r.file.replace(/\.[^.]+$/, `_rev${r.rev}.xer`) : `programme_rev${r.rev}.xer`;
+                    download(name, buildXer({ name: x(r.label), code: prg?.projectCode ?? "", dataDate, workweek }, actsFromRev(r, activities), links, wbs));
                     toast(t("Downloaded rev {n}", { n: r.rev }));
                   }}
                 >

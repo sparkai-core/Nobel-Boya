@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { BadgeCheck, Check, Clock, Signature } from "lucide-react";
 import { Avatar, Empty, FilterChips, FlowRail, Money, PageHero, Register, SearchBox, StatusBadge, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
+import { decideApprovalAt } from "../../../ops/ext/proc-client";
 import { APPROVAL_LIMIT, diffDays, TODAY } from "../../../ops/dates";
 import { R } from "../../../ops/select";
 import { fmtMoneyShort } from "../../../lib/format";
@@ -17,7 +18,6 @@ export function ApprovalsPage() {
   const navigate = useNavigate();
   const s = useOps();
   const approvals = s.approvals;
-  const decideApproval = useOps((st) => st.decideApproval);
   const [filter, setFilter] = useState<F>("ALL");
   const [q, setQ] = useState("");
 
@@ -27,7 +27,7 @@ export function ApprovalsPage() {
   const twoSig = pending.filter((a) => a.requiredLevels === 2).length;
 
   const approve = (a: Approval) => {
-    const poId = decideApproval(a.id, "APPROVE");
+    const poId = decideApprovalAt(a.id, "APPROVE");
     if (poId) toast(t("{po} issued", { po: poId }), "ok", { label: t("Open order"), onClick: () => navigate(R.order(poId)) });
     else toast(t("First approval given on {ref}. It now needs the final signature.", { ref: a.ref }), "brand");
   };
@@ -81,7 +81,7 @@ export function ApprovalsPage() {
       <PageHero
         eyebrow={t("Procurement · Approvals")}
         title={t("Approvals")}
-        subtitle={t("Quotes sent for a signature. Above the limit an order needs two approvals; the final one issues the purchase order.")}
+        subtitle={t("Quotes sent for a signature. Company rule: above {v} AZN an order needs two approvals; the final one issues the purchase order.", { v: fmtMoneyShort(APPROVAL_LIMIT) })}
         flow={["Quote chosen", "First approval", "Final approval", "Order issued"]}
         art="approve"
       />
@@ -98,7 +98,7 @@ export function ApprovalsPage() {
               <div className="po-queue-plot">
                 <div className="po-queue-limit" style={{ bottom: `${(APPROVAL_LIMIT / max) * 100}%` }}>
                   <span>
-                    {t("Above this, two approvals are needed")} · {fmtMoneyShort(APPROVAL_LIMIT)} AZN
+                    {t("Company rule: above this, two approvals are needed")} · {fmtMoneyShort(APPROVAL_LIMIT)} AZN
                   </span>
                 </div>
                 {pending.map((a, i) => (
@@ -123,8 +123,8 @@ export function ApprovalsPage() {
               </p>
             </div>
           ) : (
-            <Empty icon={<BadgeCheck size={20} />} title={t("All signed")}>
-              {t("New approvals appear here when a buyer sends a quote for approval.")}
+            <Empty icon={<BadgeCheck size={20} />} title={approvals.length ? t("All signed") : t("No approvals yet")}>
+              {t("New approvals appear here when you send a chosen quote for approval from the quote comparison.")}
             </Empty>
           )}
         </section>
@@ -175,6 +175,7 @@ export function ApprovalsPage() {
         rows={rows}
         columns={columns}
         rowKey={(a) => a.id}
+        empty={s.approvals.length ? t("Nothing matches these filters.") : t("No approvals yet. Send a chosen quote for approval from the comparison.")}
         onRowClick={(a) => navigate(R.approval(a.id))}
         initialSort={{ key: "when", dir: "desc" }}
         rowClass={(a) => (a.status === "PENDING" ? "po-row-hot" : undefined)}

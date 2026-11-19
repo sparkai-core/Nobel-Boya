@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { Ban, BadgeCheck, Copy, ExternalLink, Globe, History, Mail, PauseCircle, Phone, Sparkles, TrendingUp, User } from "lucide-react";
+import { Ban, BadgeCheck, Copy, ExternalLink, Globe, History, ListChecks, Mail, PauseCircle, Pencil, Phone, Plus, TrendingUp, User } from "lucide-react";
 import { Badge, Breadcrumbs, DetailHeader, Empty, Kebab, KeyVals, Money, NextBar, PageHero, Panel, Sparkline, StatusBadge, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, monthShort, toDate, TODAY } from "../../../ops/dates";
@@ -9,6 +9,9 @@ import type { VendorStatus } from "../../../ops/types";
 import { scoreLabel } from "./shared";
 import { monthsFrom, onTimeOf } from "../purchasing/shared";
 import { ChainLife } from "../purchasing/parts";
+import { EditVendorDialog, PastProjectDialog, ScoreDialog } from "./VendorDialogs";
+import { hasScore } from "../../../ops/ext/proc-client";
+import { projectName } from "../../../lib/loc";
 
 type Mark = { at: string; ref: string; to: string | null; tone: "brand" | "ok" | "bad" | "warn" | "muted" };
 
@@ -20,6 +23,7 @@ export function VendorDetailPage() {
   const v = s.vendors.find((o) => o.id === id);
   const st = useMemo(() => (v ? vendorStats(s, v.id) : null), [s, v]);
   const [pickPo, setPickPo] = useState<string | null>(null);
+  const [dlg, setDlg] = useState<"edit" | "score" | "past" | null>(null);
 
   const lanes = useMemo(() => {
     if (!v) return null;
@@ -64,12 +68,15 @@ export function VendorDetailPage() {
   ];
   const best = parts.reduce((a, b) => (b.value > a.value ? b : a));
   const worst = parts.reduce((a, b) => (b.value < a.value ? b : a));
+  const scored = hasScore(v);
   const verdict =
     v.status === "DISQUALIFIED"
       ? t("Disqualified: do not invite to new RFQs.")
       : v.status === "ON_HOLD"
-        ? t("On hold. Strong on {b}, but orders wait until the hold is lifted.", { b: best.label.toLowerCase() })
-        : t("Strongest on {b} ({bv}), weakest on {w} ({wv}).", { b: best.label.toLowerCase(), bv: best.value, w: worst.label.toLowerCase(), wv: worst.value });
+        ? t("On hold: orders wait until the hold is lifted.")
+        : !scored
+          ? t("Not scored yet. Score the vendor once you have worked with them.")
+          : t("Strongest on {b} ({bv}), weakest on {w} ({wv}).", { b: best.label.toLowerCase(), bv: best.value, w: worst.label.toLowerCase(), wv: worst.value });
 
   // Brief before the next order, built from the record.
   const shortGrns = s.grns.filter((g) => g.vendorId === v.id && grnShort(g));
@@ -83,7 +90,8 @@ export function VendorDetailPage() {
     brief.push({ tone: "warn", text: t("{grn} came in short ({r}).", { grn: g.ref, r: reasons.join(", ") || t("short") }) });
   }
   if (v.history.length) brief.push({ tone: onTime === v.history.length ? "ok" : "warn", text: t("{a} of {b} past projects delivered on time.", { a: onTime, b: v.history.length }) });
-  brief.push({ tone: worst.value < 65 ? "warn" : "brand", text: t("Usual delivery is {n} days; plan the order date around it.", { n: v.avgDeliveryDays }) });
+  if (v.avgDeliveryDays > 0) brief.push({ tone: scored && worst.value < 65 ? "warn" : "brand", text: t("Usual delivery is {n} days; plan the order date around it.", { n: v.avgDeliveryDays }) });
+  if (!brief.length) brief.push({ tone: "brand", text: t("Nothing on record yet: no orders, receipts or notes.") });
   if (v.note) brief.push({ tone: "brand", text: x(v.note) });
   const advice = !v.licence || v.status !== "APPROVED" ? t("Do not place the next order until the papers and status are in order.") : latePos.length || shortGrns.length ? t("Order, but agree delivery dates in writing and count every load at the gate.") : t("Safe to order on the usual terms.");
 
@@ -122,23 +130,30 @@ export function VendorDetailPage() {
         title={v.name}
         meta={
           <>
-            <span>
-              {tradeName(v.trade, lang)} · {v.city}
-            </span>
-            <span>{t("Vendor since {d}", { d: d(v.since) })}</span>
-            <span>
-              {t("TRN")} <span className="k-mono">{v.trn}</span>
-            </span>
+            <span>{[tradeName(v.trade, lang), v.city].filter(Boolean).join(" · ")}</span>
+            <span>{t("On the register since {d}", { d: d(v.since) })}</span>
+            {v.trn ? (
+              <span>
+                {t("TRN")} <span className="k-mono">{v.trn}</span>
+              </span>
+            ) : null}
           </>
         }
         aside={
-          <div className={`po-bigscore ${v.overall >= 8 ? "hi" : v.overall >= 6.5 ? "mid" : "lo"}`}>
-            <strong className="num-inline">
-              {v.overall.toFixed(1)}
-              <small>/10</small>
-            </strong>
-            <span>{t(label)}</span>
-          </div>
+          scored ? (
+            <div className={`po-bigscore ${v.overall >= 8 ? "hi" : v.overall >= 6.5 ? "mid" : "lo"}`}>
+              <strong className="num-inline">
+                {v.overall.toFixed(1)}
+                <small>/10</small>
+              </strong>
+              <span>{t(label)}</span>
+            </div>
+          ) : (
+            <div className="po-bigscore">
+              <strong className="num-inline">—</strong>
+              <span>{t("Not scored")}</span>
+            </div>
+          )
         }
       >
         <p className="po-verdict-line">{verdict}</p>
@@ -151,8 +166,13 @@ export function VendorDetailPage() {
             {t("Approve")}
           </button>
         ) : null}
+        <button type="button" className="btn btn-ghost" onClick={() => setDlg("edit")}>
+          <Pencil size={15} />
+          {t("Edit details")}
+        </button>
         <Kebab
           items={[
+            { label: t("Score this vendor"), icon: <ListChecks size={14} />, onClick: () => setDlg("score") },
             { label: t("Approve"), icon: <BadgeCheck size={14} />, disabled: v.status === "APPROVED", onClick: () => setStatus("APPROVED") },
             { label: t("Put on hold"), icon: <PauseCircle size={14} />, disabled: v.status === "ON_HOLD", onClick: () => setStatus("ON_HOLD") },
             { label: t("Disqualify"), icon: <Ban size={14} />, danger: true, disabled: v.status === "DISQUALIFIED", onClick: () => setStatus("DISQUALIFIED") },
@@ -213,9 +233,7 @@ export function VendorDetailPage() {
           </Panel>
 
           <section className="k-ai" aria-label={t("Before the next order")}>
-            <span className="k-ai-tag">
-              <Sparkles size={13} /> {t("AI brief")}
-            </span>
+            <span className="k-ai-tag">{t("From the record")}</span>
             <h2 className="po-ai-h">{t("Before the next order")}</h2>
             <ul className="po-brief">
               {brief.map((b, i) => (
@@ -228,7 +246,16 @@ export function VendorDetailPage() {
             <p className="po-brief-advice">{advice}</p>
           </section>
 
-          <Panel title={t("Past projects")} icon={<History size={15} />} pad={false}>
+          <Panel
+            title={t("Past projects")}
+            icon={<History size={15} />}
+            pad={false}
+            actions={
+              <button type="button" className="k-link-btn" onClick={() => setDlg("past")}>
+                <Plus size={13} /> {t("Add")}
+              </button>
+            }
+          >
             <div className="po-tablewrap">
               <table className="po-table">
                 <thead>
@@ -252,8 +279,8 @@ export function VendorDetailPage() {
                   ))}
                   {st.pos.length ? (
                     <tr className="po-row-hot">
-                      <td>{t("Qobu warehouse (this project)")}</td>
-                      <td className="num-inline">2026</td>
+                      <td>{t("{p} (this project)", { p: projectName(lang) })}</td>
+                      <td className="num-inline">{st.pos.map((p) => p.issuedAt.slice(0, 4)).sort()[0]}</td>
                       <td className="r">
                         <Money value={st.ordered} short />
                       </td>
@@ -307,7 +334,17 @@ export function VendorDetailPage() {
             </div>
           </Panel>
 
-          <Panel title={t("Score card")} icon={<BadgeCheck size={15} />}>
+          <Panel
+            title={t("Score card")}
+            icon={<BadgeCheck size={15} />}
+            actions={
+              <button type="button" className="k-link-btn" onClick={() => setDlg("score")}>
+                {scored ? t("Change") : t("Score")}
+              </button>
+            }
+          >
+            {!scored ? <p className="muted small">{t("Not scored yet. Give each part a score from 0 to 100 once you have worked with the vendor.")}</p> : null}
+            {scored ? (
             <ul className="po-scorecard">
               {parts.map((p) => (
                 <li key={p.key}>
@@ -319,6 +356,7 @@ export function VendorDetailPage() {
                 </li>
               ))}
             </ul>
+            ) : null}
             <KeyVals
               items={[
                 { k: t("Orders"), v: st.pos.length },
@@ -333,15 +371,15 @@ export function VendorDetailPage() {
             <ul className="po-contact">
               <li>
                 <User size={14} />
-                {v.contact}
+                {v.contact || "—"}
               </li>
               <li>
                 <Mail size={14} />
-                <a href={`mailto:${v.email}`}>{v.email}</a>
+                {v.email ? <a href={`mailto:${v.email}`}>{v.email}</a> : "—"}
               </li>
               <li>
                 <Phone size={14} />
-                <a href={`tel:${v.phone.replace(/\s/g, "")}`}>{v.phone}</a>
+                {v.phone.replace(/[\s+]|994/g, "") ? <a href={`tel:${v.phone.replace(/\s/g, "")}`}>{v.phone}</a> : "—"}
               </li>
               {v.website ? (
                 <li>
@@ -352,7 +390,7 @@ export function VendorDetailPage() {
             </ul>
             <KeyVals
               items={[
-                { k: t("Payment terms"), v: v.paymentTerms },
+                { k: t("Payment terms"), v: t(v.paymentTerms) },
                 { k: t("Licence"), v: v.licence ? <span className="k-mono">{v.licence}</span> : <Badge tone="bad">{t("Missing")}</Badge> },
               ]}
             />
@@ -394,6 +432,9 @@ export function VendorDetailPage() {
           </Panel>
         </div>
       </div>
+      <EditVendorDialog open={dlg === "edit"} onClose={() => setDlg(null)} vendor={v} />
+      <ScoreDialog open={dlg === "score"} onClose={() => setDlg(null)} vendor={v} />
+      <PastProjectDialog open={dlg === "past"} onClose={() => setDlg(null)} vendor={v} />
     </div>
   );
 }

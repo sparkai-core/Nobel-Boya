@@ -169,9 +169,9 @@ export function CataloguePage() {
       <StatTiles
         items={[
           { label: t("Materials"), value: all.length, sub: t("{n} with orders", { n: live.length }), tone: "brand" },
-          { label: t("BOQ value"), value: `${fmtMoneyShort(budget)} AZN`, sub: t("at sample rates") },
-          { label: t("Ordered so far"), value: `${fmtMoneyShort(orderedValue)} AZN`, sub: t("{p} of the BOQ", { p: `${Math.round((orderedValue / (budget || 1)) * 100)}%` }), tone: "ok" },
-          { label: t("Covered by agreements"), value: covered, sub: over ? t("{n} bought above the BOQ rate", { n: over }) : t("All bought at or under BOQ"), tone: over ? "warn" : "ok" },
+          { label: t("BOQ value"), value: `${fmtMoneyShort(budget)} AZN`, sub: t("at the bill rates") },
+          { label: t("Ordered so far"), value: `${fmtMoneyShort(orderedValue)} AZN`, sub: budget > 0 ? t("{p} of the BOQ", { p: `${Math.round((orderedValue / budget) * 100)}%` }) : "—", tone: "ok" },
+          { label: t("Covered by agreements"), value: covered, sub: over ? t("{n} bought above the BOQ rate", { n: over }) : live.length ? t("All bought at or under BOQ") : t("nothing ordered yet"), tone: over ? "warn" : live.length ? "ok" : undefined },
         ]}
       />
 

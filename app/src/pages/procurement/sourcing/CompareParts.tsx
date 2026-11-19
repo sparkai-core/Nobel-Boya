@@ -70,7 +70,7 @@ export function VendorCard({ row, weights, big, run, lowest, children }: { row: 
               <BadgeCheck size={12} />
               {t("Vendor score")}
             </dt>
-            <dd className="num-inline">{row.vendor.overall.toFixed(1)}/10</dd>
+            <dd className="num-inline">{row.vendor.overall > 0 ? `${row.vendor.overall.toFixed(1)}/10` : "—"}</dd>
           </div>
           <div>
             <dt>
@@ -212,7 +212,7 @@ export function LineGrid({ rows, lines }: { rows: Scored[]; lines: Pick<Line, "d
               <td key={r.quote.id}>{d(r.quote.validUntil)}</td>
             ))}
           </tr>
-          {numRow(t("Vendor score"), (r) => r.vendor.overall, (v) => `${v.toFixed(1)}/10`, "max")}
+          {numRow(t("Vendor score"), (r) => r.vendor.overall, (v) => (v > 0 ? `${v.toFixed(1)}/10` : "—"), "max")}
           <tr>
             <th scope="row">{t("Risk")}</th>
             {rows.map((r) => {

@@ -1,12 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertOctagon, ArrowRight, CalendarPlus, LogOut, Plus, Receipt, Wrench, CheckCircle2, MapPin } from "lucide-react";
+import { AlertOctagon, ArrowRight, CalendarPlus, LogOut, Pencil, Plus, Receipt, Trash2, Wrench, CheckCircle2, MapPin } from "lucide-react";
 import { Badge, Field, KeyVals, Money, Sparkline, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, TODAY } from "../../../ops/dates";
 import { R, statusMeta } from "../../../ops/select";
 import type { Equipment } from "../../../ops/types";
-import { CATEGORY, daysOnHire, DrawerSection, eqFlags, FLAG_LABEL, idleCost7, invoiceState, siteLink, SiteBadge, siteMeta, utilisation, zoneForBuilding, zoneTxt } from "./shared";
+import { CATEGORY, daysOnHire, DrawerSection, eqFlags, FLAG_LABEL, idleCost7, invoiceState, siteLink, SiteBadge, siteMeta, utilisation, zoneForBuilding } from "./shared";
+import { equipmentSupplier } from "../../../ops/ext/site-p2";
+import { EquipmentDialog } from "./SiteDialogs";
 
 /** Live-programme impact and permits that hang off a broken-down machine. */
 export function useBreakdownLinks(e: Equipment | undefined) {
@@ -16,19 +18,28 @@ export function useBreakdownLinks(e: Equipment | undefined) {
   if (!e) return { impact: undefined, permit: undefined, activity: undefined };
   const activity = activities.find((a) => a.id === e.activityId);
   const impact = impacts.find((i) => i.kind === "EQUIPMENT_FAILURE" && i.activityId === e.activityId && i.status !== "RESOLVED" && i.status !== "REJECTED");
-  const permit = e.category === "CRANE" ? permits.find((p) => p.kind === "LIFTING" && p.zone.en === e.zone.en && p.status !== "CLOSED") : undefined;
+  const permit = e.category === "CRANE" && e.zone.en ? permits.find((p) => p.kind === "LIFTING" && p.zone.en === e.zone.en && p.status !== "CLOSED") : undefined;
   return { impact, permit, activity };
 }
 
-export function EquipmentDetail({ e }: { e: Equipment }) {
+export function EquipmentDetail({ e, onDeleted }: { e: Equipment; onDeleted: () => void }) {
   const { t, x, d, rel } = useL();
   const activities = useOps((s) => s.activities);
   const vendors = useOps((s) => s.vendors);
   const patchItem = useOps((s) => s.patchItem);
+  const removeItem = useOps((s) => s.removeItem);
+  const [editing, setEditing] = useState(false);
   const pushFeed = useOps((s) => s.pushFeed);
   const links = useBreakdownLinks(e);
   const activity = links.activity;
   const vendor = vendors.find((v) => v.id === e.vendorId);
+  const supplier = vendor?.name ?? equipmentSupplier(e);
+  const del = () => {
+    if (!window.confirm(t("Remove {code} from the fleet?", { code: e.code }))) return;
+    removeItem("equipment", e.id);
+    toast(t("{code} removed", { code: e.code }), "neutral");
+    onDeleted();
+  };
   const flags = eqFlags(e);
   const hired = e.ownership === "HIRED";
 
@@ -53,13 +64,12 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
     toast(t("{code} assigned to {act}", { code: e.code, act: a.code }));
   };
   const toMaintenance = () => {
-    patchItem("equipment", e.id, { status: "MAINTENANCE", zone: zoneTxt("Workshop") });
+    patchItem("equipment", e.id, { status: "MAINTENANCE" });
     feed("sent to the workshop for maintenance", "texniki xidmət üçün emalatxanaya göndərildi");
     toast(t("{code} sent to maintenance", { code: e.code }), "info");
   };
   const repaired = () => {
-    const back = activity ? zoneForBuilding(activity.building) : zoneTxt("Main store");
-    patchItem("equipment", e.id, { status: activity ? "ON_SITE" : "AVAILABLE", zone: back, nextService: addDays(TODAY, 90) });
+    patchItem("equipment", e.id, { status: activity ? "ON_SITE" : "AVAILABLE", zone: activity ? zoneForBuilding(activity.building) : e.zone });
     let extra = "";
     if (links.impact) {
       patchItem("impacts", links.impact.id, { status: "MITIGATED" });
@@ -75,9 +85,9 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
     toast(t("{code} back in service", { code: e.code }) + (extra ? ` · ${extra}` : ""));
   };
   const offHire = () => {
-    patchItem("equipment", e.id, { status: "OFF_HIRE", hireTo: TODAY, activityId: null, zone: zoneTxt("Main gate yard") });
-    feed(`off-hire requested from ${vendor?.name ?? "the hire firm"}`, `${vendor?.name ?? "icarə şirkəti"} üçün icarədən çıxarılma sorğusu göndərildi`);
-    toast(t("Off-hire request sent for {code}", { code: e.code }), "warn");
+    patchItem("equipment", e.id, { status: "OFF_HIRE", hireTo: TODAY, activityId: null });
+    feed(`off hire from ${TODAY}${supplier ? ` (${supplier})` : ""}`, `${TODAY} tarixindən icarədən çıxarıldı${supplier ? ` (${supplier})` : ""}`);
+    toast(t("{code} marked off hire", { code: e.code }), "warn");
   };
   const extendHire = () => {
     const next = addDays(e.hireTo && e.hireTo > TODAY ? e.hireTo : TODAY, extend);
@@ -89,6 +99,10 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
   const billed = Number(inv.billed) || 0;
   const accrued = Math.round(days * e.dayRate);
   const recordInvoice = () => {
+    if (!e.dayRate) {
+      toast(t("Set the day rate with Edit first, so the invoice can be checked against it."), "warn");
+      return;
+    }
     if (!inv.ref.trim() || days <= 0 || billed <= 0) {
       toast(t("Add the invoice number, days and amount billed."), "warn");
       return;
@@ -105,7 +119,8 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
 
   const util = utilisation(e);
   const hoursTotal = e.hours.reduce((a, h) => a + h, 0);
-  const serviceLate = e.nextService < TODAY;
+  const serviceLate = !!e.nextService && e.nextService < TODAY;
+  const idle7 = idleCost7(e);
   const impactMeta = links.impact ? statusMeta("impact", links.impact.status) : null;
 
   return (
@@ -116,7 +131,16 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
           {hired ? t("Hired") : t("Owned")}
         </Badge>
         <span className="muted small">{x(CATEGORY[e.category].label)}</span>
+        <span className="k-spacer" />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
+          <Pencil size={13} />
+          {t("Edit")}
+        </button>
+        <button type="button" className="icon-btn" onClick={del} aria-label={t("Remove {code} from the fleet?", { code: e.code })} title={t("Remove")}>
+          <Trash2 size={14} />
+        </button>
       </div>
+      <EquipmentDialog open={editing} onClose={() => setEditing(false)} item={e} />
       {flags.length ? (
         <div className="k-row st-flags">
           {flags.map((f) => (
@@ -153,25 +177,23 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
       <DrawerSection title={t("Passport")}>
         <KeyVals
           items={[
-            { k: t("Where"), v: <span className="st-where"><MapPin size={12} />{x(e.zone)}</span> },
+            { k: t("Where"), v: <span className="st-where"><MapPin size={12} />{x(e.zone) || "—"}</span> },
             { k: t("Activity"), v: activity ? <Link to={R.programme(activity.id)}>{activity.code} · {x(activity.name)}</Link> : <span className="muted">{t("Not assigned")}</span> },
-            { k: t("Next service"), v: <span className={serviceLate ? "k-text-bad" : undefined}>{d(e.nextService)} · {rel(e.nextService)}</span> },
-            { k: t("Day rate"), v: <Money value={e.dayRate} /> },
+            { k: t("Next service"), v: e.nextService ? <span className={serviceLate ? "k-text-bad" : undefined}>{d(e.nextService)} · {rel(e.nextService)}</span> : <span className="muted">{t("Not set")}</span> },
+            { k: hired ? t("Day rate") : t("Day cost"), v: e.dayRate ? <Money value={e.dayRate} /> : <span className="muted">—</span> },
           ]}
         />
         <div className="st-spark">
           <div>
             <span className="muted small">{t("Hours, last 7 days")}</span>
-            <strong className="num-inline">
-              {hoursTotal} {t("h")} · {Math.round(util * 100)}% {t("used")}
-            </strong>
+            <strong className="num-inline">{util == null ? t("No hours logged") : `${hoursTotal} ${t("h")} · ${Math.round(util * 100)}% ${t("used")}`}</strong>
           </div>
-          <Sparkline values={e.hours} width={150} height={36} tone={util < 0.4 ? "warn" : "brand"} />
+          {util != null ? <Sparkline values={e.hours} width={150} height={36} tone={util < 0.4 ? "warn" : "brand"} /> : null}
         </div>
       </DrawerSection>
 
       {hired ? (
-        <DrawerSection title={t("Hire economics")} aside={vendor ? <Link to={R.vendor(vendor.id)} className="k-link-btn">{vendor.name}</Link> : null}>
+        <DrawerSection title={t("Hire economics")} aside={vendor ? <Link to={R.vendor(vendor.id)} className="k-link-btn">{vendor.name}</Link> : supplier ? <span className="muted small">{supplier}</span> : null}>
           <div className="st-econ">
             <div>
               <span>{t("Day rate")}</span>
@@ -181,16 +203,16 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
               <span>{t("Days on hire")}</span>
               <strong className="num-inline">{daysOnHire(e)}</strong>
               <small>
-                {d(e.hireFrom, false)} – {d(e.hireTo, false)}
+                {e.hireFrom ? d(e.hireFrom, false) : "—"} – {e.hireTo ? d(e.hireTo, false) : "—"}
               </small>
             </div>
             <div>
               <span>{t("Hire to date")}</span>
               <Money value={daysOnHire(e) * e.dayRate} short />
             </div>
-            <div className={idleCost7(e) > e.dayRate ? "bad" : undefined}>
+            <div className={idle7 != null && idle7 > e.dayRate ? "bad" : undefined}>
               <span>{t("Idle cost, past 6 days")}</span>
-              <Money value={idleCost7(e)} />
+              {idle7 == null ? <strong className="muted">—</strong> : <Money value={idle7} />}
             </div>
           </div>
         </DrawerSection>
@@ -243,10 +265,10 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
             <div className="st-inv-form k-rise">
               <div className="k-form">
                 <Field label={t("Invoice number")}>
-                  <input className="input" value={inv.ref} onChange={(ev) => setInv({ ...inv, ref: ev.target.value })} placeholder="ATL-H-1103" />
+                  <input className="input" value={inv.ref} onChange={(ev) => setInv({ ...inv, ref: ev.target.value })} />
                 </Field>
                 <Field label={t("Period")}>
-                  <input className="input" value={inv.period} onChange={(ev) => setInv({ ...inv, period: ev.target.value })} placeholder={t("Nov 2026 (16–30)")} />
+                  <input className="input" value={inv.period} onChange={(ev) => setInv({ ...inv, period: ev.target.value })} />
                 </Field>
                 <Field label={t("Days billed")}>
                   <input className="input" type="number" min={0} value={inv.days} onChange={(ev) => setInv({ ...inv, days: ev.target.value })} />
@@ -304,7 +326,7 @@ export function EquipmentDetail({ e }: { e: Equipment }) {
           {hired && e.status !== "OFF_HIRE" ? (
             <button type="button" className="btn btn-ghost btn-sm" onClick={offHire}>
               <LogOut size={13} />
-              {t("Off-hire request")}
+              {t("Mark off hire")}
             </button>
           ) : null}
         </div>

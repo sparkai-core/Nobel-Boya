@@ -16,9 +16,10 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { Badge, useL } from "../../../components/kit";
-import { addDays, diffDays, TODAY } from "../../../ops/dates";
+import { addDays, diffDays, same, TODAY } from "../../../ops/dates";
 import { to, type Tone } from "../../../ops/select";
-import type { AttendanceStatus, Equipment, EquipmentCategory, EquipmentStatus, Incident, Permit, PermitKind, PpeCheck, Txt } from "../../../ops/types";
+import { buildingById, data } from "../../../data";
+import type { AttendanceStatus, Equipment, EquipmentCategory, EquipmentStatus, Incident, Permit, PermitKind, Txt } from "../../../ops/types";
 
 /** Status labels and tones for the site collections (the shared STATUS map has none for these). */
 type Meta = { label: Txt; tone: Tone };
@@ -52,11 +53,6 @@ export const SITE_STATUS = {
     CLOSED: m("Closed", "Bağlanıb", "neutral"),
     EXPIRED: m("Expired", "Müddəti bitib", "warn"),
   } satisfies Record<Permit["status"], Meta>,
-  ppe: {
-    WAITING: m("Waiting", "Gözləyir", "warn"),
-    CONFIRMED: m("Confirmed", "Təsdiqlənib", "bad"),
-    FALSE_ALARM: m("False alarm", "Yanlış həyəcan", "muted"),
-  } satisfies Record<PpeCheck["status"], Meta>,
 } as const;
 
 export type SiteKind = keyof typeof SITE_STATUS;
@@ -106,14 +102,6 @@ export const INCIDENT_KIND: Record<Incident["kind"], Txt> = {
   ENVIRONMENT: { en: "Environment", az: "Ətraf mühit" },
 };
 
-export const PPE_ITEM: Record<PpeCheck["missing"][number], Txt> = {
-  HELMET: { en: "Helmet", az: "Kaska" },
-  VEST: { en: "Vest", az: "Jilet" },
-  BOOTS: { en: "Boots", az: "Çəkmə" },
-  GLOVES: { en: "Gloves", az: "Əlcək" },
-  HARNESS: { en: "Harness", az: "Qoruyucu kəmər" },
-};
-
 export const ROLE: Record<string, Txt> = {
   OPERATIVE: { en: "Operative", az: "İşçi" },
   FOREMAN: { en: "Foreman", az: "Briqadir" },
@@ -126,43 +114,69 @@ export const SiteIcon = HardHat;
 
 // ---------------------------------------------------------------- zones
 
-/** Zones of the stylised site plan. Equipment and permits name these in English. */
-export const ZONES: { key: string; label: Txt }[] = [
-  { key: "Warehouse grid 1–9", label: { en: "Warehouse grid 1–9", az: "Anbar, 1–9 oxları" } },
-  { key: "Admin building", label: { en: "Admin building", az: "İnzibati bina" } },
-  { key: "Main store", label: { en: "Main store", az: "Əsas anbar" } },
-  { key: "Site compound", label: { en: "Site compound", az: "Meydança düşərgəsi" } },
-  { key: "Main gate yard", label: { en: "Main gate yard", az: "Əsas darvaza həyəti" } },
-  { key: "Workshop", label: { en: "Workshop", az: "Emalatxana" } },
-];
-export const zoneTxt = (key: string): Txt => ZONES.find((z) => z.key === key)?.label ?? { en: key, az: key };
+/**
+ * Places on site: the project's own buildings (from the BOQ dataset). Anything else the user types is kept
+ * as free text. Read fresh each time so a project switch shows that project's buildings.
+ */
+export const siteZones = (): { key: string; label: Txt }[] => (data.buildings ?? []).map((b) => ({ key: b.en, label: { en: b.en, az: b.az } }));
 
-/** Where an activity's work happens on the plan. */
-export const zoneForBuilding = (building: string): Txt => zoneTxt(building === "WH" ? "Warehouse grid 1–9" : building === "AD" ? "Admin building" : "Site compound");
+/** Bilingual label for a place: a building's own names, else the text as typed. Empty stays empty. */
+export const zoneTxt = (key: string): Txt => {
+  const k = key.trim();
+  if (!k) return { en: "", az: "" };
+  return siteZones().find((z) => z.key === k || z.label.az === k)?.label ?? same(k);
+};
+
+/** Where an activity's work happens: the building it belongs to. */
+export const zoneForBuilding = (building: string): Txt => {
+  const b = buildingById.get(building);
+  return b ? { en: b.en, az: b.az } : zoneTxt(building);
+};
+
+/** Free-text place with the project's buildings offered as suggestions. */
+export function ZoneInput({ value, onChange, id, placeholder }: { value: string; onChange: (v: string) => void; id: string; placeholder?: string }) {
+  const { x } = useL();
+  const listId = `${id}-list`;
+  return (
+    <>
+      <input className="input" value={value} onChange={(e) => onChange(e.target.value)} list={listId} placeholder={placeholder} />
+      <datalist id={listId}>
+        {siteZones().map((z) => (
+          <option key={z.key} value={x(z.label)} />
+        ))}
+      </datalist>
+    </>
+  );
+}
 
 // ---------------------------------------------------------------- equipment maths
 
 export const isHired = (e: Equipment) => e.ownership === "HIRED" && e.status !== "OFF_HIRE";
 
-/** Share of an 8-hour shift worked over the last six finished days (today is still running). */
-export const utilisation = (e: Equipment) => {
+/** Share of an 8-hour shift worked over the last six finished days; null when no hours were logged. */
+export const utilisation = (e: Equipment): number | null => {
   const done = e.hours.slice(0, 6);
-  if (!done.length) return 0;
+  if (!done.length) return null;
   return done.reduce((a, h) => a + Math.min(h, 8), 0) / (done.length * 8);
 };
 
-/** Today's hire cost split into what is working and what is standing. */
+/**
+ * Today's hire cost split into what is working, what is standing, and what has no hours logged
+ * (that part cannot be split honestly).
+ */
 export function hireSplit(e: Equipment) {
-  if (!isHired(e)) return { work: 0, idle: 0 };
-  if (e.status !== "ON_SITE") return { work: 0, idle: e.dayRate };
+  if (!isHired(e)) return { work: 0, idle: 0, untracked: 0 };
+  if (e.status !== "ON_SITE") return { work: 0, idle: e.dayRate, untracked: 0 };
   const u = utilisation(e);
-  return { work: Math.round(e.dayRate * u), idle: Math.round(e.dayRate * (1 - u)) };
+  if (u == null) return { work: 0, idle: 0, untracked: e.dayRate };
+  return { work: Math.round(e.dayRate * u), idle: Math.round(e.dayRate * (1 - u)), untracked: 0 };
 }
 
-/** Hire money spent on standing time over the last six finished days (today is still running). */
-export const idleCost7 = (e: Equipment) => (e.ownership === "HIRED" ? Math.round(e.hours.slice(0, 6).reduce((a, h) => a + e.dayRate * (1 - Math.min(h, 8) / 8), 0)) : 0);
+/** Hire money spent on standing time over the last six finished days; null when no hours were logged. */
+export const idleCost7 = (e: Equipment): number | null =>
+  e.ownership !== "HIRED" ? 0 : !e.hours.length ? null : Math.round(e.hours.slice(0, 6).reduce((a, h) => a + e.dayRate * (1 - Math.min(h, 8) / 8), 0));
 
-export const daysOnHire = (e: Equipment) => (e.hireFrom ? Math.max(0, diffDays(e.hireFrom, e.hireTo && e.hireTo < TODAY ? e.hireTo : TODAY)) : 0);
+export const daysOnHire = (e: Equipment) => (e.hireFrom && e.hireFrom <= TODAY ? Math.max(0, diffDays(e.hireFrom, e.hireTo && e.hireTo < TODAY ? e.hireTo : TODAY)) : 0);
 
 export type EqFlag = "OFF_HIRE_SOON" | "IDLE_HIRED" | "INVOICE" | "SERVICE" | "BROKEN";
 export const FLAG_LABEL: Record<EqFlag, { label: string; tone: Tone }> = {
@@ -175,11 +189,12 @@ export const FLAG_LABEL: Record<EqFlag, { label: string; tone: Tone }> = {
 
 export function eqFlags(e: Equipment): EqFlag[] {
   const out: EqFlag[] = [];
+  const u = utilisation(e);
   if (e.status === "BROKEN_DOWN") out.push("BROKEN");
   if (isHired(e) && e.hireTo && e.hireTo >= TODAY && diffDays(TODAY, e.hireTo) <= 10) out.push("OFF_HIRE_SOON");
-  if (isHired(e) && (e.status === "IDLE" || (e.status === "ON_SITE" && utilisation(e) < 0.4))) out.push("IDLE_HIRED");
+  if (isHired(e) && (e.status === "IDLE" || (e.status === "ON_SITE" && u != null && u < 0.4))) out.push("IDLE_HIRED");
   if (e.hireInvoices.some((i) => i.billed > i.accrued + 0.5)) out.push("INVOICE");
-  if (e.status !== "MAINTENANCE" && e.status !== "OFF_HIRE" && e.nextService <= addDays(TODAY, 7)) out.push("SERVICE");
+  if (e.nextService && e.status !== "MAINTENANCE" && e.status !== "OFF_HIRE" && e.nextService <= addDays(TODAY, 7)) out.push("SERVICE");
   return out;
 }
 
@@ -191,13 +206,6 @@ export const invoiceState = (i: Equipment["hireInvoices"][number]): { label: str
 /** The last seven days, oldest first (matches Equipment.hours and the attendance grid). */
 export const WEEK = Array.from({ length: 7 }, (_, i) => addDays(TODAY, i - 6));
 export const isRestDay = (iso: string) => new Date(`${iso}T00:00:00Z`).getUTCDay() === 0;
-
-/** Stable 0–1 number from a string, for deterministic demo figures. */
-export const hash01 = (s: string) => {
-  let h = 7;
-  for (const c of s) h = (h * 31 + c.charCodeAt(0)) >>> 0;
-  return (h % 1000) / 1000;
-};
 
 /** A reference that is not taken yet: nextRef until the id is free (seeded counters can lag behind). */
 export function freshRef(next: () => string, taken: (id: string) => boolean) {

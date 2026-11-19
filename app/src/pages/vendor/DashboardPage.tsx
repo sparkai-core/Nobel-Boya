@@ -5,8 +5,9 @@ import { Badge, Empty, PageHero, Panel, Register, StatTiles, useL, type Column }
 import { addDays, diffDays, TODAY } from "../../ops/dates";
 import { poTotal, quoteTotal } from "../../ops/select";
 import { fmtMoneyShort } from "../../lib/format";
+import { projectName } from "../../lib/loc";
 import type { Quotation } from "../../ops/types";
-import { BUYER, orderState, portalLink, queried, quoteJourney, useVendor, vendorDocs, VP } from "./model";
+import { buyerName, orderState, portalLink, queried, quoteJourney, useVendor, vendorDocs, VP } from "./model";
 import { vendorQuery } from "../../ops/ext/money-p2";
 import { OutcomeBadge, ScoreRings, useEyebrow } from "./parts";
 
@@ -14,7 +15,7 @@ type Task = { key: string; icon: LucideIcon; tone: "bad" | "warn" | "brand" | "o
 
 /** Vendor dashboard: what still needs a reply, the quote-to-cash funnel, latest quotes and the buyer's score. */
 export function VpDashboard() {
-  const { t, x, d, rel, stamp } = useL();
+  const { t, x, d, rel, stamp, lang } = useL();
   const eyebrow = useEyebrow();
   const navigate = useNavigate();
   const { s, view } = useVendor();
@@ -55,17 +56,17 @@ export function VpDashboard() {
     }
     for (const p of view.payments.filter((x2) => x2.status === "ON_HOLD"))
       out.push({ key: `h-${p.id}`, icon: ShieldAlert, tone: "warn", title: t("Payment {ref} is on hold", { ref: p.ref }), sub: p.holdReason ?? "", due: p.dueDate, action: t("See payment"), to: VP.payments, weight: 74 });
-    for (const doc of vendorDocs(s, v).filter((x2) => x2.state === "missing" ? x2.required : x2.state === "expired" || x2.state === "expiring"))
+    for (const doc of vendorDocs(s, v).filter((x2) => x2.state === "expired" || x2.state === "expiring"))
       out.push({
         key: `doc-${doc.key}`,
         icon: ShieldAlert,
         tone: doc.state === "expiring" ? "warn" : "bad",
-        title: doc.state === "missing" ? t("{doc} is missing", { doc: x(doc.label) }) : doc.state === "expired" ? t("{doc} has expired", { doc: x(doc.label) }) : t("{doc} expires {when}", { doc: x(doc.label), when: rel(doc.expires!) }),
-        sub: doc.required ? t("The buyer cannot place new orders without it.") : t("Optional, but the buyer scores you on it."),
+        title: doc.state === "expired" ? t("{doc} has expired", { doc: x(doc.label) }) : t("{doc} expires {when}", { doc: x(doc.label), when: rel(doc.expires!) }),
+        sub: doc.ref ?? "",
         due: doc.expires,
         action: t("Upload a renewed copy"),
         to: VP.documents,
-        weight: doc.state === "expiring" ? 52 : doc.required ? 92 : 48,
+        weight: doc.state === "expiring" ? 52 : 80,
       });
     for (const i of view.invites.filter((r) => r.bucket === "sent" && r.quote)) {
       const j = quoteJourney(s, i.quote!);
@@ -115,7 +116,7 @@ export function VpDashboard() {
       <PageHero
         eyebrow={eyebrow("Dashboard")}
         title={t("What still needs a reply")}
-        subtitle={t("Everything {buyer} is waiting on from {vendor}, most urgent first.", { buyer: BUYER, vendor: v.name })}
+        subtitle={t("Everything {buyer} is waiting on from {vendor}, most urgent first.", { buyer: buyerName(), vendor: v.name })}
         flow={["Invited", "Quote", "Order", "Dispatch", "Get paid"]}
         art="portal"
         actions={
@@ -167,7 +168,7 @@ export function VpDashboard() {
             </span>
             <div className="vp-next-copy">
               <strong>{t("You are all caught up")}</strong>
-              <span>{t("New requests and orders from {buyer} will appear here.", { buyer: BUYER })}</span>
+              <span>{t("New requests and orders from {buyer} will appear here.", { buyer: buyerName() })}</span>
             </div>
           </div>
         )}
@@ -200,13 +201,13 @@ export function VpDashboard() {
           { label: t("Requests to answer"), value: view.invites.filter((i) => i.bucket === "answer").length, sub: t("{n} invitations in total", { n: view.invites.length }), onClick: () => navigate(VP.rfqs) },
           { label: t("Quotes with the buyer"), value: view.quotes.filter((q) => ["buyer", "approval", "reading"].includes(quoteJourney(s, q).outcome.key)).length, sub: t("waiting for a decision"), onClick: () => navigate(VP.quotes) },
           { label: t("Open orders"), value: view.pos.filter((p) => p.status === "ISSUED" || p.status === "PART_RECEIVED").length, sub: t("{n} closed", { n: view.pos.filter((p) => p.status === "CLOSED").length }), onClick: () => navigate(VP.orders) },
-          { label: t("Paid so far"), value: <><span className="num-inline">{fmtMoneyShort(funnel.stages[3]!.value)}</span> <small className="k-cur">AZN</small></>, sub: t("on the Qobu project"), tone: "ok", onClick: () => navigate(VP.payments) },
+          { label: t("Paid so far"), value: <><span className="num-inline">{fmtMoneyShort(funnel.stages[3]!.value)}</span> <small className="k-cur">AZN</small></>, sub: t("on {p}", { p: projectName(lang) }), tone: "ok", onClick: () => navigate(VP.payments) },
         ]}
       />
 
       <div className="k-grid-main">
         <div className="k-stack">
-          <Panel title={t("From quote to cash")} icon={<Wallet size={15} />} sub={t("What you have quoted to {buyer}, how much became orders, what arrived on site and what has been paid.", { buyer: BUYER })}>
+          <Panel title={t("From quote to cash")} icon={<Wallet size={15} />} sub={t("What you have quoted to {buyer}, how much became orders, what arrived on site and what has been paid.", { buyer: buyerName() })}>
             <div className="vp-funnel">
               <svg className="vp-funnel-links" viewBox="0 0 400 100" preserveAspectRatio="none" aria-hidden="true">
                 {funnel.stages.slice(0, -1).map((f, i) => {
@@ -241,7 +242,7 @@ export function VpDashboard() {
         </div>
 
         <div className="k-stack">
-          <Panel title={t("How the buyer scores you")} icon={<Gauge size={15} />} sub={t("From your deliveries, inspections and prices on past orders.")}>
+          <Panel title={t("How the buyer scores you")} icon={<Gauge size={15} />} sub={v.overall > 0 ? t("From your deliveries, inspections and prices on past orders.") : undefined}>
             <ScoreRings vendor={v} />
             {v.note ? (
               <div className="k-callout k-tone-warn vp-score-note">
@@ -266,7 +267,7 @@ export function VpDashboard() {
                       <div>
                         {to ? <Link to={to}>{x(f.text)}</Link> : <span>{x(f.text)}</span>}
                         <small>
-                          {mine ? <Badge tone="ok" dot={false}>{t("You")}</Badge> : <span>{BUYER}</span>} · {stamp(f.at)}
+                          {mine ? <Badge tone="ok" dot={false}>{t("You")}</Badge> : <span>{buyerName()}</span>} · {stamp(f.at)}
                         </small>
                       </div>
                     </li>

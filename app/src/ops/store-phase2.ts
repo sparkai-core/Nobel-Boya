@@ -1,22 +1,13 @@
 import { addDays, diffDays, nowStamp, same, TODAY } from "./dates";
-import { PEOPLE } from "./seed";
+import { me, PEOPLE } from "./people";
 import { round } from "./seed/util";
-import type { Activity, FeedEvent, Invoice, InvoiceLine, OpsData, PurchaseOrder, Tool, Txt, Vendor } from "./types";
+import { progressWeight } from "./select";
+import { siteAddress } from "./site";
+import type { Activity, FeedEvent, Invoice, InvoiceLine, OpsData, PurchaseOrder, Txt, Vendor } from "./types";
 
 /** Collections that hold records with an `id`, usable with the generic helpers. */
 export type ListKey = { [K in keyof OpsData]: OpsData[K] extends Array<{ id: string }> ? K : never }[keyof OpsData];
 export type ItemOf<K extends ListKey> = OpsData[K] extends Array<infer T> ? T : never;
-
-export type ImportResult = {
-  programmeId: string;
-  revId: string;
-  /** Finish date before and after, and per-activity changes. */
-  finishBefore: string;
-  finishAfter: string;
-  changed: number;
-  added: number;
-  removed: number;
-};
 
 export type Phase2Actions = {
   /** Next number of a kind, e.g. nextRef("INC") → "INC-0004". Updates the counter. */
@@ -30,10 +21,7 @@ export type Phase2Actions = {
   /** Add an event to the live feed (shown on dashboards and in notifications). */
   pushFeed: (module: FeedEvent["module"], text: Txt, link: string | null, actor?: string) => void;
 
-  // planning and progress
-  importProgramme: (input: { file: string; tool: Tool; mode: "NEW" | "REVISION"; name: string }) => ImportResult;
-  /** Preview what an import would change, without saving. */
-  previewImport: (file: string, tool: Tool) => Omit<ImportResult, "programmeId" | "revId"> & { activities: number; links: number; wbsLevels: number; calendars: number; dataDate: string; done: number; inProgress: number; notStarted: number; progress: number; warnings: Txt[] };
+  // planning and progress (programme files are read and imported by ops/ext/programme-import.ts)
   saveRevision: (label: string) => string;
   restoreRevision: (revId: string) => void;
   submitProgressUpdate: (input: { lines: { activityId: string; pct: number; remaining?: number; aStart?: string | null; aEnd?: string | null }[]; note: string }) => string;
@@ -58,9 +46,17 @@ export type Phase2Actions = {
 type Get = () => OpsData & Phase2Actions & { logProgress: (activityId: string, pct: number, note: string) => void; createVendor: (input: never) => string };
 type Set = (partial: Partial<OpsData> | ((s: OpsData) => Partial<OpsData>)) => void;
 
-const ME = PEOPLE.pm;
 const ev = (actor: "SYSTEM" | "AI" | "USER" | "VENDOR", en: string, az: string) => ({ at: nowStamp(), actor, text: { en, az } });
-const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+/**
+ * Cost performance (earned ÷ actual cost). Earned value is the share done × the BOQ value of the work
+ * the activities carry; actual cost is what has been paid. 0 means no cost recorded yet.
+ */
+function costIndex(s: OpsData, actualShare: number) {
+  const budget = s.activities.reduce((x, a) => x + a.budget, 0);
+  const paid = s.payments.filter((p) => p.status === "PAID").reduce((x, p) => x + p.amount, 0);
+  return budget > 0 && paid > 0 ? round((actualShare * budget) / paid, 2) : 0;
+}
+
 const poTotal = (po: PurchaseOrder) => round(po.lines.reduce((a, l) => a + l.qty * l.rate, 0) * (1 + po.vatRate) + po.shipping, 2);
 
 /** Three-way match: billed vs ordered vs received, line by line. */
@@ -78,19 +74,8 @@ export function matchInvoice(inv: Pick<Invoice, "lines">, po: PurchaseOrder | un
   return { ok: lines.every((l) => l.ok), lines, over: round(lines.reduce((a, l) => a + Math.max(0, l.money), 0), 2) };
 }
 
-function shiftForFile(file: string, a: Activity) {
-  // Deterministic "what the planner changed in the file": a few activities move.
-  const h = hash(file + a.code);
-  if (a.status === "COMPLETED") return 0;
-  // The planner's update always moves the end of the critical chain a little, so an import shows a real finish change.
-  if (a.code === "WH-250" || a.code === "G-900" || a.code === "G-910") return (hash(file) % 5) + 3;
-  if (h % 7 === 0) return (h % 5) + 2;
-  if (h % 11 === 0) return -((h % 3) + 1);
-  return 0;
-}
-
 export function phase2Actions(set: Set, get: Get): Phase2Actions {
-  const feedOf = (s: OpsData, module: FeedEvent["module"], text: Txt, link: string | null, actor = ME) => {
+  const feedOf = (s: OpsData, module: FeedEvent["module"], text: Txt, link: string | null, actor = me()) => {
     const n = (s.seq.F ?? 0) + 1;
     return { feed: [{ id: `F-${n}`, at: nowStamp(), module, text, link, actor }, ...s.feed].slice(0, 80), seq: { ...s.seq, F: n } };
   };
@@ -109,71 +94,12 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
     pushFeed: (module, text, link, actor) => set((s) => feedOf(s, module, text, link, actor)),
 
     // ---------------------------------------------------------------- planning
-    previewImport: (file, tool) => {
-      const s = get();
-      const before = s.activities.reduce((m, a) => (a.end > m ? a.end : m), TODAY);
-      const moved = s.activities.map((a) => ({ a, d: shiftForFile(file, a) }));
-      const after = moved.reduce((m, x) => {
-        const e = addDays(x.a.end, x.d);
-        return e > m ? e : m;
-      }, TODAY);
-      const changed = moved.filter((x) => x.d !== 0).length;
-      const done = s.activities.filter((a) => a.status === "COMPLETED").length;
-      const inProgress = s.activities.filter((a) => a.status === "IN_PROGRESS" || a.status === "BLOCKED").length;
-      const budget = s.activities.reduce((x, a) => x + a.budget, 0) || 1;
-      const warnings: Txt[] = [
-        ...(tool === "MSP" ? [{ en: "Calendar 'Standard' mapped to the project's Mon–Sat week", az: "'Standard' təqvimi layihənin B.e.–Ş. həftəsinə uyğunlaşdırıldı" }] : []),
-        { en: "2 activities have no successor (WH-240, AD-230)", az: "2 işin ardıcılı yoxdur (WH-240, AD-230)" },
-        ...(hash(file) % 3 === 0 ? [{ en: "1 constraint 'Finish no later than' ignored", az: "1 'Ən gec bitmə' məhdudiyyəti nəzərə alınmadı" }] : []),
-      ];
-      return {
-        finishBefore: before,
-        finishAfter: after,
-        changed,
-        added: hash(file) % 3,
-        removed: hash(file) % 2,
-        activities: s.activities.length + (hash(file) % 3),
-        links: s.links.length + (hash(file) % 4),
-        wbsLevels: 3,
-        calendars: tool === "P6" ? 2 : 1,
-        dataDate: TODAY,
-        done,
-        inProgress,
-        notStarted: s.activities.length - done - inProgress,
-        progress: round((s.activities.reduce((x, a) => x + (a.budget * a.pct) / 100, 0) / budget) * 100, 1),
-        warnings,
-      };
-    },
-    importProgramme: ({ file, tool, mode, name }) => {
-      const s = get();
-      const pv = get().previewImport(file, tool);
-      const keepId = `REV-${(s.seq.REV ?? 0) + 1}`;
-      const kept = { id: keepId, programmeId: s.programmes.find((p) => p.current)?.id ?? "PRG-3", rev: s.revisions.length, label: same(`Kept before importing ${file}`), kind: "KEPT" as const, file: null, at: nowStamp(), by: PEOPLE.planner, finish: pv.finishBefore, activities: s.activities.length, snapshot: s.activities.map((a) => ({ code: a.code, name: a.name.en, start: a.start, end: a.end, pct: a.pct })) };
-      const activities = mode === "REVISION" ? s.activities.map((a) => {
-        const d = shiftForFile(file, a);
-        return d ? { ...a, start: a.start > TODAY ? addDays(a.start, d) : a.start, end: addDays(a.end, d) } : a;
-      }) : s.activities;
-      const prgN = (s.seq.PRG ?? 0) + (mode === "NEW" ? 1 : 0);
-      const programmeId = mode === "NEW" ? `PRG-${prgN}` : (s.programmes.find((p) => p.current)?.id ?? "PRG-3");
-      const revN = (s.seq.REV ?? 0) + 2;
-      const revId = `REV-${revN}`;
-      const finish = activities.reduce((m, a) => (a.end > m ? a.end : m), TODAY);
-      const rev = { id: revId, programmeId, rev: s.revisions.length + 1, label: same(`Imported ${file}`), kind: "IMPORTED" as const, file, at: nowStamp(), by: PEOPLE.planner, finish, activities: pv.activities, snapshot: activities.map((a) => ({ code: a.code, name: a.name.en, start: a.start, end: a.end, pct: a.pct })) };
-      const programme = { id: programmeId, name: name || file.replace(/\.[^.]+$/, ""), tool, file, projectCode: "QOBU", dataDate: TODAY, contractFinish: "2027-08-27", finish, activities: pv.activities, links: pv.links, wbsLevels: pv.wbsLevels, calendars: pv.calendars, donePct: pv.progress, updatedAt: TODAY, current: mode === "REVISION", warnings: pv.warnings };
-      set({
-        activities,
-        revisions: [...s.revisions, ...(mode === "REVISION" ? [kept] : []), rev],
-        programmes: mode === "NEW" ? [...s.programmes, programme] : s.programmes.map((p) => (p.id === programmeId ? { ...p, ...programme, current: true } : p)),
-                ...feedOf({ ...s, seq: { ...s.seq, PRG: prgN, REV: revN } }, "PM", { en: `${tool === "P6" ? "Primavera P6" : "MS Project"} file imported: ${file}`, az: `${tool === "P6" ? "Primavera P6" : "MS Project"} faylı idxal edildi: ${file}` }, "pm/planning", PEOPLE.planner),
-      });
-      return { programmeId, revId, finishBefore: pv.finishBefore, finishAfter: mode === "REVISION" ? finish : pv.finishBefore, changed: mode === "REVISION" ? pv.changed : 0, added: pv.added, removed: pv.removed };
-    },
     saveRevision: (label) => {
       const s = get();
       const n = (s.seq.REV ?? 0) + 1;
       const id = `REV-${n}`;
-      const finish = s.activities.reduce((m, a) => (a.end > m ? a.end : m), TODAY);
-      set({ revisions: [...s.revisions, { id, programmeId: s.programmes.find((p) => p.current)?.id ?? "PRG-3", rev: s.revisions.length, label: same(label || "Saved by hand"), kind: "MANUAL", file: null, at: nowStamp(), by: PEOPLE.planner, finish, activities: s.activities.length, snapshot: s.activities.map((a) => ({ code: a.code, name: a.name.en, start: a.start, end: a.end, pct: a.pct })) }], seq: { ...s.seq, REV: n } });
+      const finish = s.activities.reduce((m, a) => (a.end > m ? a.end : m), "");
+      set({ revisions: [...s.revisions, { id, programmeId: s.programmes.find((p) => p.current)?.id ?? "", rev: s.revisions.reduce((m, r) => Math.max(m, r.rev), 0) + 1, label: same(label || "Saved by hand"), kind: "MANUAL", file: null, at: nowStamp(), by: me(), finish, activities: s.activities.length, snapshot: s.activities.map((a) => ({ code: a.code, name: a.name.en, start: a.start, end: a.end, pct: a.pct })) }], seq: { ...s.seq, REV: n } });
       return id;
     },
     restoreRevision: (revId) => {
@@ -182,8 +108,9 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
       if (!rev) return;
       get().saveRevision(`Kept before going back to rev ${rev.rev}`);
       const s2 = get();
+      const snap = new Map(rev.snapshot.map((y) => [y.code, y]));
       set({ activities: s2.activities.map((a) => {
-        const x = rev.snapshot.find((y) => y.code === a.code);
+        const x = snap.get(a.code);
         return x && a.status !== "COMPLETED" ? { ...a, start: x.start, end: x.end } : a;
       }), ...feedOf(s2, "PM", { en: `Programme restored to rev ${rev.rev}`, az: `Qrafik ${rev.rev} versiyasına qaytarıldı` }, "pm/planning/changes", PEOPLE.planner) });
     },
@@ -199,13 +126,15 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
         const end = l.remaining != null && pct < 100 ? addDays(TODAY, Math.max(1, l.remaining)) : a.end;
         return { ...a, pct, status, aStart: l.aStart !== undefined ? l.aStart : (a.aStart ?? (pct > 0 ? TODAY : null)), aEnd: pct >= 100 ? (l.aEnd ?? TODAY) : null, end: end > a.end || pct < 100 ? end : a.end };
       });
-      const budget = activities.reduce((x, a) => x + a.budget, 0) || 1;
+      // Weighted by budget when every activity has one, else by duration (imported programmes carry no money).
+      const w = progressWeight(activities);
+      const budget = activities.reduce((x, a) => x + w(a), 0) || 1;
       const planned = activities.reduce((x, a) => {
         const sh = TODAY <= a.bStart ? 0 : TODAY >= a.bEnd ? 1 : diffDays(a.bStart, TODAY) / Math.max(1, diffDays(a.bStart, a.bEnd));
-        return x + a.budget * sh;
+        return x + w(a) * sh;
       }, 0) / budget;
-      const actual = activities.reduce((x, a) => x + (a.budget * a.pct) / 100, 0) / budget;
-      const snap = { id, dataDate: TODAY, submittedAt: nowStamp(), by: PEOPLE.planner, plannedPct: round(planned, 3), actualPct: round(actual, 3), spi: round(planned > 0 ? actual / planned : 1, 2), cpi: 0.98, note: note ? same(note) : null, lines: lines.map((l) => ({ activityId: l.activityId, pctBefore: s.activities.find((a) => a.id === l.activityId)?.pct ?? 0, pct: l.pct, remaining: l.remaining ?? 0 })) };
+      const actual = activities.reduce((x, a) => x + (w(a) * a.pct) / 100, 0) / budget;
+      const snap = { id, dataDate: TODAY, submittedAt: nowStamp(), by: PEOPLE.planner, plannedPct: round(planned, 3), actualPct: round(actual, 3), spi: round(planned > 0 ? actual / planned : 0, 2), cpi: costIndex(s, actual), note: note ? same(note) : null, lines: lines.map((l) => ({ activityId: l.activityId, pctBefore: s.activities.find((a) => a.id === l.activityId)?.pct ?? 0, pct: l.pct, remaining: l.remaining ?? 0 })) };
       set({ activities, snapshots: [...s.snapshots, snap], zones: s.zones.map((z) => { const l = lines.find((x) => x.activityId === z.activityId); return l ? { ...z, actualPct: l.pct } : z; }), ...feedOf({ ...s, seq: { ...s.seq, PS: n } }, "PM", { en: `Weekly progress update ${id} submitted (${lines.length} activities)`, az: `Həftəlik irəliləyiş ${id} göndərildi (${lines.length} iş)` }, "pm/progress-tracking", PEOPLE.planner) });
       return id;
     },
@@ -219,9 +148,9 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
       const ls: InvoiceLine[] = lines ?? (po ? po.lines.map((l, i) => ({ key: `${id}-${i}`, description: l.description, unit: l.unit, qty: l.received || l.qty, rate: l.rate, poLineKey: l.key })) : []);
       const m = matchInvoice({ lines: ls }, po);
       const dup = s.invoices.some((x) => x.ref === ref && x.vendorId === vendorId);
-      const inv: Invoice = { id, ref, vendorId, poId, date: TODAY, dueDate: addDays(TODAY, 30), status: dup ? "TO_MATCH" : m.ok ? "SIGN_OFF" : "MISMATCH", lines: ls, vatRate: 0.18, source, confidence: confidence ?? (source === "PORTAL" ? 1 : 0.92), duplicate: dup, paymentId: s.payments.find((p) => p.poId === poId && p.kind === "ON_DELIVERY")?.id ?? null, history: [source === "PORTAL" ? ev("VENDOR", "Invoice sent through the vendor portal", "Faktura portal vasitəsilə göndərildi") : ev("AI", "Invoice read from the uploaded file", "Faktura yüklənmiş fayldan oxundu"), m.ok ? ev("SYSTEM", "Three-way match passed", "Üçtərəfli uyğunlaşdırma keçdi") : ev("SYSTEM", "Billed differs from what was ordered or received", "Faktura sifariş və ya qəbul ilə fərqlənir")] };
+      const inv: Invoice = { id, ref, vendorId, poId, date: TODAY, dueDate: addDays(TODAY, 30), status: dup ? "TO_MATCH" : m.ok ? "SIGN_OFF" : "MISMATCH", lines: ls, vatRate: 0.18, source, confidence: confidence ?? 1, duplicate: dup, paymentId: s.payments.find((p) => p.poId === poId && p.kind === "ON_DELIVERY")?.id ?? null, history: [source === "PORTAL" ? ev("VENDOR", "Invoice sent through the vendor portal", "Faktura portal vasitəsilə göndərildi") : ev("USER", "Invoice entered", "Faktura daxil edildi"), m.ok ? ev("SYSTEM", "Three-way match passed", "Üçtərəfli uyğunlaşdırma keçdi") : ev("SYSTEM", "Billed differs from what was ordered or received", "Faktura sifariş və ya qəbul ilə fərqlənir")] };
       const vendor = s.vendors.find((v) => v.id === vendorId)?.name ?? vendorId;
-      set({ invoices: [inv, ...s.invoices], ...feedOf({ ...s, seq: { ...s.seq, INV: n } }, source === "PORTAL" ? "VENDOR" : "PROC", { en: `${vendor} invoice ${ref} on ${poId}: ${m.ok ? "matches" : "does not match"}`, az: `${vendor} ${ref} fakturası (${poId}): ${m.ok ? "uyğundur" : "uyğun deyil"}` }, `procurement/invoices/${id}`, source === "PORTAL" ? vendor : ME) });
+      set({ invoices: [inv, ...s.invoices], ...feedOf({ ...s, seq: { ...s.seq, INV: n } }, source === "PORTAL" ? "VENDOR" : "PROC", { en: `${vendor} invoice ${ref} on ${poId}: ${m.ok ? "matches" : "does not match"}`, az: `${vendor} ${ref} fakturası (${poId}): ${m.ok ? "uyğundur" : "uyğun deyil"}` }, `procurement/invoices/${id}`, source === "PORTAL" ? vendor : me()) });
       return id;
     },
     rematchInvoice: (id) => {
@@ -241,18 +170,18 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
       const payments = s.payments.map((p) => {
         if (p.id !== inv.paymentId) return p;
         if (status === "BOOKED" && p.status !== "PAID") return { ...p, status: (goodsIn ? "READY" : p.status) as typeof p.status, amount: Math.min(p.amount, billed) || p.amount };
-        if (status === "PAID") return { ...p, status: "PAID" as const, paidAt: TODAY, method: p.method ?? "Bank transfer", bankRef: p.bankRef ?? `KB-${TODAY.replace(/-/g, "").slice(2)}${id.slice(-2)}` };
+        if (status === "PAID") return { ...p, status: "PAID" as const, paidAt: TODAY, method: p.method, bankRef: p.bankRef };
         if (status === "REJECTED" || status === "CREDIT_REQUESTED") return p.status === "PAID" ? p : { ...p, status: "ON_HOLD" as const, holdReason: note || (status === "REJECTED" ? "Invoice rejected" : "Waiting for a credit note") };
         return p;
       });
       const label: Record<Invoice["status"], [string, string]> = { TO_MATCH: ["sent back to matching", "uyğunlaşdırmaya qaytarıldı"], MISMATCH: ["marked as not matching", "uyğun deyil kimi qeyd edildi"], CREDIT_REQUESTED: ["credit note requested", "kredit notu istənildi"], SIGN_OFF: ["sent for sign-off", "imzaya göndərildi"], BOOKED: ["signed off and booked", "imzalandı və uçota alındı"], PAID: ["paid", "ödənildi"], REJECTED: ["rejected", "rədd edildi"] };
-      set({ invoices: s.invoices.map((x) => (x.id === id ? { ...x, status, history: [...x.history, ev("USER", `${label[status][0]}${note ? `: ${note}` : ""}`, `${label[status][1]}${note ? `: ${note}` : ""}`)] } : x)), payments, ...feedOf(s, "PROC", { en: `${inv.ref} ${label[status][0]}`, az: `${inv.ref} ${label[status][1]}` }, `procurement/invoices/${id}`, status === "BOOKED" || status === "PAID" ? PEOPLE.finance : ME) });
+      set({ invoices: s.invoices.map((x) => (x.id === id ? { ...x, status, history: [...x.history, ev("USER", `${label[status][0]}${note ? `: ${note}` : ""}`, `${label[status][1]}${note ? `: ${note}` : ""}`)] } : x)), payments, ...feedOf(s, "PROC", { en: `${inv.ref} ${label[status][0]}`, az: `${inv.ref} ${label[status][1]}` }, `procurement/invoices/${id}`, status === "BOOKED" || status === "PAID" ? PEOPLE.finance : me()) });
     },
     createPayRun: (paymentIds) => {
       const s = get();
       const n = (s.seq.RUN ?? 0) + 1;
       const id = `RUN-${String(n).padStart(2, "0")}`;
-      set({ payRuns: [{ id, ref: `RUN-${TODAY.slice(0, 7)}-${String.fromCharCode(64 + n)}`, date: TODAY, status: "PROPOSED", paymentIds, cashToday: 386_000, buffer: 120_000, by: PEOPLE.finance }, ...s.payRuns], seq: { ...s.seq, RUN: n } });
+      set({ payRuns: [{ id, ref: `RUN-${TODAY.slice(0, 7)}-${String.fromCharCode(64 + n)}`, date: TODAY, status: "PROPOSED", paymentIds, cashToday: s.setup.cashAvailable ?? 0, buffer: 0, by: PEOPLE.finance }, ...s.payRuns], seq: { ...s.seq, RUN: n } });
       return id;
     },
     setPayRunStatus: (id, status) => {
@@ -288,7 +217,7 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
         issuedAt: TODAY,
         expectedAt,
         paymentTerms: vendor?.paymentTerms ?? "30 days",
-        deliverTo: { en: "Qobu site, main gate, Absheron district", az: "Qobu meydançası, əsas darvaza, Abşeron rayonu" },
+        deliverTo: siteAddress(),
         vatRate: 0.18,
         shipping: 0,
         lines: lines.map((l, i) => ({ key: `${id}-${i}`, material: l.material, description: l.description, qty: l.qty, unit: l.unit, rate: l.rate, received: 0 })),
@@ -329,7 +258,7 @@ export function phase2Actions(set: Set, get: Get): Phase2Actions {
       const id = `V-${String(n).padStart(2, "0")}`;
       const score = inv.score ?? 7;
       const sc = Math.round(score * 10);
-      const vendor: Vendor = { id, name: inv.company, trade: inv.trade, trades: [inv.trade], city: "Bakı", trn: `${1400000000 + n * 7919}`, licence: `TL-2026-${5000 + n}`, contact: inv.contact, email: inv.email, phone: "+994 12 000 00 00", website: null, paymentTerms: "30 days", status: "APPROVED", risk: score >= 8 ? "LOW" : "MEDIUM", scores: { reliability: sc, quality: sc, price: sc, delivery: sc }, overall: score, avgDeliveryDays: 14, since: TODAY, portal: true, note: same("Onboarded through prequalification"), history: [] };
+      const vendor: Vendor = { id, name: inv.company, trade: inv.trade, trades: [inv.trade], city: "", trn: "", licence: null, contact: inv.contact, email: inv.email, phone: "", website: null, paymentTerms: "30 days", status: "APPROVED", risk: score >= 8 ? "LOW" : "MEDIUM", scores: { reliability: sc, quality: sc, price: sc, delivery: sc }, overall: score, avgDeliveryDays: 0, since: TODAY, portal: true, note: same("Onboarded through prequalification"), history: [] };
       set({ vendors: [...s.vendors, vendor], invites: s.invites.map((i) => (i.id === inviteId ? { ...i, status: "APPROVED", vendorId: id } : i)), ...feedOf({ ...s, seq: { ...s.seq, V: n } }, "PROC", { en: `${inv.company} approved as a vendor`, az: `${inv.company} təchizatçı kimi təsdiqləndi` }, `procurement/vendors/${id}`, PEOPLE.buyer) });
       return id;
     },

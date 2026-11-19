@@ -95,9 +95,11 @@ export function BudgetPage() {
         items={[
           { label: t("BOQ budget"), value: `${fmtMoneyShort(data.tot.budget)}`, sub: t("rate × measured quantity, net") },
           { label: t("Committed on orders"), value: fmtMoneyShort(data.tot.committed), sub: t("{p}% of the budget", { p: ((data.tot.committed / (data.tot.budget || 1)) * 100).toFixed(1) }) },
-          { label: t("Received value"), value: fmtMoneyShort(data.tot.received), sub: t("{p}% of committed", { p: Math.round((data.tot.received / (data.tot.committed || 1)) * 100) }) },
+          { label: t("Received value"), value: fmtMoneyShort(data.tot.received), sub: data.tot.committed > 0 ? t("{p}% of committed", { p: Math.round((data.tot.received / data.tot.committed) * 100) }) : t("nothing ordered yet") },
           { label: t("Paid"), value: fmtMoneyShort(data.tot.paid), sub: t("net of VAT") },
-          { label: t("Against BOQ rates"), value: `${variance >= 0 ? "−" : "+"}${fmtMoneyShort(Math.abs(variance))}`, tone: variance >= 0 ? "ok" : "bad", sub: variance >= 0 ? t("bought under the BOQ rates") : t("over the BOQ rates") },
+          data.tot.committed > 0
+            ? { label: t("Against BOQ rates"), value: `${variance >= 0 ? "−" : "+"}${fmtMoneyShort(Math.abs(variance))}`, tone: variance >= 0 ? "ok" : "bad", sub: variance >= 0 ? t("bought under the BOQ rates") : t("over the BOQ rates") }
+            : { label: t("Against BOQ rates"), value: "—", sub: t("nothing ordered yet") },
         ]}
       />
 

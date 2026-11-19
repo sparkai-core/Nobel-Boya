@@ -23,6 +23,7 @@ import {
   type PathStep,
 } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
+import { decideApprovalAt, hasScore } from "../../../ops/ext/proc-client";
 import { APPROVAL_LIMIT, diffDays, TODAY } from "../../../ops/dates";
 import { PATHS, PRESETS, quoteNet, quoteTotal, R, scoreQuotes, statusMeta, trailOf } from "../../../ops/select";
 import { fmtMoneyShort, fmtQty, unitLabel } from "../../../lib/format";
@@ -75,7 +76,7 @@ export function ApprovalDetailPage() {
       ? [
           {
             label: t("Final approval"),
-            who: a.status === "APPROVED" ? (a.finalBy ?? "—") : a.status === "REJECTED" && a.level >= 1 ? (a.finalBy ?? "—") : t("Director"),
+            who: a.status === "APPROVED" ? (a.finalBy ?? "—") : a.status === "REJECTED" && a.level >= 1 ? (a.finalBy ?? "—") : t("Final approver"),
             at: a.status === "APPROVED" && a.finalAt ? stamp(a.finalAt) : undefined,
             state: (a.status === "APPROVED" ? "done" : a.status === "REJECTED" && a.level >= 1 ? "rejected" : a.level >= 1 ? "current" : "todo") as PathStep["state"],
           },
@@ -86,7 +87,7 @@ export function ApprovalDetailPage() {
 
   const decide = () => {
     if (!mode) return;
-    const poId = s.decideApproval(a.id, mode, notes.trim() || undefined);
+    const poId = decideApprovalAt(a.id, mode, notes.trim() || undefined);
     setMode(null);
     setNotes("");
     if (mode === "REJECT") toast(t("{ref} rejected", { ref: a.ref }), "bad");
@@ -97,7 +98,7 @@ export function ApprovalDetailPage() {
   const nextText = pending
     ? last
       ? t("Your signature is the last one. Approving issues the purchase order to {v}.", { v: vendor?.name ?? "" })
-      : t("This needs two signatures. Yours is the first; the director signs after you.")
+      : t("This needs two signatures (company rule). Yours is the first; the final approver signs after you.")
     : a.status === "APPROVED"
       ? t("Approved. The order {po} is with the vendor.", { po: a.poId ?? "" })
       : t("Rejected. The buyer can send another quote for approval.");
@@ -272,7 +273,7 @@ export function ApprovalDetailPage() {
                   <dd className="num-inline">{fmtMoneyShort(a.amount)}</dd>
                 </div>
                 <div>
-                  <dt>{t("Two-signature limit")}</dt>
+                  <dt>{t("Two-signature limit (company rule)")}</dt>
                   <dd className="num-inline">{fmtMoneyShort(APPROVAL_LIMIT)}</dd>
                 </div>
                 <div>
@@ -311,10 +312,10 @@ export function ApprovalDetailPage() {
               <KeyVals
                 cols={2}
                 items={[
-                  { k: t("Score"), v: <b className="num-inline">{vendor.overall.toFixed(1)} / 10</b> },
+                  { k: t("Score"), v: hasScore(vendor) ? <b className="num-inline">{vendor.overall.toFixed(1)} / 10</b> : t("Not scored") },
                   { k: t("Risk"), v: x(statusMeta("risk", vendor.risk).label) },
                   { k: t("Status"), v: <StatusBadge kind="vendor" status={vendor.status} /> },
-                  { k: t("Usual delivery"), v: t("{n} days", { n: vendor.avgDeliveryDays }) },
+                  { k: t("Usual delivery"), v: vendor.avgDeliveryDays > 0 ? t("{n} days", { n: vendor.avgDeliveryDays }) : "—" },
                 ]}
               />
             </Panel>
@@ -343,7 +344,7 @@ export function ApprovalDetailPage() {
             ? t("The buyer is told why. The quote stays on file.")
             : last
               ? t("A purchase order goes to {v} for {amt}. A delivery payment is scheduled.", { v: vendorName(s, a.vendorId), amt: `${fmtMoneyShort(a.amount)} AZN` })
-              : t("Your signature is recorded and the request moves to the director.")}
+              : t("Your signature is recorded and the request moves to the final approver.")}
         </p>
         <Field label={mode === "REJECT" ? t("Reason") : t("Notes (optional)")}>
           <textarea className="input" value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={mode === "REJECT" ? t("Why it is rejected") : t("Anything the next person should know")} />

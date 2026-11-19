@@ -253,7 +253,7 @@ export function InvoiceDetailPage() {
             </span>
             <span>
               {x(SOURCE_LABEL[inv.source])}
-              {inv.source !== "PORTAL" ? ` · ${t("read at {p}%", { p: Math.round(inv.confidence * 100) })}` : ""}
+
             </span>
           </>
         }
@@ -428,7 +428,7 @@ export function InvoiceDetailPage() {
             </div>
           </Panel>
 
-          <Panel title={t("The original invoice")} icon={<FileSearch size={15} />} sub={inv.source === "PORTAL" ? t("Sent by the supplier through the vendor portal.") : t("Read by AI from the supplier's file.")}>
+          <Panel title={t("The original invoice")} icon={<FileSearch size={15} />} sub={inv.source === "PORTAL" ? t("Sent by the supplier through the vendor portal.") : t("Entered by hand from the supplier's bill.")}>
             <InvoicePaper vendor={vName} vendorCity={vendor?.city} refNo={inv.ref} date={inv.date} due={inv.dueDate} poRef={inv.poId} lines={inv.lines} vatRate={inv.vatRate} status={inv.status} />
           </Panel>
         </div>

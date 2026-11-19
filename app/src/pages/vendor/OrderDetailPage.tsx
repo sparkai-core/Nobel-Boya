@@ -6,7 +6,8 @@ import { useOps } from "../../ops/store";
 import { poNet, poTotal, quoteTotal, tradeName } from "../../ops/select";
 import { fmtMoney, fmtQty, unitLabel } from "../../lib/format";
 import { VENDOR_INV_STATUS } from "../../ops/ext/money-p2";
-import { BUYER, orderState, payState, useVendor, VP } from "./model";
+import { projectTxt } from "../../ops/ext/proc-client";
+import { buyerName, orderState, payState, useVendor, VP } from "./model";
 import { DispatchDialog, InvoiceDialog, OutcomeBadge, StageBadge } from "./parts";
 
 /** One purchase order from the vendor's side: the PO document, accept → dispatch, deliveries and payments. */
@@ -43,7 +44,7 @@ export function VpOrderDetail() {
 
   const accept = () => {
     vendorAcceptPo(po.id);
-    toast(t("{ref} accepted. {buyer} can see it.", { ref: po.ref, buyer: BUYER }));
+    toast(t("{ref} accepted. {buyer} can see it.", { ref: po.ref, buyer: buyerName() }));
   };
 
   const accepted = po.vendorAck === "ACCEPTED";
@@ -51,7 +52,7 @@ export function VpOrderDetail() {
   const received = st.share > 0.999 || po.status === "CLOSED";
   const allPaid = st.pays.length > 0 && st.unpaid.length === 0;
   const steps: PathStep[] = [
-    { label: t("Issued"), state: "done", at: d(po.issuedAt), who: BUYER },
+    { label: t("Issued"), state: "done", at: d(po.issuedAt), who: buyerName() },
     { label: t("Accepted"), state: accepted ? "done" : "current", who: accepted ? t("by you") : t("waiting for you") },
     { label: t("Dispatched"), state: dispatched ? "done" : accepted ? "current" : "todo", at: po.dispatchedAt ? stamp(po.dispatchedAt) : undefined, who: po.dispatchNote ?? undefined },
     { label: t("Received on site"), state: received ? "done" : st.share > 0 || st.atGate || st.onWay ? "current" : "todo", who: st.share > 0 ? t("{p}% so far", { p: Math.round(st.share * 100) }) : undefined },
@@ -128,14 +129,14 @@ export function VpOrderDetail() {
             <div className="vp-doc-parties">
               <div>
                 <small>{t("From")}</small>
-                <b>{BUYER}</b>
-                <span>{t("Qobu warehouse and administration building")}</span>
+                <b>{buyerName()}</b>
+                <span>{x(projectTxt())}</span>
               </div>
               <div>
                 <small>{t("To")}</small>
                 <b>{v.name}</b>
                 <span>
-                  {t("TRN")} {v.trn} · {v.city}
+                  {[v.trn ? `${t("TRN")} ${v.trn}` : "", v.city].filter(Boolean).join(" · ") || "—"}
                 </span>
               </div>
               <div>

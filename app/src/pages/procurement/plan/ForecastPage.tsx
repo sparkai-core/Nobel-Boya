@@ -225,7 +225,7 @@ function MaterialRow({ r, on, onPick }: { r: Row; on: boolean; onPick: () => voi
             onClick={(e) => {
               e.stopPropagation();
               toast(t("New request for {m}.", { m: x(r.ps.name) }), "brand");
-              navigate(r.pkg ? `${R.newRequest}?activity=${r.pkg.act.id}` : R.newRequest);
+              navigate(r.pkg?.act ? `${R.newRequest}?activity=${r.pkg.act.id}` : R.newRequest);
             }}
           >
             {t("Request")}
@@ -291,7 +291,7 @@ function Decision({ row }: { row: Row }) {
   const threeMonths = `${row.ps.forecast[2]?.month ?? TODAY.slice(0, 7)}-01`;
   const pkg = row.pkg;
   const pkgOrdered = pkg && (pkg.status === "ORDERED" || pkg.status === "DELIVERED");
-  const waitMisses = pkg && !pkgOrdered && row.ps.call === "WAIT" && pkg.latestPo < threeMonths;
+  const waitMisses = pkg && !pkgOrdered && row.ps.call === "WAIT" && pkg.latestPo != null && pkg.latestPo < threeMonths;
   const headline =
     row.ps.call === "BUY_NOW"
       ? t("Buy now: prices likely to rise {p}% in 3 months.", { p: (row.change3 * 100).toFixed(1) })
@@ -338,7 +338,7 @@ function Decision({ row }: { row: Row }) {
         {pkg ? (
           <li>
             <LineChart size={14} />
-            <span>{pkgOrdered ? t("Programme package") : t("Latest PO for {code}", { code: pkg.act.code })}</span>
+            <span>{pkgOrdered ? t("Programme package") : t("Latest PO for {code}", { code: pkg.act?.code ?? "" })}</span>
             <b className={`num-inline${pkg.late ? " k-text-bad" : ""}`}>{pkgOrdered ? t("Ordered") : d(pkg.latestPo)}</b>
           </li>
         ) : null}
@@ -347,7 +347,7 @@ function Decision({ row }: { row: Row }) {
       {waitMisses && pkg ? (
         <div className="k-callout k-tone-warn">
           <TrendingDown size={16} />
-          <span>{t("Waiting 3 months runs past the latest PO date for {code} ({d}). Buy to the programme, not the market.", { code: pkg.act.code, d: d(pkg.latestPo) })}</span>
+          <span>{t("Waiting 3 months runs past the latest PO date for {code} ({d}). Buy to the programme, not the market.", { code: pkg.act?.code ?? "", d: d(pkg.latestPo) })}</span>
         </div>
       ) : null}
 
@@ -356,7 +356,7 @@ function Decision({ row }: { row: Row }) {
         className="btn btn-primary ppl-call-cta"
         onClick={() => {
           toast(t("New request for {m}.", { m: x(row.ps.name) }), "brand");
-          navigate(pkg ? `${R.newRequest}?activity=${pkg.act.id}` : R.newRequest);
+          navigate(pkg?.act ? `${R.newRequest}?activity=${pkg.act.id}` : R.newRequest);
         }}
       >
         <ClipboardList size={15} />

@@ -143,7 +143,7 @@ export function RfqDetailPage() {
         <Kebab
           items={[
             { label: t("Invite more vendors"), icon: <UserPlus size={14} />, disabled: !open, onClick: () => setInviteOpen(true) },
-            { label: t("Upload a quote"), icon: <FileUp size={14} />, disabled: rfq.status === "CANCELLED" || rfq.status === "AWARDED", onClick: () => navigate(R.uploadQuote(rfq.id)) },
+            { label: t("Enter a quote"), icon: <FileUp size={14} />, disabled: rfq.status === "CANCELLED" || rfq.status === "AWARDED", onClick: () => navigate(R.uploadQuote(rfq.id)) },
             {
               label: t("Close to new quotes"),
               icon: <Lock size={14} />,
@@ -240,7 +240,7 @@ export function RfqDetailPage() {
                           ) : null}
                           <Kebab
                             items={[
-                              { label: t("Upload their quote"), icon: <FileUp size={14} />, onClick: () => navigate(`${R.uploadQuote(rfq.id)}&vendor=${inv.vendorId}`) },
+                              { label: t("Enter their quote"), icon: <FileUp size={14} />, onClick: () => navigate(`${R.uploadQuote(rfq.id)}&vendor=${inv.vendorId}`) },
                               {
                                 label: t("Copy invite link"),
                                 icon: <Copy size={14} />,
@@ -366,12 +366,12 @@ function InviteDialog({ rfq, open, onClose }: { rfq: Rfq; open: boolean; onClose
                 <span className="ps-vname">
                   <strong className="truncate">{v.name}</strong>
                   <small>
-                    {tradeName(v.trade, lang)} · {v.city} · {t("{n} days", { n: v.avgDeliveryDays })}
+                    {[tradeName(v.trade, lang), v.city, v.avgDeliveryDays > 0 ? t("{n} days", { n: v.avgDeliveryDays }) : ""].filter(Boolean).join(" · ")}
                   </small>
                 </span>
                 {v.status !== "APPROVED" ? <StatusBadge kind="vendor" status={v.status} /> : null}
                 <span className="ps-vstat">
-                  <b>{v.overall.toFixed(1)}</b>
+                  <b>{v.overall > 0 ? v.overall.toFixed(1) : "—"}</b>
                   <small>/10</small>
                 </span>
               </button>

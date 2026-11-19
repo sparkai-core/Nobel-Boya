@@ -1,10 +1,22 @@
 import type { Lang } from "../lib/i18n";
 import type { Txt } from "./types";
 
-/** The demo runs on a fixed "today" so the seeded programme always reads the same way. */
-export const TODAY = "2026-11-17";
-export const PROJECT_START = "2026-10-05";
-export const PROJECT_FINISH = "2027-08-27";
+function localIso(d: Date) {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+/** Today on the user's clock. */
+export const TODAY = localIso(new Date());
+/**
+ * Project time frame. Live bindings, kept current by the ops store: the planned start and contract
+ * finish from the project setup, else the earliest and latest activity dates, else today.
+ */
+export let PROJECT_START = TODAY;
+export let PROJECT_FINISH = TODAY;
+export function setProjectFrame(start: string, finish: string) {
+  PROJECT_START = start;
+  PROJECT_FINISH = finish < start ? start : finish;
+}
 /** Above this amount a purchase needs two approvals. */
 export const APPROVAL_LIMIT = 50_000;
 
@@ -24,19 +36,19 @@ export function diffDays(a: string, b: string) {
   return Math.round((toDate(b).getTime() - toDate(a).getTime()) / DAY);
 }
 export function minDate(...d: string[]) {
-  return d.reduce((a, b) => (a < b ? a : b));
+  return d.length ? d.reduce((a, b) => (a < b ? a : b)) : TODAY;
 }
 export function maxDate(...d: string[]) {
-  return d.reduce((a, b) => (a > b ? a : b));
+  return d.length ? d.reduce((a, b) => (a > b ? a : b)) : TODAY;
 }
 export function isWeekend(isoDate: string) {
   const w = toDate(isoDate).getUTCDay();
   return w === 0;
 }
-/** Timestamp "now" inside the demo: TODAY plus the real clock time, so new records sort last. */
+/** Timestamp "now": today plus the clock time, so new records sort last. */
 export function nowStamp() {
   const t = new Date();
-  return `${TODAY}T${t.toISOString().slice(11, 19)}Z`;
+  return `${localIso(t)}T${String(t.getHours()).padStart(2, "0")}:${String(t.getMinutes()).padStart(2, "0")}:${String(t.getSeconds()).padStart(2, "0")}`;
 }
 
 const MONTHS_EN = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];

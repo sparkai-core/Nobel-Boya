@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
 import { Check, Plus, Search, ShieldCheck } from "lucide-react";
-import { Badge, Dialog, Field, FilterChips, KeyVals, Panel, Register, SearchBox, StatusBadge, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
+import { Badge, Dialog, Empty, Field, FilterChips, KeyVals, Panel, Register, SearchBox, StatusBadge, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { Drawer } from "../../../components/ui";
-import { useOps, ME } from "../../../ops/store";
+import { useOps, me } from "../../../ops/store";
 import { addDays, same, TODAY } from "../../../ops/dates";
 import { statusMeta } from "../../../ops/select";
 import type { Incident } from "../../../ops/types";
-import { DrawerSection, freshRef, INCIDENT_KIND, SiteBadge, siteMeta, ZONES, zoneTxt } from "./shared";
+import { DrawerSection, freshRef, INCIDENT_KIND, SiteBadge, siteMeta, ZoneInput, zoneTxt } from "./shared";
 
 const KINDS: Incident["kind"][] = ["NEAR_MISS", "FIRST_AID", "LOST_TIME", "PROPERTY", "ENVIRONMENT"];
 const SEVS: Incident["severity"][] = ["CRITICAL", "HIGH", "MEDIUM", "LOW"];
@@ -78,7 +78,8 @@ export function IncidentsTab({ logOpen, setLogOpen }: { logOpen: boolean; setLog
         <span className="k-cell-title">
           <strong>{x(i.title)}</strong>
           <small>
-            {x(i.zone)} · {d(i.date, false)}
+            {x(i.zone) ? `${x(i.zone)} · ` : ""}
+            {d(i.date, false)}
           </small>
         </span>
       ),
@@ -88,6 +89,25 @@ export function IncidentsTab({ logOpen, setLogOpen }: { logOpen: boolean; setLog
     { key: "actions", header: t("Actions"), hideBelow: 820, sort: (i) => i.actions.filter((a) => !a.done).length, render: (i) => <span className="num-inline small">{t("{a} of {n} done", { a: i.actions.filter((a) => a.done).length, n: i.actions.length })}</span> },
     { key: "status", header: t("Status"), sort: (i) => STATUSES.indexOf(i.status), render: (i) => <SiteBadge kind="incident" status={i.status} /> },
   ];
+
+  if (!incidents.length)
+    return (
+      <>
+        <Empty
+          icon={<ShieldCheck size={22} />}
+          title={t("No incidents recorded")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setLogOpen(true)}>
+              <Plus size={15} />
+              {t("Log incident")}
+            </button>
+          }
+        >
+          {t("Log near misses, first-aid cases, lost-time injuries, damage and environmental events as they happen, then track the actions that close them.")}
+        </Empty>
+        <LogIncidentDialog open={logOpen} onClose={() => setLogOpen(false)} onLogged={(id) => setOpenId(id)} />
+      </>
+    );
 
   return (
     <div className="k-stack">
@@ -149,7 +169,7 @@ function IncidentDetail({ i }: { i: Incident }) {
   };
   const add = () => {
     if (!draft.text.trim()) return;
-    patchItem("incidents", i.id, { actions: [...i.actions, { text: same(draft.text.trim()), owner: draft.owner.trim() || ME, due: draft.due, done: false }] });
+    patchItem("incidents", i.id, { actions: [...i.actions, { text: same(draft.text.trim()), owner: draft.owner.trim() || me(), due: draft.due, done: false }] });
     setDraft({ text: "", owner: "", due: addDays(TODAY, 3) });
     toast(t("Action added to {ref}", { ref: i.ref }));
   };
@@ -179,7 +199,7 @@ function IncidentDetail({ i }: { i: Incident }) {
       <KeyVals
         items={[
           { k: t("Date"), v: `${d(i.date)} · ${rel(i.date)}` },
-          { k: t("Where"), v: x(i.zone) },
+          { k: t("Where"), v: x(i.zone) || "—" },
           { k: t("Reported by"), v: i.reportedBy },
           { k: t("Actions"), v: t("{a} of {n} done", { a: done, n: i.actions.length }) },
         ]}
@@ -236,7 +256,7 @@ function IncidentDetail({ i }: { i: Incident }) {
   );
 }
 
-const BLANK_INCIDENT = { title: "", kind: "NEAR_MISS" as Incident["kind"], severity: "MEDIUM" as Incident["severity"], zone: ZONES[0]!.key, date: TODAY, description: "", action: "" };
+const BLANK_INCIDENT = { title: "", kind: "NEAR_MISS" as Incident["kind"], severity: "MEDIUM" as Incident["severity"], zone: "", date: TODAY, description: "", action: "" };
 
 function LogIncidentDialog({ open, onClose, onLogged }: { open: boolean; onClose: () => void; onLogged: (id: string) => void }) {
   const { t, x } = useL();
@@ -262,9 +282,9 @@ function LogIncidentDialog({ open, onClose, onLogged }: { open: boolean; onClose
       severity: f.severity,
       zone: zoneTxt(f.zone),
       status: "OPEN",
-      reportedBy: ME,
+      reportedBy: me(),
       description: same(f.description.trim() || f.title.trim()),
-      actions: f.action.trim() ? [{ text: same(f.action.trim()), owner: ME, due: addDays(TODAY, 2), done: false }] : [],
+      actions: f.action.trim() ? [{ text: same(f.action.trim()), owner: me(), due: addDays(TODAY, 2), done: false }] : [],
     };
     addItem("incidents", inc, true);
     pushFeed("PM", { en: `${id} logged: ${f.title.trim()} (${INCIDENT_KIND[f.kind].en.toLowerCase()})`, az: `${id} qeydə alındı: ${f.title.trim()} (${INCIDENT_KIND[f.kind].az.toLowerCase()})` }, "pm/safety?tab=incidents");
@@ -291,7 +311,7 @@ function LogIncidentDialog({ open, onClose, onLogged }: { open: boolean; onClose
     >
       <div className="k-form">
         <Field label={t("What happened")} wide>
-          <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={t("e.g. Unsecured ladder at grid 4")} autoFocus />
+          <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={t("A short title")} autoFocus />
         </Field>
         <Field label={t("Kind")}>
           <select className="input select" value={f.kind} onChange={(e) => setF({ ...f, kind: e.target.value as Incident["kind"] })}>
@@ -312,13 +332,7 @@ function LogIncidentDialog({ open, onClose, onLogged }: { open: boolean; onClose
           </select>
         </Field>
         <Field label={t("Where")}>
-          <select className="input select" value={f.zone} onChange={(e) => setF({ ...f, zone: e.target.value })}>
-            {ZONES.map((z) => (
-              <option key={z.key} value={z.key}>
-                {x(z.label)}
-              </option>
-            ))}
-          </select>
+          <ZoneInput id="st-inc-zone" value={f.zone} onChange={(v) => setF({ ...f, zone: v })} />
         </Field>
         <Field label={t("Date")}>
           <input className="input" type="date" value={f.date} max={TODAY} onChange={(e) => setF({ ...f, date: e.target.value || TODAY })} />

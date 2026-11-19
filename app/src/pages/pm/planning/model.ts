@@ -1,5 +1,6 @@
-import { diffDays, maxDate, minDate, PROJECT_START, TODAY } from "../../../ops/dates";
-import type { Activity, Dependency, LinkType, OpsData, ProgrammeRev, Resource, Tool, WbsNode } from "../../../ops/types";
+import { diffDays, maxDate, minDate, PROJECT_FINISH, PROJECT_START, TODAY } from "../../../ops/dates";
+import { progressWeight } from "../../../ops/select";
+import type { Activity, Dependency, LinkType, OpsData, ProgrammeRev, Tool, WbsNode } from "../../../ops/types";
 
 /** Planning tab keys (sub-routes of pm/planning). */
 export const TABS = ["programmes", "activities", "resources", "changes"] as const;
@@ -7,20 +8,14 @@ export type Tab = (typeof TABS)[number];
 
 export const TOOL_NAME: Record<Tool, string> = { P6: "Primavera P6", MSP: "MS Project" };
 
-/** Which tool wrote a file, from its name. null = not a programme file. */
-export function detectTool(name: string): Tool | null {
-  const n = name.toLowerCase();
-  if (n.endsWith(".xer")) return "P6";
-  if (n.endsWith(".mpp")) return "MSP";
-  if (n.endsWith(".xml")) return n.includes("msp") || n.includes("project") ? "MSP" : "P6";
-  return null;
-}
+const DAY_EN = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export const hash = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
-
-/** Calendar the activity runs on (the P6 file carries two: site Mon–Sat and the fabrication shop 7-day). */
-export function calendarOf(a: Activity) {
-  return a.code === "WH-150" || a.code === "G-900" ? "Mon–Sun 7d" : "Mon–Sat 6d";
+/** The project's working week as a calendar name, e.g. "Mon–Sat 6d" (every activity runs on it). */
+export function calendarName(workweek: number[]) {
+  const days = [1, 2, 3, 4, 5, 6, 0].filter((d) => workweek.includes(d));
+  if (!days.length) return "—";
+  const run = days.every((d, i) => i === 0 || d === (days[i - 1]! + 1) % 7);
+  return `${run && days.length > 1 ? `${DAY_EN[days[0]!]}–${DAY_EN[days[days.length - 1]!]}` : days.map((d) => DAY_EN[d]).join(" ")} ${days.length}d`;
 }
 
 export const LINK_WORDS: Record<LinkType, string> = { FS: "Finish to start", SS: "Start to start", FF: "Finish to finish", SF: "Start to finish" };
@@ -32,33 +27,51 @@ export const remDur = (a: Activity) => (a.status === "COMPLETED" ? 0 : Math.max(
 /** P6 variance: baseline finish − finish (negative = late). */
 export const variance = (a: Activity) => diffDays(a.end, a.bEnd);
 
-export const programmeFinish = (acts: Activity[]) => acts.reduce((m, a) => maxDate(m, a.end), PROJECT_START);
-export const baselineFinish = (acts: Activity[]) => acts.reduce((m, a) => maxDate(m, a.bEnd), PROJECT_START);
+/** Latest finish of the programme; PROJECT_FINISH when there are no activities. */
+export const programmeFinish = (acts: Activity[]) => (acts.length ? acts.reduce((m, a) => maxDate(m, a.end), acts[0]!.end) : PROJECT_FINISH);
+export const baselineFinish = (acts: Activity[]) => (acts.length ? acts.reduce((m, a) => maxDate(m, a.bEnd), acts[0]!.bEnd) : PROJECT_FINISH);
 
 // ---------------------------------------------------------------- WBS grouping
 
 export type WbsGroup = { node: WbsNode; level: number; children: WbsGroup[]; activities: Activity[] };
 
-/** WBS tree under the project root, with each node's own activities (only nodes that hold work). */
+/** Activities with no (or an unknown) WBS item are shown under this group. */
+export const UNASSIGNED: WbsNode = { id: "__none", parentId: null, code: "—", name: { en: "No WBS item", az: "WBS bəndi yoxdur" }, building: null };
+
+/** WBS tree from the top, with each node's own activities (only nodes that hold work). Activities on no known node come last. */
 export function wbsTree(wbs: WbsNode[], acts: Activity[]): WbsGroup[] {
-  const root = wbs.find((w) => w.parentId === null);
+  const ids = new Set(wbs.map((w) => w.id));
+  const kids = new Map<string | null, WbsNode[]>();
+  for (const w of wbs) {
+    const p = w.parentId && ids.has(w.parentId) ? w.parentId : null;
+    kids.set(p, [...(kids.get(p) ?? []), w]);
+  }
+  const own = new Map<string, Activity[]>();
+  const loose: Activity[] = [];
+  for (const a of acts) {
+    if (!ids.has(a.wbsId)) loose.push(a);
+    else own.set(a.wbsId, [...(own.get(a.wbsId) ?? []), a]);
+  }
+  const seen = new Set<string>();
   const build = (parentId: string | null, level: number): WbsGroup[] =>
-    wbs
-      .filter((w) => w.parentId === parentId)
-      .map((node) => ({ node, level, children: build(node.id, level + 1), activities: acts.filter((a) => a.wbsId === node.id) }))
+    (kids.get(parentId) ?? [])
+      .filter((node) => !seen.has(node.id) && seen.add(node.id))
+      .map((node) => ({ node, level, children: build(node.id, level + 1), activities: own.get(node.id) ?? [] }))
       .filter((g) => g.activities.length || g.children.length);
-  return build(root?.id ?? null, 0);
+  const out = build(null, 0);
+  if (loose.length) out.push({ node: UNASSIGNED, level: 0, children: [], activities: loose });
+  return out;
 }
 
 export const groupActivities = (g: WbsGroup): Activity[] => [...g.activities, ...g.children.flatMap(groupActivities)];
 
-export function groupSpan(list: Activity[]) {
+export function groupSpan(list: Activity[], weight: (a: Activity) => number = progressWeight(list)) {
   if (!list.length) return null;
-  const budget = list.reduce((x, a) => x + a.budget, 0) || 1;
+  const total = list.reduce((x, a) => x + weight(a), 0);
   return {
     start: list.reduce((m, a) => minDate(m, a.start), list[0]!.start),
     end: list.reduce((m, a) => maxDate(m, a.end), list[0]!.end),
-    pct: list.reduce((x, a) => x + (a.budget * a.pct) / 100, 0) / budget,
+    pct: total > 0 ? list.reduce((x, a) => x + (weight(a) * a.pct) / 100, 0) / total : list.reduce((x, a) => x + a.pct, 0) / list.length / 100,
   };
 }
 
@@ -82,19 +95,20 @@ export function monthsBetween(from: string, to: string) {
   return out;
 }
 
-/** Spread a resource budget over the months its activities run; past months count as used. */
-export function spreadResource(acts: Activity[], total: number, from: string, to: string): Resource["monthly"] {
+/**
+ * Plan of a resource by month: its budgeted quantity spread evenly over the months its activities run
+ * (a planning assumption, labelled as such). Nothing is counted as used: "used" is what the user records.
+ */
+export function spreadResource(acts: Activity[], total: number): { month: string; planned: number }[] {
   const w = new Map<string, number>();
   for (const a of acts) {
     const ms = monthsBetween(monthKey(a.start), monthKey(a.end));
     for (const mm of ms) w.set(mm, (w.get(mm) ?? 0) + 1 / ms.length);
   }
+  if (!w.size) return [];
+  const keys = [...w.keys()].sort();
   const sum = [...w.values()].reduce((x, y) => x + y, 0) || 1;
-  const now = monthKey(TODAY);
-  return monthsBetween(monthKey(from), monthKey(to)).map((mm) => {
-    const q = Math.round(((w.get(mm) ?? 0) / sum) * total * 10) / 10;
-    return { month: mm, used: mm < now ? q : mm === now ? Math.round(q * 5) / 10 : 0, toCome: mm < now ? 0 : mm === now ? Math.round(q * 5) / 10 : q };
-  });
+  return monthsBetween(keys[0]!, keys[keys.length - 1]!).map((mm) => ({ month: mm, planned: Math.round(((w.get(mm) ?? 0) / sum) * total * 10) / 10 }));
 }
 
 // ---------------------------------------------------------------- material supply for an activity
@@ -133,8 +147,10 @@ export type RevRow = { code: string; name: string; oldEnd: string | null; newEnd
 /** Current programme compared with a saved point, biggest moves first. */
 export function compareWith(rev: ProgrammeRev, acts: Activity[]): { rows: RevRow[]; finishOld: string; finishNew: string; changed: number; added: number; removed: number; same: number } {
   const rows: RevRow[] = [];
+  const snap = new Map(rev.snapshot.map((x) => [x.code, x]));
+  const now = new Set(acts.map((a) => a.code));
   for (const a of acts) {
-    const o = rev.snapshot.find((x) => x.code === a.code);
+    const o = snap.get(a.code);
     if (!o) {
       rows.push({ code: a.code, name: a.name.en, oldEnd: null, newEnd: a.end, days: 0, oldPct: null, newPct: a.pct, kind: "ADDED" });
       continue;
@@ -142,74 +158,96 @@ export function compareWith(rev: ProgrammeRev, acts: Activity[]): { rows: RevRow
     const days = diffDays(o.end, a.end);
     rows.push({ code: a.code, name: a.name.en, oldEnd: o.end, newEnd: a.end, days, oldPct: o.pct, newPct: a.pct, kind: days !== 0 || o.start !== a.start || o.pct !== a.pct ? "CHANGED" : "SAME" });
   }
-  for (const o of rev.snapshot) if (!acts.some((a) => a.code === o.code)) rows.push({ code: o.code, name: o.name, oldEnd: o.end, newEnd: null, days: 0, oldPct: o.pct, newPct: null, kind: "REMOVED" });
+  for (const o of rev.snapshot) if (!now.has(o.code)) rows.push({ code: o.code, name: o.name, oldEnd: o.end, newEnd: null, days: 0, oldPct: o.pct, newPct: null, kind: "REMOVED" });
   rows.sort((a, b) => Math.abs(b.days) - Math.abs(a.days) || (b.newPct ?? 0) - (b.oldPct ?? 0) - ((a.newPct ?? 0) - (a.oldPct ?? 0)) || a.code.localeCompare(b.code));
   const count = (k: RevRow["kind"]) => rows.filter((r) => r.kind === k).length;
-  return { rows, finishOld: rev.finish, finishNew: programmeFinish(acts), changed: count("CHANGED"), added: count("ADDED"), removed: count("REMOVED"), same: count("SAME") };
+  return { rows, finishOld: rev.finish, finishNew: acts.length ? programmeFinish(acts) : "", changed: count("CHANGED"), added: count("ADDED"), removed: count("REMOVED"), same: count("SAME") };
 }
 
 // ---------------------------------------------------------------- export files
 
-type ExportAct = { id: string; code: string; name: string; wbs: string; start: string; end: string; bStart: string; bEnd: string; pct: number; aStart: string | null; aEnd: string | null; status: Activity["status"]; cal: string };
+/** What an export carries besides the activities: the programme's name and code, the data date and the working week. */
+export type ExportMeta = { name: string; code: string; dataDate: string; workweek: number[] };
 
-const toExport = (acts: Activity[], wbs: WbsNode[]): ExportAct[] =>
-  acts.map((a) => ({ id: a.id, code: a.code, name: a.name.en, wbs: wbs.find((w) => w.id === a.wbsId)?.code ?? "", start: a.start, end: a.end, bStart: a.bStart, bEnd: a.bEnd, pct: a.pct, aStart: a.aStart, aEnd: a.aEnd, status: a.status, cal: calendarOf(a) }));
+type ExportAct = { n: number; id: string; code: string; name: string; wbsId: string; wbs: number; start: string; end: string; bStart: string; bEnd: string; pct: number; aStart: string | null; aEnd: string | null; status: Activity["status"]; milestone: boolean };
+
+/**
+ * Numbered rows: P6 and MS Project need numeric ids, so every activity and WBS item is numbered in list
+ * order. A single top WBS item is the project itself and is not written as a WBS item of its own.
+ */
+function exportRows(acts: Activity[], all: WbsNode[]) {
+  const known = new Set(all.map((w) => w.id));
+  const roots = all.filter((w) => !w.parentId || !known.has(w.parentId));
+  const top = roots.length === 1 ? roots[0]!.id : null;
+  const wbs = all.filter((w) => w.id !== top).map((w) => (w.parentId === top ? { ...w, parentId: null } : w));
+  const wbsNo = new Map(wbs.map((w, i) => [w.id, i + 1]));
+  const rows: ExportAct[] = acts.map((a, i) => ({ n: i + 1, id: a.id, code: a.code, name: a.name.en, wbsId: wbsNo.has(a.wbsId) ? a.wbsId : "", wbs: wbsNo.get(a.wbsId) ?? 0, start: a.start, end: a.end, bStart: a.bStart, bEnd: a.bEnd, pct: a.pct, aStart: a.aStart, aEnd: a.aEnd, status: a.status, milestone: a.isMilestone }));
+  const actNo = new Map(rows.map((r) => [r.id, r.n]));
+  return { rows, actNo, wbsNo, wbs };
+}
 
 const esc = (s: string) => s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+const xerText = (s: string) => s.replace(/[\t\r\n]+/g, " ");
 const hours = (a: ExportAct) => Math.max(0, diffDays(a.start, a.end)) * 8;
 const p6Status = (a: ExportAct) => (a.status === "COMPLETED" ? "TK_Complete" : a.status === "NOT_STARTED" ? "TK_NotStart" : "TK_Active");
+const startOf = (acts: Activity[]) => (acts.length ? acts.reduce((m, a) => minDate(m, a.start), acts[0]!.start) : PROJECT_START);
 
 /** Primavera P6 XER (tab separated tables). */
-export function buildXer(name: string, acts: Activity[], links: Dependency[], wbs: WbsNode[], dataDate: string) {
-  const rows = toExport(acts, wbs);
+export function buildXer(meta: ExportMeta, acts: Activity[], links: Dependency[], allWbs: WbsNode[]) {
+  const { rows, actNo, wbsNo, wbs } = exportRows(acts, allWbs);
   const T = "\t";
+  const code = xerText(meta.code || "PROJECT");
   const out: string[] = [];
-  out.push(["ERMHDR", "22.12", dataDate, "Project", "admin", "Nobel", "dbxDatabaseNoName", "Project Management", "AZN"].join(T));
-  out.push("%T\tPROJECT", ["%F", "proj_id", "proj_short_name", "last_recalc_date", "plan_start_date", "scd_end_date"].join(T), ["%R", "4501", "QOBU", `${dataDate} 08:00`, `${PROJECT_START} 08:00`, `${programmeFinish(acts)} 17:00`].join(T));
-  out.push("%T\tCALENDAR", ["%F", "clndr_id", "clndr_name", "day_hr_cnt", "week_hr_cnt"].join(T), ["%R", "601", "Mon-Sat 6d", "8", "48"].join(T), ["%R", "602", "Mon-Sun 7d", "8", "56"].join(T));
-  out.push("%T\tPROJWBS", ["%F", "wbs_id", "proj_id", "wbs_short_name", "wbs_name", "parent_wbs_id"].join(T));
-  wbs.forEach((w, i) => out.push(["%R", String(7000 + i), "4501", w.code, w.name.en, w.parentId ? String(7000 + wbs.findIndex((x) => x.id === w.parentId)) : ""].join(T)));
-  out.push("%T\tTASK", ["%F", "task_id", "proj_id", "wbs_id", "clndr_id", "task_code", "task_name", "status_code", "phys_complete_pct", "target_drtn_hr_cnt", "remain_drtn_hr_cnt", "act_start_date", "act_end_date", "early_start_date", "early_end_date", "target_start_date", "target_end_date"].join(T));
+  out.push(["ERMHDR", "22.12", meta.dataDate, "Project", "admin", "Nobel", "dbxDatabaseNoName", "Project Management", "AZN", xerText(meta.name)].join(T));
+  out.push("%T\tPROJECT", ["%F", "proj_id", "proj_short_name", "last_recalc_date", "plan_start_date", "scd_end_date"].join(T), ["%R", "1", code, `${meta.dataDate} 08:00`, `${startOf(acts)} 08:00`, `${programmeFinish(acts)} 17:00`].join(T));
+  out.push("%T\tCALENDAR", ["%F", "clndr_id", "clndr_name", "day_hr_cnt", "week_hr_cnt"].join(T), ["%R", "1", calendarName(meta.workweek), "8", String(meta.workweek.length * 8)].join(T));
+  out.push("%T\tPROJWBS", ["%F", "wbs_id", "proj_id", "wbs_short_name", "wbs_name", "parent_wbs_id", "proj_node_flag"].join(T));
+  out.push(["%R", "1000000", "1", code, xerText(meta.name), "", "Y"].join(T));
+  for (const w of wbs) out.push(["%R", String(1000000 + wbsNo.get(w.id)!), "1", xerText(w.code), xerText(w.name.en), w.parentId && wbsNo.has(w.parentId) ? String(1000000 + wbsNo.get(w.parentId)!) : "1000000", "N"].join(T));
+  out.push("%T\tTASK", ["%F", "task_id", "proj_id", "wbs_id", "clndr_id", "task_code", "task_name", "task_type", "status_code", "complete_pct_type", "phys_complete_pct", "target_drtn_hr_cnt", "remain_drtn_hr_cnt", "act_start_date", "act_end_date", "early_start_date", "early_end_date", "target_start_date", "target_end_date"].join(T));
   for (const a of rows) {
-    out.push(["%R", String(9000 + Number(a.id.slice(1))), "4501", String(7000 + wbs.findIndex((w) => w.code === a.wbs)), a.cal.includes("7d") ? "602" : "601", a.code, a.name, p6Status(a), String(a.pct), String(hours(a)), String(a.status === "COMPLETED" ? 0 : Math.max(0, diffDays(a.start > dataDate ? a.start : dataDate, a.end)) * 8), a.aStart ? `${a.aStart} 08:00` : "", a.aEnd ? `${a.aEnd} 17:00` : "", `${a.start} 08:00`, `${a.end} 17:00`, `${a.bStart} 08:00`, `${a.bEnd} 17:00`].join(T));
+    out.push(["%R", String(a.n), "1", String(a.wbs ? 1000000 + a.wbs : 1000000), "1", xerText(a.code), xerText(a.name), a.milestone ? "TT_FinMile" : "TT_Task", p6Status(a), "CP_Phys", String(a.pct), String(hours(a)), String(a.status === "COMPLETED" ? 0 : Math.max(0, diffDays(a.start > meta.dataDate ? a.start : meta.dataDate, a.end)) * 8), a.aStart ? `${a.aStart} 08:00` : "", a.aEnd ? `${a.aEnd} 17:00` : "", `${a.start} 08:00`, `${a.end} 17:00`, `${a.bStart} 08:00`, `${a.bEnd} 17:00`].join(T));
   }
-  out.push("%T\tTASKPRED", ["%F", "task_pred_id", "task_id", "pred_task_id", "proj_id", "pred_type", "lag_hr_cnt"].join(T));
+  out.push("%T\tTASKPRED", ["%F", "task_pred_id", "task_id", "pred_task_id", "proj_id", "pred_proj_id", "pred_type", "lag_hr_cnt"].join(T));
   links.forEach((l, i) => {
-    const to = acts.find((a) => a.id === l.to);
-    const from = acts.find((a) => a.id === l.from);
+    const to = actNo.get(l.to);
+    const from = actNo.get(l.from);
     if (!to || !from) return;
-    out.push(["%R", String(12000 + i), String(9000 + Number(to.id.slice(1))), String(9000 + Number(from.id.slice(1))), "4501", `PR_${l.type}`, String(l.lag * 8)].join(T));
+    out.push(["%R", String(i + 1), String(to), String(from), "1", "1", `PR_${l.type}`, String(l.lag * 8)].join(T));
   });
   out.push("%E");
-  out[0] = `${out[0]}\t${name}`;
   return `${out.join("\r\n")}\r\n`;
 }
 
 /** Primavera P6 XML (APIBusinessObjects). */
-export function buildP6Xml(name: string, acts: Activity[], links: Dependency[], wbs: WbsNode[], dataDate: string) {
-  const rows = toExport(acts, wbs);
+export function buildP6Xml(meta: ExportMeta, acts: Activity[], links: Dependency[], allWbs: WbsNode[]) {
+  const { rows, actNo, wbsNo, wbs } = exportRows(acts, allWbs);
   const lines = [
     `<?xml version="1.0" encoding="UTF-8"?>`,
     `<APIBusinessObjects xmlns="http://xmlns.oracle.com/Primavera/P6/V22.12/API/BusinessObjects">`,
+    `  <Calendar><ObjectId>1</ObjectId><Name>${esc(calendarName(meta.workweek))}</Name><HoursPerDay>8</HoursPerDay></Calendar>`,
     `  <Project>`,
-    `    <Id>QOBU</Id>`,
-    `    <Name>${esc(name)}</Name>`,
-    `    <DataDate>${dataDate}T08:00:00</DataDate>`,
-    `    <PlannedStartDate>${PROJECT_START}T08:00:00</PlannedStartDate>`,
-    ...wbs.map((w) => `    <WBS><Code>${esc(w.code)}</Code><Name>${esc(w.name.en)}</Name></WBS>`),
+    `    <ObjectId>1</ObjectId>`,
+    `    <Id>${esc(meta.code || "PROJECT")}</Id>`,
+    `    <Name>${esc(meta.name)}</Name>`,
+    `    <DataDate>${meta.dataDate}T08:00:00</DataDate>`,
+    `    <PlannedStartDate>${startOf(acts)}T08:00:00</PlannedStartDate>`,
+    ...wbs.map((w) => `    <WBS><ObjectId>${wbsNo.get(w.id)}</ObjectId>${w.parentId && wbsNo.has(w.parentId) ? `<ParentObjectId>${wbsNo.get(w.parentId)}</ParentObjectId>` : ""}<Code>${esc(w.code)}</Code><Name>${esc(w.name.en)}</Name></WBS>`),
     ...rows.map((a) =>
       [
         `    <Activity>`,
-        `      <Id>${a.code}</Id>`,
+        `      <ObjectId>${a.n}</ObjectId>`,
+        `      <Id>${esc(a.code)}</Id>`,
         `      <Name>${esc(a.name)}</Name>`,
-        `      <WBSCode>${esc(a.wbs)}</WBSCode>`,
-        `      <CalendarName>${a.cal}</CalendarName>`,
+        a.wbs ? `      <WBSObjectId>${a.wbs}</WBSObjectId>` : "",
+        `      <CalendarObjectId>1</CalendarObjectId>`,
+        `      <Type>${a.milestone ? "Finish Milestone" : "Task Dependent"}</Type>`,
         `      <Status>${a.status === "COMPLETED" ? "Completed" : a.status === "NOT_STARTED" ? "Not Started" : "In Progress"}</Status>`,
         `      <PercentComplete>${a.pct / 100}</PercentComplete>`,
         `      <StartDate>${a.start}T08:00:00</StartDate>`,
         `      <FinishDate>${a.end}T17:00:00</FinishDate>`,
-        `      <BaselineStartDate>${a.bStart}T08:00:00</BaselineStartDate>`,
-        `      <BaselineFinishDate>${a.bEnd}T17:00:00</BaselineFinishDate>`,
+        `      <PlannedStartDate>${a.bStart}T08:00:00</PlannedStartDate>`,
+        `      <PlannedFinishDate>${a.bEnd}T17:00:00</PlannedFinishDate>`,
         a.aStart ? `      <ActualStartDate>${a.aStart}T08:00:00</ActualStartDate>` : "",
         a.aEnd ? `      <ActualFinishDate>${a.aEnd}T17:00:00</ActualFinishDate>` : "",
         `    </Activity>`,
@@ -217,12 +255,12 @@ export function buildP6Xml(name: string, acts: Activity[], links: Dependency[], 
         .filter(Boolean)
         .join("\n"),
     ),
-    ...links.map((l) => {
-      const f = acts.find((a) => a.id === l.from);
-      const t = acts.find((a) => a.id === l.to);
-      return f && t ? `    <Relationship><PredecessorActivityId>${f.code}</PredecessorActivityId><SuccessorActivityId>${t.code}</SuccessorActivityId><Type>${LINK_WORDS[l.type]}</Type><Lag>${l.lag * 8}</Lag></Relationship>` : "";
-    }),
     `  </Project>`,
+    ...links.map((l, i) => {
+      const f = actNo.get(l.from);
+      const t = actNo.get(l.to);
+      return f && t ? `  <Relationship><ObjectId>${i + 1}</ObjectId><PredecessorActivityObjectId>${f}</PredecessorActivityObjectId><SuccessorActivityObjectId>${t}</SuccessorActivityObjectId><Type>${LINK_WORDS[l.type]}</Type><Lag>${l.lag * 8}</Lag></Relationship>` : "";
+    }),
     `</APIBusinessObjects>`,
   ];
   return lines.filter(Boolean).join("\n");
@@ -230,54 +268,91 @@ export function buildP6Xml(name: string, acts: Activity[], links: Dependency[], 
 
 const MSP_TYPE: Record<LinkType, number> = { FF: 0, FS: 1, SF: 2, SS: 3 };
 
-/** Microsoft Project XML (MSPDI). */
-export function buildMspXml(name: string, acts: Activity[], links: Dependency[], wbs: WbsNode[], dataDate: string) {
-  const rows = toExport(acts, wbs);
-  const uid = (id: string) => Number(id.slice(1));
-  const lines = [
+/** Microsoft Project XML (MSPDI). WBS items become summary tasks; activity IDs go to Text1. */
+export function buildMspXml(meta: ExportMeta, acts: Activity[], links: Dependency[], allWbs: WbsNode[]) {
+  const { rows, wbs } = exportRows(acts, allWbs);
+  const ids = new Set(wbs.map((w) => w.id));
+  const kids = new Map<string | null, WbsNode[]>();
+  for (const w of wbs) {
+    const p = w.parentId && ids.has(w.parentId) ? w.parentId : null;
+    kids.set(p, [...(kids.get(p) ?? []), w]);
+  }
+  const byWbs = new Map<string, ExportAct[]>();
+  const loose: ExportAct[] = [];
+  for (const r of rows) {
+    if (r.wbsId && ids.has(r.wbsId)) byWbs.set(r.wbsId, [...(byWbs.get(r.wbsId) ?? []), r]);
+    else loose.push(r);
+  }
+  // Number everything first (outline order), then write: a predecessor may come later in the outline.
+  type Row = { uid: number; level: number; r?: ExportAct; w?: WbsNode };
+  const order: Row[] = [];
+  const actUid = new Map<string, number>();
+  const seen = new Set<string>();
+  const addAct = (r: ExportAct, level: number) => {
+    order.push({ uid: order.length + 1, level, r });
+    actUid.set(r.id, order.length);
+  };
+  const walk = (p: string | null, level: number) => {
+    for (const w of kids.get(p) ?? []) {
+      if (seen.has(w.id)) continue;
+      seen.add(w.id);
+      order.push({ uid: order.length + 1, level, w });
+      for (const r of byWbs.get(w.id) ?? []) addAct(r, level + 1);
+      walk(w.id, level + 1);
+    }
+  };
+  walk(null, 1);
+  for (const r of loose) addAct(r, 1);
+  const tasks = order.map((o) => {
+    if (o.w) return `    <Task><UID>${o.uid}</UID><ID>${o.uid}</ID><Name>${esc(o.w.name.en)}</Name><WBS>${esc(o.w.code)}</WBS><OutlineLevel>${o.level}</OutlineLevel><Summary>1</Summary></Task>`;
+    const a = o.r!;
+    return [
+      `    <Task>`,
+      `      <UID>${o.uid}</UID>`,
+      `      <ID>${o.uid}</ID>`,
+      `      <Name>${esc(a.name)}</Name>`,
+      `      <Text1>${esc(a.code)}</Text1>`,
+      `      <OutlineLevel>${o.level}</OutlineLevel>`,
+      `      <Summary>0</Summary>`,
+      `      <Milestone>${a.milestone ? 1 : 0}</Milestone>`,
+      `      <Start>${a.start}T08:00:00</Start>`,
+      `      <Finish>${a.end}T17:00:00</Finish>`,
+      `      <Duration>PT${hours(a)}H0M0S</Duration>`,
+      `      <PercentComplete>${Math.round(a.pct)}</PercentComplete>`,
+      a.aStart ? `      <ActualStart>${a.aStart}T08:00:00</ActualStart>` : "",
+      a.aEnd ? `      <ActualFinish>${a.aEnd}T17:00:00</ActualFinish>` : "",
+      `      <CalendarUID>1</CalendarUID>`,
+      ...links
+        .filter((l) => l.to === a.id && actUid.has(l.from))
+        .map((l) => `      <PredecessorLink><PredecessorUID>${actUid.get(l.from)}</PredecessorUID><Type>${MSP_TYPE[l.type]}</Type><LinkLag>${l.lag * 4800}</LinkLag><LagFormat>7</LagFormat></PredecessorLink>`),
+      `      <Baseline><Number>0</Number><Start>${a.bStart}T08:00:00</Start><Finish>${a.bEnd}T17:00:00</Finish></Baseline>`,
+      `    </Task>`,
+    ]
+      .filter(Boolean)
+      .join("\n");
+  });
+  return [
     `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>`,
     `<Project xmlns="http://schemas.microsoft.com/project">`,
-    `  <Name>${esc(name)}</Name>`,
-    `  <StatusDate>${dataDate}T17:00:00</StatusDate>`,
-    `  <StartDate>${PROJECT_START}T08:00:00</StartDate>`,
-    `  <Calendars><Calendar><UID>1</UID><Name>Mon-Sat 6d</Name></Calendar><Calendar><UID>2</UID><Name>Mon-Sun 7d</Name></Calendar></Calendars>`,
+    `  <Name>${esc(meta.name)}.xml</Name>`,
+    `  <Title>${esc(meta.name)}</Title>`,
+    `  <StatusDate>${meta.dataDate}T17:00:00</StatusDate>`,
+    `  <StartDate>${startOf(acts)}T08:00:00</StartDate>`,
+    `  <MinutesPerDay>480</MinutesPerDay>`,
+    `  <Calendars><Calendar><UID>1</UID><Name>${esc(calendarName(meta.workweek))}</Name><IsBaseCalendar>1</IsBaseCalendar></Calendar></Calendars>`,
     `  <Tasks>`,
-    ...rows.map((a) =>
-      [
-        `    <Task>`,
-        `      <UID>${uid(a.id)}</UID>`,
-        `      <ID>${uid(a.id)}</ID>`,
-        `      <Name>${esc(a.name)}</Name>`,
-        `      <WBS>${esc(a.wbs)}</WBS>`,
-        `      <Text1>${a.code}</Text1>`,
-        `      <Start>${a.start}T08:00:00</Start>`,
-        `      <Finish>${a.end}T17:00:00</Finish>`,
-        `      <Duration>PT${hours(a)}H0M0S</Duration>`,
-        `      <PercentComplete>${a.pct}</PercentComplete>`,
-        `      <BaselineStart>${a.bStart}T08:00:00</BaselineStart>`,
-        `      <BaselineFinish>${a.bEnd}T17:00:00</BaselineFinish>`,
-        a.aStart ? `      <ActualStart>${a.aStart}T08:00:00</ActualStart>` : "",
-        a.aEnd ? `      <ActualFinish>${a.aEnd}T17:00:00</ActualFinish>` : "",
-        `      <CalendarUID>${a.cal.includes("7d") ? 2 : 1}</CalendarUID>`,
-        ...links
-          .filter((l) => l.to === a.id)
-          .map((l) => `      <PredecessorLink><PredecessorUID>${uid(l.from)}</PredecessorUID><Type>${MSP_TYPE[l.type]}</Type><LinkLag>${l.lag * 4800}</LinkLag></PredecessorLink>`),
-        `    </Task>`,
-      ]
-        .filter(Boolean)
-        .join("\n"),
-    ),
+    ...tasks,
     `  </Tasks>`,
     `</Project>`,
-  ];
-  return lines.join("\n");
+  ].join("\n");
 }
 
 /** A saved point as a programme: snapshot dates on the current activity list. */
 export function actsFromRev(rev: ProgrammeRev, acts: Activity[]): Activity[] {
+  const byCode = new Map(acts.map((a) => [a.code, a]));
   return rev.snapshot
     .map((x) => {
-      const a = acts.find((y) => y.code === x.code);
+      const a = byCode.get(x.code);
       return a ? { ...a, start: x.start, end: x.end, pct: x.pct } : null;
     })
     .filter((a): a is Activity => a !== null);
@@ -295,10 +370,12 @@ export function download(fileName: string, text: string, type = "text/plain") {
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-/** P6 / MSP style best · most likely · worst durations for an activity. */
+/** Spread assumed for an activity's remaining work: −10 % best case, +25 % worst case (+40 % while blocked). */
+export const RISK_SPREAD = { best: 0.1, worst: 0.25, blocked: 0.4 };
+
+/** Best · most likely · worst remaining durations, from the assumed spread (not from the file). */
 export function riskDays(a: Activity) {
   const d = Math.max(1, remDur(a) || origDur(a));
-  const h = hash(a.code);
-  const blocked = a.status === "BLOCKED" ? 0.25 : 0;
-  return { best: Math.max(1, Math.round(d * (0.86 + (h % 5) / 100))), likely: d, worst: Math.round(d * (1.18 + (h % 9) / 50 + blocked)) };
+  const up = a.status === "BLOCKED" ? RISK_SPREAD.blocked : RISK_SPREAD.worst;
+  return { best: Math.max(1, Math.round(d * (1 - RISK_SPREAD.best))), likely: d, worst: Math.max(d, Math.round(d * (1 + up))) };
 }

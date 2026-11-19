@@ -1,7 +1,7 @@
-import { useMemo, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { AlertTriangle, CalendarRange, Check, CheckCheck, CloudRain, Hourglass, Layers, Send, Users, Wrench, X as XIcon } from "lucide-react";
-import { Badge, Field, PageHero, Panel, Register, StatusBadge, toast, useL, type Column } from "../../../components/kit";
+import { Badge, Empty, Field, PageHero, Panel, Register, StatusBadge, toast, useL, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, maxDate, monthShort, PROJECT_FINISH, PROJECT_START, same, toDate, TODAY } from "../../../ops/dates";
 import { programmeStats, R } from "../../../ops/select";
@@ -29,6 +29,8 @@ export function LivePage() {
   const crit = useCpm();
   const floatOf = useFloat();
 
+  const hasActs = activities.length > 0;
+  const contractSet = useOps((s) => !!s.setup.contractFinish);
   const stats = programmeStats(activities);
   const baselineFinish = activities.reduce((a, v) => maxDate(a, v.bEnd), PROJECT_START);
   const overrun = (i: LiveImpact) => Math.max(0, i.daysImpact - floatOf(i.activityId));
@@ -62,7 +64,7 @@ export function LivePage() {
 
   const layers: { key: string; label: string; end: string; cls: string; note: string }[] = [
     { key: "base", label: t("Baseline"), end: baselineFinish, cls: "base", note: t("as first planned") },
-    { key: "contract", label: t("Contract target"), end: PROJECT_FINISH, cls: "contract", note: t("the date we signed for") },
+    { key: "contract", label: t("Contract target"), end: PROJECT_FINISH, cls: "contract", note: contractSet ? t("the date we signed for") : t("not set: the latest activity finish is used") },
     { key: "current", label: t("Current programme"), end: stats.forecastFinish, cls: "current", note: t("{n} d vs contract", { n: signed(diffDays(PROJECT_FINISH, stats.forecastFinish)) }) },
     { key: "forecast", label: t("Forecast"), end: forecastFinish, cls: "forecast", note: pending ? t("+{n} d from open site impacts", { n: pending }) : t("no open impacts") },
   ];
@@ -71,11 +73,14 @@ export function LivePage() {
   const choices = useMemo(() => activities.filter((a) => a.status !== "COMPLETED").sort((a, b) => (a.status === "NOT_STARTED" ? 1 : 0) - (b.status === "NOT_STARTED" ? 1 : 0) || a.start.localeCompare(b.start)), [activities]);
   const [kind, setKind] = useState<ImpactKind>("TASK_DELAY");
   const [activityId, setActivityId] = useState(() => choices.find((a) => a.status === "IN_PROGRESS")?.id ?? choices[0]?.id ?? "");
+  useEffect(() => {
+    if (!choices.some((c) => c.id === activityId) && choices[0]) setActivityId(choices[0].id);
+  }, [choices, activityId]);
   const [startedAt, setStartedAt] = useState(TODAY);
   const [text, setText] = useState("");
   const [lost, setLost] = useState(1);
-  const [crewPlanned, setCrewPlanned] = useState(12);
-  const [crewOnSite, setCrewOnSite] = useState(8);
+  const [crewPlanned, setCrewPlanned] = useState(() => Math.max(1, act(activityId)?.crew ?? 1));
+  const [crewOnSite, setCrewOnSite] = useState(() => Math.max(0, act(activityId)?.crew ?? 0));
   const [windowDays, setWindowDays] = useState(5);
   const [hours, setHours] = useState(8);
   const [wxForecast, setWxForecast] = useState<Weather>("CLOUDY");
@@ -128,8 +133,8 @@ export function LivePage() {
     setActivityId(id);
     const a = act(id);
     if (a) {
-      setCrewPlanned(a.crew);
-      setCrewOnSite(Math.max(0, Math.round(a.crew * 0.66)));
+      setCrewPlanned(Math.max(1, a.crew));
+      setCrewOnSite(Math.max(0, a.crew));
     }
   };
 
@@ -237,6 +242,19 @@ export function LivePage() {
       />
 
       <Panel title={t("Four layers of the finish date")} icon={<Layers size={15} />} sub={t("Each bar runs from the project start. Pins mark impacts reported from site.")}>
+        {!hasActs ? (
+          <Empty
+            icon={<CalendarRange size={20} />}
+            title={t("No programme yet")}
+            action={
+              <Link to={R.programme()} className="btn btn-primary">
+                {t("Open the programme")}
+              </Link>
+            }
+          >
+            {t("The finish dates come from the programme activities. Add activities or import a P6 / MS Project file first.")}
+          </Empty>
+        ) : (
         <div className="pmc-layers">
           <div className="pmc-layers-scale">
             {months.map((m) => (
@@ -276,6 +294,7 @@ export function LivePage() {
             <i className="pmc-layers-contract" style={{ left: `${X(PROJECT_FINISH)}%` }} />
           </div>
         </div>
+        )}
       </Panel>
 
       <div className="k-grid-main">
@@ -294,6 +313,14 @@ export function LivePage() {
               );
             })}
           </div>
+          {!choices.length ? (
+            <p className="k-note" style={{ marginTop: 16 }}>
+              {t("An impact is reported against an open activity of the programme. There is none yet.")}{" "}
+              <Link to={R.programme()} className="k-link-btn">
+                {t("Open the programme")}
+              </Link>
+            </p>
+          ) : null}
           <div className="k-form" style={{ marginTop: 16 }}>
             <Field label={t("Activity")} hint={sel ? (crit.get(sel.id)?.critical ? t("On the critical path") : t("{n} days of float today", { n: selFloat })) : undefined}>
               <select className="input select" value={activityId} onChange={(e) => pickActivity(e.target.value)}>
@@ -382,7 +409,7 @@ export function LivePage() {
               <b className="num-inline">{days > selFloat ? t("+{n} d", { n: days - selFloat }) : t("none")}</b>
             </span>
             <span className="k-spacer" />
-            <button type="button" className="btn btn-primary" onClick={submit} disabled={!activityId}>
+            <button type="button" className="btn btn-primary" onClick={submit} disabled={!activityId || !act(activityId)}>
               <Send size={15} />
               {t("Report impact")}
             </button>
@@ -391,13 +418,19 @@ export function LivePage() {
         </Panel>
 
         <div className="k-stack">
-          <div className={`k-callout k-tone-${pending || stats.varianceDays > 0 ? "bad" : "ok"} pmc-finish`}>
+          <div className={`k-callout k-tone-${!hasActs ? "info" : pending || stats.varianceDays > 0 ? "bad" : "ok"} pmc-finish`}>
             <CalendarRange size={18} />
             <div>
               <strong>{t("Where the finish date stands")}</strong>
               <p>
-                {t("The current programme finishes on {date}, {n} days against the contract date.", { date: d(stats.forecastFinish), n: signed(stats.varianceDays) })}{" "}
-                {pending ? t("Open site impacts could add {n} more days, to {date}.", { n: pending, date: d(forecastFinish) }) : t("No open site impact reaches the finish.")}
+                {!hasActs ? (
+                  t("No programme yet, so there is no finish date to report.")
+                ) : (
+                  <>
+                    {t("The current programme finishes on {date}, {n} days against the contract date.", { date: d(stats.forecastFinish), n: signed(stats.varianceDays) })}{" "}
+                    {pending ? t("Open site impacts could add {n} more days, to {date}.", { n: pending, date: d(forecastFinish) }) : t("No open site impact reaches the finish.")}
+                  </>
+                )}
               </p>
             </div>
           </div>

@@ -267,6 +267,7 @@ export function PaymentsPage() {
         rows={rows}
         columns={columns}
         rowKey={(p) => p.id}
+        empty={s.payments.length ? t("Nothing matches these filters.") : t("No payments yet. A payment is scheduled when a purchase order is issued.")}
         onRowClick={(p) => navigate(R.payment(p.id))}
         initialSort={{ key: "due", dir: "asc" }}
         toolbar={

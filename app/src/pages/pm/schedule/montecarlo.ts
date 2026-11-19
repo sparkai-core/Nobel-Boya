@@ -9,6 +9,8 @@ import type { Activity, Dependency } from "../../../ops/types";
 
 export type McResult = {
   runs: number;
+  /** False when there is no unfinished work to simulate: every figure below is then empty. */
+  hasWork: boolean;
   /** Finish day (from today) of every run, sorted. */
   finishes: number[];
   /** Finish with every duration at its most likely value. */
@@ -50,17 +52,26 @@ export function simulate(activities: Activity[], links: Dependency[], runs: numb
   const preds = new Map<string, Dependency[]>();
   for (const l of links) if (byId.has(l.from) && byId.has(l.to)) preds.set(l.to, [...(preds.get(l.to) ?? []), l]);
 
-  // Topological order (ignores accidental loops).
-  const order: Activity[] = [];
-  const seen = new Set<string>();
-  const visit = (a: Activity, stack: Set<string>) => {
-    if (seen.has(a.id) || stack.has(a.id)) return;
-    stack.add(a.id);
-    for (const l of preds.get(a.id) ?? []) visit(byId.get(l.from)!, stack);
-    seen.add(a.id);
-    order.push(a);
-  };
-  for (const a of activities) visit(a, new Set());
+  // Topological order (Kahn); activities caught in an accidental loop follow in list order.
+  const succ = new Map<string, string[]>();
+  const indeg = new Map<string, number>();
+  for (const [to, ls] of preds) for (const l of ls) {
+    succ.set(l.from, [...(succ.get(l.from) ?? []), to]);
+    indeg.set(to, (indeg.get(to) ?? 0) + 1);
+  }
+  const order: Activity[] = activities.filter((a) => !indeg.get(a.id));
+  const placed = new Set(order.map((a) => a.id));
+  for (let i = 0; i < order.length; i++) {
+    for (const to of succ.get(order[i]!.id) ?? []) {
+      const n = (indeg.get(to) ?? 0) - 1;
+      indeg.set(to, n);
+      if (n === 0 && !placed.has(to)) {
+        placed.add(to);
+        order.push(byId.get(to)!);
+      }
+    }
+  }
+  if (order.length < activities.length) for (const a of activities) if (!placed.has(a.id)) order.push(a);
 
   const rel = (d: string) => diffDays(TODAY, d);
   const prep = order.map((a) => {
@@ -122,8 +133,10 @@ export function simulate(activities: Activity[], links: Dependency[], runs: numb
         last = p.a.id;
       }
     });
-    return { finish: Math.round(finish), last };
+    return { finish: Number.isFinite(finish) ? Math.round(finish) : 0, last };
   };
+  const hasWork = prep.some((p) => !p.done);
+  if (!hasWork) return { runs: 0, hasWork, finishes: [], likely: 0, critical: new Map(), pct: () => 0 };
 
   const likely = pass((i) => prep[i]!.ml).finish;
   const rnd = mulberry32(seed * 7919 + 17);
@@ -139,5 +152,5 @@ export function simulate(activities: Activity[], links: Dependency[], runs: numb
   }
   finishes.sort((a, b) => a - b);
   const pct = (p: number) => finishes[Math.min(finishes.length - 1, Math.max(0, Math.round(p * (finishes.length - 1))))] ?? likely;
-  return { runs, finishes, likely, critical, pct };
+  return { runs, hasWork, finishes, likely, critical, pct };
 }

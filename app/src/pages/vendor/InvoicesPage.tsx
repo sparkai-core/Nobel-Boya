@@ -5,7 +5,7 @@ import { Badge, Empty, Money, PageHero, Panel, StatTiles, useL } from "../../com
 import { fmtMoneyShort, fmtQty, unitLabel } from "../../lib/format";
 import { matchOf, invTotal, VENDOR_INV_STATUS, vendorQuery } from "../../ops/ext/money-p2";
 import type { Invoice, PurchaseOrder } from "../../ops/types";
-import { BUYER, canInvoice, queried, useVendor, VP } from "./model";
+import { buyerName, canInvoice, queried, useVendor, VP } from "./model";
 import { InvoiceDialog, useEyebrow } from "./parts";
 
 const TRACK = [
@@ -38,7 +38,7 @@ export function VpInvoices() {
       <PageHero
         eyebrow={eyebrow("Invoices")}
         title={t("Your invoices")}
-        subtitle={t("Send an invoice for what was delivered and follow it until {buyer} pays.", { buyer: BUYER })}
+        subtitle={t("Send an invoice for what was delivered and follow it until {buyer} pays.", { buyer: buyerName() })}
         flow={["Send", "Being checked", "Approved for payment", "Paid"]}
         art="pay"
         actions={
@@ -96,7 +96,7 @@ export function VpInvoices() {
                   </span>
                   <div>
                     <small>
-                      {t("Query from {buyer}", { buyer: BUYER })} · {inv.ref} · {inv.poId}
+                      {t("Query from {buyer}", { buyer: buyerName() })} · {inv.ref} · {inv.poId}
                     </small>
                     <strong>{q ? x(q) : t("The buyer is checking a difference on this bill.")}</strong>
                   </div>

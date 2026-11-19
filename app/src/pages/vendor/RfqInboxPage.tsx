@@ -7,7 +7,7 @@ import { useOps } from "../../ops/store";
 import { addDays, diffDays, maxDate, minDate, TODAY } from "../../ops/dates";
 import { tradeName } from "../../ops/select";
 import { fmtQty, unitLabel } from "../../lib/format";
-import { BUCKET_LABEL, BUCKET_TONE, BUYER, useVendor, VP, type Bucket, type InviteRow } from "./model";
+import { BUCKET_LABEL, BUCKET_TONE, buyerName, useVendor, VP, type Bucket, type InviteRow } from "./model";
 import { Countdown, DeclineDialog, OutcomeBadge, useEyebrow } from "./parts";
 
 type Filter = Bucket | "all";
@@ -33,7 +33,7 @@ export function VpRfqInbox() {
       <PageHero
         eyebrow={eyebrow("RFQ inbox")}
         title={t("Requests for quotation")}
-        subtitle={t("What {buyer} has asked you to price, and when each answer is due.", { buyer: BUYER })}
+        subtitle={t("What {buyer} has asked you to price, and when each answer is due.", { buyer: buyerName() })}
         flow={["Invited", "Acknowledge", "Prepare quote", "Sent to the buyer"]}
         art="rfq"
       />
@@ -63,7 +63,7 @@ export function VpRfqInbox() {
         </div>
       ) : (
         <Empty icon={<CalendarClock size={20} />} title={t("No requests here")}>
-          {t("When {buyer} invites you to quote, the request appears in this inbox.", { buyer: BUYER })}
+          {t("When {buyer} invites you to quote, the request appears in this inbox.", { buyer: buyerName() })}
         </Empty>
       )}
 

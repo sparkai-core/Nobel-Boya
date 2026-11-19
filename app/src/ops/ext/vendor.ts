@@ -1,48 +1,70 @@
+import { create } from "zustand";
+import { createJSONStorage, persist } from "zustand/middleware";
 import { useOps } from "../store";
 import { nowStamp } from "../dates";
-import type { FeedEvent, OpsData, Txt } from "../types";
+import type { Txt } from "../types";
 
 /**
- * Vendor-portal helpers that the shared store has no action for. Invoices are real records now
- * (see ops/ext/money-p2 sendPortalInvoice). Renewed compliance documents are written as a VENDOR feed
- * event in the store's own shape, so the buyer sees them in the live feed (and in the other tab, through
- * the storage event); the document record is read back from the feed link, which carries the fields.
+ * Vendor compliance documents: only what the vendor (in the portal) or the buyer actually added.
+ * Each record keeps the type, the reference printed on it, its expiry date and the file name for
+ * reference (the file itself is not stored). Kept in this browser and shared by all projects, like vendors.
  */
 
-const vendorName = (s: OpsData, id: string) => s.vendors.find((v) => v.id === id)?.name ?? id;
+export type DocType = "licence" | "vat" | "insurance" | "iso" | "hse" | "other";
 
-function withFeed(s: OpsData, text: Txt, link: string, actor: string, seq = s.seq): Pick<OpsData, "feed" | "seq"> {
-  const n = (seq.F ?? 0) + 1;
-  const ev: FeedEvent = { id: `F-${n}`, at: nowStamp(), module: "VENDOR", text, link, actor };
-  return { feed: [ev, ...s.feed].slice(0, 80), seq: { ...seq, F: n } };
+export const DOC_TYPES: { key: DocType; label: Txt }[] = [
+  { key: "licence", label: { en: "Trade licence", az: "Ticarət lisenziyası" } },
+  { key: "vat", label: { en: "VAT registration certificate", az: "ƏDV qeydiyyat şəhadətnaməsi" } },
+  { key: "insurance", label: { en: "Liability insurance", az: "Məsuliyyət sığortası" } },
+  { key: "iso", label: { en: "Quality certificate (ISO 9001)", az: "Keyfiyyət sertifikatı (ISO 9001)" } },
+  { key: "hse", label: { en: "HSE policy", az: "ƏMSE siyasəti" } },
+  { key: "other", label: { en: "Other document", az: "Digər sənəd" } },
+];
+
+export type VendorDocRec = {
+  id: string;
+  vendorId: string;
+  type: DocType;
+  /** Name for an "other" document. */
+  title: string;
+  ref: string;
+  expires: string | null;
+  file: string;
+  addedAt: string;
+  addedBy: string;
+};
+
+type DocState = {
+  docs: VendorDocRec[];
+  add: (d: Omit<VendorDocRec, "id" | "addedAt">) => string;
+  remove: (id: string) => void;
+};
+
+export const useVendorDocs = create<DocState>()(
+  persist(
+    (set, get) => ({
+      docs: [],
+      add: (d) => {
+        const n = get().docs.reduce((m, x) => Math.max(m, Number(x.id.slice(4)) || 0), 0) + 1;
+        const id = `DOC-${String(n).padStart(4, "0")}`;
+        set({ docs: [{ ...d, id, addedAt: nowStamp() }, ...get().docs] });
+        const s = useOps.getState();
+        const name = s.vendors.find((v) => v.id === d.vendorId)?.name ?? d.vendorId;
+        const label = d.type === "other" ? { en: d.title || "document", az: d.title || "sənəd" } : DOC_TYPES.find((x) => x.key === d.type)!.label;
+        s.pushFeed("VENDOR", { en: `${name} added a document: ${label.en}${d.ref ? ` (${d.ref})` : ""}`, az: `${name} sənəd əlavə etdi: ${label.az}${d.ref ? ` (${d.ref})` : ""}` }, `procurement/vendors/${d.vendorId}`, d.addedBy);
+        return id;
+      },
+      remove: (id) => set({ docs: get().docs.filter((x) => x.id !== id) }),
+    }),
+    { name: "nobel.ops.vendor-docs", storage: createJSONStorage(() => localStorage), partialize: (s) => ({ docs: s.docs }) },
+  ),
+);
+
+// The portal opens in another tab: keep the document list in step.
+if (typeof window !== "undefined") {
+  window.addEventListener("storage", (e) => {
+    if (e.key === "nobel.ops.vendor-docs") void useVendorDocs.persist.rehydrate();
+  });
 }
 
-export type DocUpload = { key: string; file: string; at: string; expires: string | null };
-
-/** The vendor uploads a renewed compliance document (file name only) with its new expiry date. */
-export function sendDocument(vendorId: string, key: string, label: Txt, file: string, expires: string | null) {
-  const s = useOps.getState();
-  const name = vendorName(s, vendorId);
-  const link = `procurement/vendors/${vendorId}?doc=${encodeURIComponent(key)}&file=${encodeURIComponent(file)}${expires ? `&expires=${expires}` : ""}`;
-  useOps.setState(withFeed(s, { en: `${name} uploaded a renewed ${label.en.toLowerCase()} (${file})`, az: `${name} yenilənmiş sənəd yüklədi: ${label.az} (${file})` }, link, name));
-}
-
-function query(link: string | null) {
-  if (!link) return null;
-  const i = link.indexOf("?");
-  return i < 0 ? null : { path: link.slice(0, i), params: new URLSearchParams(link.slice(i + 1)) };
-}
-
-/** Latest renewed document per document key. */
-export function docUploadsOf(feed: FeedEvent[], vendorId: string): Map<string, DocUpload> {
-  const out = new Map<string, DocUpload>();
-  for (const f of feed) {
-    if (f.module !== "VENDOR") continue;
-    const q = query(f.link);
-    if (!q || q.path !== `procurement/vendors/${vendorId}`) continue;
-    const key = q.params.get("doc");
-    if (!key || out.has(key)) continue;
-    out.set(key, { key, file: q.params.get("file") ?? "", at: f.at, expires: q.params.get("expires") });
-  }
-  return out;
-}
+export const docLabel = (d: Pick<VendorDocRec, "type" | "title">): Txt => (d.type === "other" && d.title ? { en: d.title, az: d.title } : (DOC_TYPES.find((x) => x.key === d.type)?.label ?? { en: d.type, az: d.type }));

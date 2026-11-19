@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { useOps } from "../../../ops/store";
-import { cpm, milestoneForecast, programmeStats, R, type Cpm, type MilestoneState, type Tone } from "../../../ops/select";
+import { cpm, milestoneForecast, programmeStats, progressWeight, R, type Cpm, type MilestoneState, type Tone } from "../../../ops/select";
 import { addDays, diffDays, maxDate, minDate, PROJECT_FINISH, PROJECT_START, TODAY } from "../../../ops/dates";
 import type { Activity, Dependency, LiveImpact, Milestone, Subcontractor, WbsNode } from "../../../ops/types";
 
@@ -39,12 +39,16 @@ export function ownerName(owner: string, subs: Subcontractor[]) {
 }
 export function ownerShort(owner: string, subs: Subcontractor[]) {
   const full = ownerName(owner, subs).replace(NAME_TAIL, "");
-  return full.split(/\s+/)[0] ?? full;
+  return full.split(/\s+/)[0] || "—";
 }
 
 // ---------------------------------------------------------------- finish outlook
 
 export type Outlook = {
+  /** False when the project has no activities: the dates below are then placeholders, not a forecast. */
+  hasData: boolean;
+  /** True when the user entered a contract finish date in Settings (otherwise `contract` is just the programme finish). */
+  contractKnown: boolean;
   contract: string;
   baseline: string;
   /** Latest finish on the programme as it stands. */
@@ -60,10 +64,12 @@ export type Outlook = {
 
 const PENDING: LiveImpact["status"][] = ["REPORTED", "UNDER_REVIEW", "CONFIRMED"];
 
-export function finishOutlook(activities: Activity[], cp: Map<string, Cpm>, impacts: LiveImpact[]): Outlook {
-  const current = activities.reduce((a, x) => maxDate(a, x.end), PROJECT_START);
-  const baseline = activities.reduce((a, x) => maxDate(a, x.bEnd), PROJECT_START);
-  const maxEf = Math.max(0, ...[...cp.values()].map((c) => c.ef));
+export function finishOutlook(activities: Activity[], cp: Map<string, Cpm>, impacts: LiveImpact[], contractKnown = true): Outlook {
+  if (!activities.length) return { hasData: false, contractKnown, contract: PROJECT_FINISH, baseline: PROJECT_FINISH, current: PROJECT_FINISH, calculated: PROJECT_FINISH, forecast: PROJECT_FINISH, pendingDays: 0, pending: [], lateDays: 0 };
+  const current = activities.reduce((a, x) => maxDate(a, x.end), activities[0]!.end);
+  const baseline = activities.reduce((a, x) => maxDate(a, x.bEnd), activities[0]!.bEnd);
+  let maxEf = 0;
+  for (const c of cp.values()) if (c.ef > maxEf) maxEf = c.ef;
   const calculated = maxDate(current, dateOf(maxEf));
   const pending = impacts.filter((i) => PENDING.includes(i.status));
   let pendingDays = 0;
@@ -73,7 +79,7 @@ export function finishOutlook(activities: Activity[], cp: Map<string, Cpm>, impa
     pendingDays = Math.max(pendingDays, i.daysImpact - Math.max(0, c.tf));
   }
   const forecast = addDays(calculated, pendingDays);
-  return { contract: PROJECT_FINISH, baseline, current, calculated, forecast, pendingDays, pending, lateDays: diffDays(PROJECT_FINISH, forecast) };
+  return { hasData: true, contractKnown, contract: PROJECT_FINISH, baseline, current, calculated, forecast, pendingDays, pending, lateDays: contractKnown ? diffDays(PROJECT_FINISH, forecast) : 0 };
 }
 
 // ---------------------------------------------------------------- WBS
@@ -99,16 +105,19 @@ export function subtreeIds(id: string, kids: Map<string | null, WbsNode[]>): Set
   return out;
 }
 
-export function rollup(acts: Activity[], cp?: Map<string, Cpm>): Rollup {
+/** Roll-up of a set of activities. Progress is weighted like the whole programme (budget when every activity has one, else duration). */
+export function rollup(acts: Activity[], cp?: Map<string, Cpm>, weight: (a: Activity) => number = progressWeight(acts)): Rollup {
   const budget = acts.reduce((a, x) => a + x.budget, 0);
   const earned = acts.reduce((a, x) => a + (x.budget * x.pct) / 100, 0);
-  const plannedV = acts.reduce((a, x) => a + (x.budget * baselineShare(x)) / 100, 0);
+  const total = acts.reduce((a, x) => a + weight(x), 0);
+  const earnedW = acts.reduce((a, x) => a + (weight(x) * x.pct) / 100, 0);
+  const plannedW = acts.reduce((a, x) => a + (weight(x) * baselineShare(x)) / 100, 0);
   return {
     count: acts.length,
     budget,
     earned,
-    pct: budget > 0 ? (earned / budget) * 100 : acts.length ? acts.reduce((a, x) => a + x.pct, 0) / acts.length : 0,
-    planned: budget > 0 ? (plannedV / budget) * 100 : 0,
+    pct: total > 0 ? (earnedW / total) * 100 : acts.length ? acts.reduce((a, x) => a + x.pct, 0) / acts.length : 0,
+    planned: total > 0 ? (plannedW / total) * 100 : 0,
     start: acts.length ? minDate(...acts.map((a) => a.start)) : PROJECT_START,
     end: acts.length ? maxDate(...acts.map((a) => a.end)) : PROJECT_START,
     bEnd: acts.length ? maxDate(...acts.map((a) => a.bEnd)) : PROJECT_START,
@@ -151,9 +160,11 @@ export function useSchedule() {
   const impacts = useOps((s) => s.impacts);
   const wbs = useOps((s) => s.wbs);
   const subs = useOps((s) => s.subs);
+  const contractKnown = useOps((s) => !!s.setup.contractFinish);
   const cp = useMemo(() => cpm(activities, links), [activities, links]);
   const stats = useMemo(() => programmeStats(activities), [activities]);
-  const outlook = useMemo(() => finishOutlook(activities, cp, impacts), [activities, cp, impacts]);
+  const outlook = useMemo(() => finishOutlook(activities, cp, impacts, contractKnown), [activities, cp, impacts, contractKnown]);
   const byId = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
-  return { activities, links, milestones, impacts, wbs, subs, cp, stats, outlook, byId };
+  const weight = useMemo(() => progressWeight(activities), [activities]);
+  return { activities, links, milestones, impacts, wbs, subs, cp, stats, outlook, byId, weight };
 }

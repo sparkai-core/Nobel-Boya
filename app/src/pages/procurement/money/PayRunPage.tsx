@@ -1,7 +1,7 @@
 import { useState, type DragEvent } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { ArrowRight, Ban, CalendarClock, CheckCircle2, Download, FileSpreadsheet, GripVertical, History, Landmark, PauseCircle, ShieldCheck, Zap, type LucideIcon } from "lucide-react";
-import { ApprovalPath, Badge, Empty, FlowRail, Money, PageHero, Panel, StatTiles, toast, useL, type PathStep } from "../../../components/kit";
+import { ApprovalPath, Badge, Empty, Field, FlowRail, Money, PageHero, Panel, StatTiles, toast, useL, type PathStep } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, TODAY } from "../../../ops/dates";
 import { paymentGate, R, type Tone } from "../../../ops/select";
@@ -17,9 +17,6 @@ const BUCKETS: { key: Bucket; title: string; sub: string; tone: Tone; icon: Luci
   { key: "hold", title: "Hold", sub: "In dispute or waiting on the supplier", tone: "bad", icon: PauseCircle },
 ];
 
-/** Cash figures used for the pay run (the same the store writes on a new run). */
-const CASH_TODAY = 386_000;
-const BUFFER = 120_000;
 
 const RUN_PATH: { key: PayRun["status"]; label: string }[] = [
   { key: "PROPOSED", label: "Proposed" },
@@ -27,10 +24,6 @@ const RUN_PATH: { key: PayRun["status"]; label: string }[] = [
   { key: "EXPORTED", label: "Bank file exported" },
 ];
 
-const fakeIban = (vendorId: string) => {
-  const n = Number(vendorId.replace(/\D/g, "")) || 1;
-  return `AZ${String(10 + ((n * 37) % 89)).padStart(2, "0")}NABZ${String(1_370_100_000_000 + n * 7_919_311).padStart(20, "0")}`;
-};
 
 /** Pay run: cash today against the buffer, three buckets (pay now / on due date / hold), the run itself and past runs. */
 export function PayRunPage() {
@@ -40,6 +33,17 @@ export function PayRunPage() {
   const [moved, setMoved] = useState<Record<string, Bucket>>({});
   const [dragId, setDragId] = useState<string | null>(null);
   const [over, setOver] = useState<Bucket | null>(null);
+  // Cash comes from Settings → Project setup (editable here too); the buffer is the user's own choice.
+  const cash = s.setup.cashAvailable;
+  const [cashText, setCashText] = useState(cash != null ? String(cash) : "");
+  const [bufferText, setBufferText] = useState("0");
+  const num = (v: string) => {
+    const n = Number(v.replace(/[\s,]/g, ""));
+    return Number.isFinite(n) && n >= 0 ? n : 0;
+  };
+  const BUFFER = num(bufferText);
+  const CASH_TODAY = cash ?? 0;
+  const hasCash = cash != null;
 
   const active = s.payRuns.find((r) => r.status === "PROPOSED" || r.status === "APPROVED") ?? null;
   const past = s.payRuns.filter((r) => r !== active);
@@ -56,7 +60,8 @@ export function PayRunPage() {
   const sum = (ps: Payment[]) => ps.reduce((a, p) => a + p.amount, 0);
   const nowTotal = sum(by.now);
   const room = CASH_TODAY - BUFFER;
-  const left = room - nowTotal;
+  // Without a cash figure the run is not checked against the bank.
+  const left = hasCash ? room - nowTotal : 0;
   const dueWeek = s.payments.filter((p) => p.status !== "PAID" && p.dueDate <= addDays(TODAY, 7));
   const runTotal = active ? sum(s.payments.filter((p) => active.paymentIds.includes(p.id))) : 0;
 
@@ -100,7 +105,7 @@ export function PayRunPage() {
     const rows = pays.map((p) => {
       const v = s.vendors.find((y) => y.id === p.vendorId);
       const inv = invOf(p);
-      return [p.ref, v?.name ?? p.vendorId, v?.trn ?? "", fakeIban(p.vendorId), Math.round(p.amount * 100) / 100, "AZN", TODAY, `${run.ref} ${p.ref} ${p.poId}${inv ? ` ${inv.ref}` : ""}`];
+      return [p.ref, v?.name ?? p.vendorId, v?.trn ?? "", "", Math.round(p.amount * 100) / 100, "AZN", TODAY, `${run.ref} ${p.ref} ${p.poId}${inv ? ` ${inv.ref}` : ""}`];
     });
     downloadCsv(`${run.ref}-bank-file.csv`, [head, ...rows]);
     s.setPayRunStatus(run.id, "EXPORTED");
@@ -113,7 +118,7 @@ export function PayRunPage() {
       return { label: t(st.label), state: run.status === "CANCELLED" ? (i === 0 ? "rejected" : "todo") : i < idx || (i === idx && i === RUN_PATH.length - 1) ? "done" : i === idx ? "current" : "todo", at: i === 0 ? d(run.date) : undefined, who: i === 0 ? run.by : undefined };
     });
 
-  const W = (v: number) => `${Math.max(0, (v / CASH_TODAY) * 100)}%`;
+  const W = (v: number) => `${Math.max(0, (v / Math.max(1, CASH_TODAY, nowTotal)) * 100)}%`;
 
   return (
     <div className="k-page pmn-page">
@@ -134,9 +139,9 @@ export function PayRunPage() {
 
       <StatTiles
         items={[
-          { label: t("Cash today"), value: <Money value={CASH_TODAY} short />, sub: t("Kapital Bank, main account"), icon: <Landmark size={14} /> },
+          { label: t("Cash available"), value: hasCash ? <Money value={CASH_TODAY} short /> : "—", sub: hasCash ? t("from Project setup") : t("not set yet"), icon: <Landmark size={14} /> },
           { label: t("Buffer to keep"), value: <Money value={BUFFER} short />, sub: t("never paid out"), tone: "muted", icon: <ShieldCheck size={14} /> },
-          { label: t("Room to pay"), value: <Money value={left} short />, sub: nowTotal ? t("after {a} AZN in Pay now", { a: fmtMoneyShort(nowTotal) }) : t("nothing picked yet"), tone: left < 0 ? "bad" : "ok" },
+          { label: t("Room to pay"), value: hasCash ? <Money value={left} short /> : "—", sub: !hasCash ? t("set the cash available first") : nowTotal ? t("after {a} AZN in Pay now", { a: fmtMoneyShort(nowTotal) }) : t("nothing picked yet"), tone: hasCash ? (left < 0 ? "bad" : "ok") : undefined },
           { label: t("Due this week"), value: <Money value={sum(dueWeek)} short />, sub: t("{n} payments, {m} overdue", { n: dueWeek.length, m: dueWeek.filter((p) => p.dueDate < TODAY).length }), tone: dueWeek.some((p) => p.dueDate < TODAY) ? "warn" : undefined },
         ]}
       />
@@ -144,8 +149,27 @@ export function PayRunPage() {
       <section className="pmn-cash" aria-label={t("Cash today")}>
         <header>
           <h2>{t("Where today's cash goes")}</h2>
-          <p>{left < 0 ? t("Pay now is {a} AZN over the room. Move something to its due date.", { a: fmtMoney(-left) }) : t("{a} AZN stays free after this run and the buffer.", { a: fmtMoney(left) })}</p>
+          <p>{!hasCash ? t("Enter the cash available for payments to check the run against it. It is saved in Project setup.") : left < 0 ? t("Pay now is {a} AZN over the room. Move something to its due date.", { a: fmtMoney(-left) }) : t("{a} AZN stays free after this run and the buffer.", { a: fmtMoney(left) })}</p>
         </header>
+        <div className="k-form" style={{ marginBottom: 12 }}>
+          <Field label={t("Cash available, AZN")}>
+            <input
+              className="input num"
+              inputMode="decimal"
+              value={cashText}
+              onChange={(e) => setCashText(e.target.value)}
+              onBlur={() => {
+                const v = cashText.trim() ? num(cashText) : null;
+                if (v !== cash) s.setSetup({ cashAvailable: v });
+              }}
+            />
+          </Field>
+          <Field label={t("Buffer to keep, AZN")} hint={t("Money you never pay out. 0 if none.")}>
+            <input className="input num" inputMode="decimal" value={bufferText} onChange={(e) => setBufferText(e.target.value)} />
+          </Field>
+        </div>
+        {hasCash ? (
+          <>
         <div className="pmn-cash-bar">
           <i className="now k-grow-x" style={{ width: W(Math.min(nowTotal, room)) }} title={t("Pay now")} />
           {left < 0 ? <i className="over k-grow-x" style={{ width: W(Math.min(-left, BUFFER)) }} title={t("Over the room")} /> : <i className="free k-grow-x" style={{ width: W(left) }} title={t("Room left")} />}
@@ -165,6 +189,8 @@ export function PayRunPage() {
             <i /> {t("Buffer to keep")} <b className="num-inline">{fmtMoneyShort(BUFFER)}</b>
           </li>
         </ul>
+          </>
+        ) : null}
       </section>
 
       {active ? (
@@ -347,7 +373,7 @@ export function PayRunPage() {
 
       {!open.length && !active ? (
         <Empty icon={<CheckCircle2 size={20} />} title={t("Nothing to pay")} action={<button type="button" className="btn btn-ghost" onClick={() => navigate(MONEY.invoices)}>{t("Supplier invoices")}</button>}>
-          {t("Every payment is paid.")}
+          {s.payments.length ? t("Every payment is paid.") : t("No payments yet. A payment is scheduled when a purchase order is issued.")}
         </Empty>
       ) : null}
     </div>

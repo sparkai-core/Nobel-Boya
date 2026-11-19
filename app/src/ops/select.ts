@@ -1,6 +1,7 @@
 import { data, P } from "../data";
-import { addDays, diffDays, maxDate, PROJECT_FINISH, PROJECT_START, TODAY } from "./dates";
-import { round, sectionValue } from "./seed/util";
+import { useApp } from "../lib/store";
+import { addDays, diffDays, maxDate, minDate, PROJECT_FINISH, PROJECT_START, TODAY } from "./dates";
+import { round, sectionValueMap } from "./seed/util";
 import type {
   Activity,
   Dependency,
@@ -314,32 +315,67 @@ export function scoreQuotes(s: Pick<OpsData, "vendors">, quotes: Quotation[], we
 
 // ---------------------------------------------------------------- programme maths
 
+const DAY_MS = 86_400_000;
+/** Day number of an ISO date (days since 1970-01-01, UTC). NaN for a missing or broken date. */
+const dayNo = (iso: string | null | undefined) => (iso ? Math.round(Date.parse(`${iso.slice(0, 10)}T00:00:00Z`) / DAY_MS) : NaN);
+const safeDay = (iso: string | null | undefined, fallback: number) => {
+  const n = dayNo(iso);
+  return Number.isFinite(n) ? n : fallback;
+};
+
+/**
+ * How much each activity counts in progress figures. When every working activity carries a budget,
+ * progress is weighted by money; otherwise by baseline duration (P6 duration weighting), so a
+ * programme imported without costs still reads true. Milestones carry no weight under duration weighting.
+ */
+export function progressWeight(activities: Activity[]): (a: Activity) => number {
+  const work = activities.filter((a) => !a.isMilestone);
+  const byBudget = work.length > 0 && work.every((a) => a.budget > 0);
+  if (byBudget) return (a) => Math.max(0, a.budget);
+  return (a) => (a.isMilestone ? 0 : Math.max(1, safeDay(a.bEnd, 0) - safeDay(a.bStart, 0)));
+}
+
 export type Cpm = { es: number; ef: number; ls: number; lf: number; tf: number; ff: number; critical: boolean; near: boolean; dur: number };
 
-/** Critical path on the current programme (calendar days from project start). */
+/** Critical path on the current programme (calendar days from project start). Safe with no activities and with loops. */
 export function cpm(activities: Activity[], links: Dependency[], finish = PROJECT_FINISH): Map<string, Cpm> {
+  const out = new Map<string, Cpm>();
+  if (!activities.length) return out;
+  const base = safeDay(PROJECT_START, 0);
   const byId = new Map(activities.map((a) => [a.id, a]));
   const preds = new Map<string, Dependency[]>();
   const succs = new Map<string, Dependency[]>();
+  const indeg = new Map<string, number>();
   for (const l of links) {
-    if (!byId.has(l.from) || !byId.has(l.to)) continue;
-    preds.set(l.to, [...(preds.get(l.to) ?? []), l]);
-    succs.set(l.from, [...(succs.get(l.from) ?? []), l]);
+    if (!byId.has(l.from) || !byId.has(l.to) || l.from === l.to) continue;
+    let p = preds.get(l.to);
+    if (!p) preds.set(l.to, (p = []));
+    p.push(l);
+    let s = succs.get(l.from);
+    if (!s) succs.set(l.from, (s = []));
+    s.push(l);
+    indeg.set(l.to, (indeg.get(l.to) ?? 0) + 1);
   }
+  // Kahn's order; activities caught in a loop follow in their list order.
   const order: Activity[] = [];
-  const seen = new Set<string>();
-  const visit = (a: Activity, stack = new Set<string>()) => {
-    if (seen.has(a.id) || stack.has(a.id)) return;
-    stack.add(a.id);
-    for (const l of preds.get(a.id) ?? []) visit(byId.get(l.from)!, stack);
-    seen.add(a.id);
+  const queue = activities.filter((a) => !indeg.get(a.id));
+  const placed = new Set<string>();
+  for (let i = 0; i < queue.length; i++) {
+    const a = queue[i]!;
+    placed.add(a.id);
     order.push(a);
-  };
-  activities.forEach((a) => visit(a));
-  const out = new Map<string, Cpm>();
+    for (const l of succs.get(a.id) ?? []) {
+      const n = (indeg.get(l.to) ?? 0) - 1;
+      indeg.set(l.to, n);
+      if (n === 0) queue.push(byId.get(l.to)!);
+    }
+  }
+  if (order.length < activities.length) for (const a of activities) if (!placed.has(a.id)) order.push(a);
+
   for (const a of order) {
-    const dur = Math.max(0, diffDays(a.start, a.end));
-    let es = diffDays(PROJECT_START, a.start);
+    const s = safeDay(a.start, base);
+    const dur = Math.max(0, safeDay(a.end, s) - s);
+    let es = s - base;
     for (const l of preds.get(a.id) ?? []) {
       const p = out.get(l.from);
       if (!p) continue;
@@ -350,8 +386,10 @@ export function cpm(activities: Activity[], links: Dependency[], finish = PROJEC
     }
     out.set(a.id, { es, ef: es + dur, ls: 0, lf: 0, tf: 0, ff: 0, critical: false, near: false, dur });
   }
-  const projectEnd = Math.max(diffDays(PROJECT_START, finish), ...[...out.values()].map((c) => c.ef));
-  for (const a of [...order].reverse()) {
+  let projectEnd = safeDay(finish, base) - base;
+  for (const c of out.values()) if (c.ef > projectEnd) projectEnd = c.ef;
+  for (let i = order.length - 1; i >= 0; i--) {
+    const a = order[i]!;
     const c = out.get(a.id)!;
     let lf = projectEnd;
     let minSuccEs = Infinity;
@@ -374,29 +412,64 @@ export function cpm(activities: Activity[], links: Dependency[], finish = PROJEC
   return out;
 }
 
-/** Budget-weighted planned share of an activity at a date, using baseline dates. */
-function plannedShare(a: Activity, date: string, useBaseline = true) {
-  const s = useBaseline ? a.bStart : a.start;
-  const e = useBaseline ? a.bEnd : a.end;
-  if (date <= s) return 0;
-  if (date >= e) return 1;
-  return diffDays(s, date) / Math.max(1, diffDays(s, e));
+/** Share (0–1) of an activity planned by a day, on its baseline or current dates. */
+function shareAt(s: number, e: number, day: number) {
+  if (day <= s) return 0;
+  if (day >= e) return 1;
+  return (day - s) / Math.max(1, e - s);
 }
 
-export type ProgrammeStats = { plannedPct: number; actualPct: number; spi: number; forecastFinish: string; varianceDays: number; daysLeft: number; budget: number; earned: number; planned: number };
+export type ProgrammeStats = {
+  /** False when the project has no activities yet: every figure below is then empty, not a reading. */
+  hasData: boolean;
+  plannedPct: number;
+  actualPct: number;
+  spi: number;
+  forecastFinish: string;
+  varianceDays: number;
+  daysLeft: number;
+  /** Money carried by the activities (0 when none has a budget). */
+  budget: number;
+  earned: number;
+  planned: number;
+};
 
 export function programmeStats(activities: Activity[], date = TODAY): ProgrammeStats {
-  const budget = activities.reduce((a, x) => a + x.budget, 0) || 1;
-  const planned = activities.reduce((a, x) => a + x.budget * plannedShare(x, date), 0);
-  const earned = activities.reduce((a, x) => a + (x.budget * x.pct) / 100, 0);
-  const forecastFinish = activities.reduce((a, x) => maxDate(a, x.end), PROJECT_START);
+  if (!activities.length) {
+    return { hasData: false, plannedPct: 0, actualPct: 0, spi: 0, forecastFinish: PROJECT_FINISH, varianceDays: 0, daysLeft: 0, budget: 0, earned: 0, planned: 0 };
+  }
+  const w = progressWeight(activities);
+  const day = safeDay(date, safeDay(TODAY, 0));
+  let total = 0;
+  let plannedW = 0;
+  let earnedW = 0;
+  let budget = 0;
+  let planned = 0;
+  let earned = 0;
+  let finish = activities[0]!.end;
+  for (const a of activities) {
+    const wt = w(a);
+    const s = safeDay(a.bStart, safeDay(a.start, day));
+    const e = safeDay(a.bEnd, safeDay(a.end, s));
+    const sh = shareAt(s, e, day);
+    total += wt;
+    plannedW += wt * sh;
+    earnedW += (wt * a.pct) / 100;
+    budget += a.budget;
+    planned += a.budget * sh;
+    earned += (a.budget * a.pct) / 100;
+    if (a.end > finish) finish = a.end;
+  }
+  const plannedPct = total > 0 ? plannedW / total : 0;
+  const actualPct = total > 0 ? earnedW / total : 0;
   return {
-    plannedPct: planned / budget,
-    actualPct: earned / budget,
-    spi: planned > 0 ? earned / planned : 1,
-    forecastFinish,
-    varianceDays: diffDays(PROJECT_FINISH, forecastFinish),
-    daysLeft: diffDays(date, forecastFinish),
+    hasData: true,
+    plannedPct,
+    actualPct,
+    spi: plannedPct > 0 ? actualPct / plannedPct : 1,
+    forecastFinish: finish,
+    varianceDays: diffDays(PROJECT_FINISH, finish),
+    daysLeft: Math.max(0, diffDays(date, finish)),
     budget,
     earned,
     planned,
@@ -405,34 +478,58 @@ export function programmeStats(activities: Activity[], date = TODAY): ProgrammeS
 
 export type CurvePoint = { date: string; planned: number; actual: number | null; forecast: number | null };
 
-/** Planned vs actual S-curve, weekly. Actual history is scaled from today's earned share. */
-export function sCurve(activities: Activity[], step = 7): CurvePoint[] {
+/**
+ * Planned vs actual S-curve, weekly. The actual line is drawn only where progress was really
+ * recorded: the saved progress updates passed in `history` and today's figure. Nothing in between is made up.
+ */
+export function sCurve(activities: Activity[], step = 7, history: { date: string; actual: number }[] = []): CurvePoint[] {
+  if (!activities.length) return [];
   const st = programmeStats(activities);
-  const ratio = st.plannedPct > 0 ? st.actualPct / st.plannedPct : 1;
-  const budget = st.budget;
-  const end = maxDate(PROJECT_FINISH, st.forecastFinish);
-  const pts: CurvePoint[] = [];
-  for (let d = PROJECT_START; d <= addDays(end, step); d = addDays(d, step)) {
-    const date = d > end ? end : d;
-    const planned = activities.reduce((a, x) => a + x.budget * plannedShare(x, date), 0) / budget;
-    const forecast = activities.reduce((a, x) => a + x.budget * plannedShare(x, date, false), 0) / budget;
-    pts.push({ date, planned, actual: date <= TODAY ? planned * (date === TODAY ? ratio : 1 - (1 - ratio) * (diffDays(PROJECT_START, date) / Math.max(1, diffDays(PROJECT_START, TODAY)))) : null, forecast: date >= TODAY ? Math.max(forecast, st.actualPct) : null });
-    if (date === end) break;
+  const w = progressWeight(activities);
+  const rows = activities.map((a) => {
+    const bs = safeDay(a.bStart, safeDay(a.start, 0));
+    const cs = safeDay(a.start, bs);
+    return { w: w(a), bs, be: safeDay(a.bEnd, bs), cs, ce: safeDay(a.end, cs) };
+  });
+  const total = rows.reduce((x, r) => x + r.w, 0) || 1;
+  const first = minDate(PROJECT_START, ...activities.map((a) => a.bStart), ...activities.map((a) => a.start));
+  const end = maxDate(PROJECT_FINISH, st.forecastFinish, ...activities.map((a) => a.bEnd));
+  const dates = new Set<string>();
+  // At most ~400 points, so a long programme stays quick to draw.
+  const stride = Math.max(step, Math.ceil(diffDays(first, end) / 400));
+  for (let d = first; d < end; d = addDays(d, stride)) dates.add(d);
+  dates.add(end);
+  if (TODAY >= first && TODAY <= end) dates.add(TODAY);
+  const hist = new Map<string, number>();
+  for (const h of history) if (h.date >= first && h.date <= end && h.date !== TODAY) {
+    hist.set(h.date, h.actual);
+    dates.add(h.date);
   }
-  // Exact point at today.
-  const i = pts.findIndex((p) => p.date > TODAY);
-  if (i > 0 && pts[i - 1]!.date !== TODAY) pts.splice(i, 0, { date: TODAY, planned: st.plannedPct, actual: st.actualPct, forecast: st.actualPct });
-  return pts;
+  return [...dates].sort().map((date) => {
+    const day = dayNo(date);
+    let p = 0;
+    let f = 0;
+    for (const r of rows) {
+      p += r.w * shareAt(r.bs, r.be, day);
+      f += r.w * shareAt(r.cs, r.ce, day);
+    }
+    const actual = date === TODAY ? st.actualPct : (hist.get(date) ?? null);
+    return { date, planned: p / total, actual, forecast: date >= TODAY ? Math.max(f / total, st.actualPct) : null };
+  });
 }
 
 export type MilestoneState = "DONE" | "ON_TRACK" | "WATCH" | "AT_RISK" | "LATE";
 
-/** Live forecast of a milestone from the activities that drive it. */
+/**
+ * Live forecast of a milestone. With driving activities it follows them; without, it is the target
+ * until that date passes unreached, then today. A milestone the user marked as reached is done.
+ */
 export function milestoneForecast(mst: Milestone, activities: Activity[]) {
   const ends = mst.drivers.map((id) => activities.find((a) => a.id === id)).filter(Boolean) as Activity[];
-  const done = ends.length > 0 && ends.every((a) => a.status === "COMPLETED");
-  const forecast = ends.length ? ends.map((a) => (a.status === "COMPLETED" ? (a.aEnd ?? a.end) : a.end)).reduce((a, b) => maxDate(a, b)) : mst.forecast;
+  const reached = mst.actual ?? (ends.length > 0 && ends.every((a) => a.status === "COMPLETED") ? ends.map((a) => a.aEnd ?? a.end).reduce((a, b) => maxDate(a, b)) : null);
+  const forecast = reached ?? (ends.length ? ends.map((a) => a.end).reduce((a, b) => maxDate(a, b)) : maxDate(mst.forecast || mst.target, mst.target < TODAY ? TODAY : mst.target));
   const slip = diffDays(mst.target, forecast);
+  const done = !!reached;
   const state: MilestoneState = done ? "DONE" : slip <= 0 ? "ON_TRACK" : slip <= 5 ? "WATCH" : slip <= 10 ? "AT_RISK" : "LATE";
   return { forecast, slip, state, done };
 }
@@ -442,79 +539,111 @@ export function milestoneForecast(mst: Milestone, activities: Activity[]) {
 export type HealthArea = { key: string; label: Txt; score: number | null; link: string };
 export type HealthDriver = { area: string; text: Txt; impact: number; link: string; attention: boolean };
 
-/** Project health 0–100 across eight areas, with signed drivers that explain the score. */
+const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
+
+/**
+ * Project health 0–100 across eight areas, with signed drivers that explain the score. An area with
+ * no records of its own has no score (null) and does not count. With no activities there is no score
+ * at all: `hasData` is false, the score is 0 and there are no drivers.
+ */
 export function projectHealth(s: OpsData) {
   const st = programmeStats(s.activities);
   const drivers: HealthDriver[] = [];
   const clamp = (v: number) => Math.max(0, Math.min(100, Math.round(v)));
+  const areaDefs: Omit<HealthArea, "score">[] = [
+    { key: "schedule", label: { en: "Schedule", az: "Qrafik" }, link: R.programme() },
+    { key: "cost", label: { en: "Cost & cash flow", az: "Xərc və pul axını" }, link: R.budget },
+    { key: "manpower", label: { en: "Manpower", az: "İşçi qüvvəsi" }, link: R.reports },
+    { key: "materials", label: { en: "Materials", az: "Materiallar" }, link: R.inventory },
+    { key: "equipment", label: { en: "Equipment", az: "Texnika" }, link: R.live },
+    { key: "safety", label: { en: "Safety", az: "Təhlükəsizlik" }, link: R.inspections },
+    { key: "quality", label: { en: "Quality", az: "Keyfiyyət" }, link: R.inspections },
+    { key: "risk", label: { en: "Risk & approvals", az: "Risk və təsdiqlər" }, link: R.rfis },
+  ];
+  if (!st.hasData) {
+    return {
+      hasData: false,
+      score: 0,
+      status: { en: "No programme yet", az: "Hələ qrafik yoxdur" } as Txt,
+      tone: "muted" as Tone,
+      areas: areaDefs.map((a) => ({ ...a, score: null })) as HealthArea[],
+      drivers,
+      stats: st,
+    };
+  }
 
   const blocked = s.activities.filter((a) => a.status === "BLOCKED").length;
   const late = s.milestones.filter((x) => milestoneForecast(x, s.activities).state === "LATE").length;
-  const schedule = clamp(st.spi * 100 - blocked * 6 - late * 4);
+  const schedule = clamp(Math.min(1, st.spi) * 100 - blocked * 6 - late * 4);
   if (st.spi < 0.95) drivers.push({ area: "schedule", text: { en: `Work is ${Math.round((1 - st.spi) * 100)}% behind the planned value`, az: `İş planlaşdırılmış dəyərdən ${Math.round((1 - st.spi) * 100)}% geridədir` }, impact: -Math.round((1 - st.spi) * 60), link: R.pm, attention: st.spi < 0.85 });
-  if (blocked) drivers.push({ area: "schedule", text: { en: `${blocked} ${blocked > 1 ? "activities" : "activity"} blocked on the critical path`, az: `Kritik yolda ${blocked} iş bloklanıb` }, impact: -blocked * 6, link: R.programme(), attention: true });
+  if (blocked) drivers.push({ area: "schedule", text: { en: `${blocked} ${plural(blocked, "activity", "activities")} blocked`, az: `${blocked} iş bloklanıb` }, impact: -blocked * 6, link: R.programme(), attention: true });
+  if (late) drivers.push({ area: "schedule", text: { en: `${late} ${plural(late, "milestone", "milestones")} forecast late`, az: `${late} mərhələ gecikəcək` }, impact: -late * 4, link: R.milestones, attention: true });
 
-  const committed = s.pos.filter((p) => p.status !== "CANCELLED").reduce((a, p) => a + poNet(p), 0);
-  const budgeted = s.pos.filter((p) => p.status !== "CANCELLED").reduce((a, p) => a + budgetOf(s, p.lines), 0);
+  const livePos = s.pos.filter((p) => p.status !== "CANCELLED");
+  const committed = livePos.reduce((a, p) => a + poNet(p), 0);
+  const budgeted = livePos.reduce((a, p) => a + budgetOf(s, p.lines), 0);
   const costVar = budgeted > 0 ? committed / budgeted - 1 : 0;
-  const cost = clamp(92 - Math.max(0, costVar) * 300 + Math.max(0, -costVar) * 60);
-  if (costVar < 0) drivers.push({ area: "cost", text: { en: `Orders placed ${Math.round(-costVar * 100)}% under the BOQ budget`, az: `Sifarişlər smetadan ${Math.round(-costVar * 100)}% aşağı verilib` }, impact: Math.round(-costVar * 40), link: R.budget, attention: false });
+  const cost = livePos.length && budgeted > 0 ? clamp(92 - Math.max(0, costVar) * 300 + Math.max(0, -costVar) * 60) : null;
+  if (cost != null && costVar < 0) drivers.push({ area: "cost", text: { en: `Orders placed ${Math.round(-costVar * 100)}% under the BOQ budget`, az: `Sifarişlər smetadan ${Math.round(-costVar * 100)}% aşağı verilib` }, impact: Math.round(-costVar * 40), link: R.budget, attention: false });
+  if (cost != null && costVar > 0.02) drivers.push({ area: "cost", text: { en: `Orders placed ${Math.round(costVar * 100)}% over the BOQ budget`, az: `Sifarişlər smetadan ${Math.round(costVar * 100)}% yuxarı verilib` }, impact: -Math.round(costVar * 100), link: R.budget, attention: costVar > 0.1 });
 
-  const today = s.reports.filter((r) => r.date <= TODAY).slice(-1)[0];
+  const today = [...s.reports].filter((r) => r.date <= TODAY).sort((a, b) => a.date.localeCompare(b.date)).slice(-1)[0];
   const crewPlanned = s.activities.filter((a) => a.status === "IN_PROGRESS").reduce((a, x) => a + x.crew, 0);
-  const crewOnSite = today ? today.labour.reduce((a, l) => a + l.count, 0) : crewPlanned;
-  const manpower = clamp((crewOnSite / Math.max(1, crewPlanned)) * 90);
-  const shortage = s.impacts.filter((i) => i.kind === "MANPOWER_SHORTAGE" && i.status !== "RESOLVED").length;
-  if (shortage) drivers.push({ area: "manpower", text: { en: "Steel fixers short on the admin foundations", az: "İnzibati bina bünövrəsində armaturçu çatışmır" }, impact: -4, link: R.live, attention: false });
+  const crewOnSite = today ? today.labour.reduce((a, l) => a + l.count, 0) : 0;
+  const shortage = s.impacts.filter((i) => i.kind === "MANPOWER_SHORTAGE" && i.status !== "RESOLVED" && i.status !== "REJECTED").length;
+  const manpower = crewPlanned > 0 && today ? clamp((crewOnSite / crewPlanned) * 90 - shortage * 4) : shortage ? clamp(90 - shortage * 8) : null;
+  if (shortage) drivers.push({ area: "manpower", text: { en: `${shortage} manpower ${plural(shortage, "shortage", "shortages")} reported on site`, az: `Meydançada ${shortage} işçi çatışmazlığı bildirilib` }, impact: -shortage * 4, link: R.live, attention: false });
 
   const low = s.stock.filter((x) => x.reorder > 0 && x.onHand < x.reorder).length;
   const latePos = s.pos.filter(poLate).length;
-  const materials = clamp(95 - low * 4 - latePos * 10);
-  if (latePos) drivers.push({ area: "materials", text: { en: `${latePos} purchase order${latePos > 1 ? "s" : ""} late on delivery`, az: `${latePos} sifarişin çatdırılması gecikir` }, impact: -latePos * 10, link: R.orders, attention: true });
-  if (low) drivers.push({ area: "materials", text: { en: `${low} stock items below the reorder line`, az: `${low} material ehtiyat həddindən aşağıdır` }, impact: -low * 2, link: R.inventory, attention: false });
+  const materials = s.stock.length || livePos.length ? clamp(95 - low * 4 - latePos * 10) : null;
+  if (latePos) drivers.push({ area: "materials", text: { en: `${latePos} purchase ${plural(latePos, "order", "orders")} late on delivery`, az: `${latePos} sifarişin çatdırılması gecikir` }, impact: -latePos * 10, link: R.orders, attention: true });
+  if (low) drivers.push({ area: "materials", text: { en: `${low} stock ${plural(low, "item", "items")} below the reorder line`, az: `${low} material ehtiyat həddindən aşağıdır` }, impact: -low * 2, link: R.inventory, attention: false });
 
-  const broken = s.impacts.filter((i) => i.kind === "EQUIPMENT_FAILURE" && i.status !== "RESOLVED").length;
-  const equipment = clamp(92 - broken * 18);
-  if (broken) drivers.push({ area: "equipment", text: { en: "Mobile crane 50 t out of service", az: "50 t avtokran işlək deyil" }, impact: -broken * 8, link: R.live, attention: true });
+  const broken = s.impacts.filter((i) => i.kind === "EQUIPMENT_FAILURE" && i.status !== "RESOLVED" && i.status !== "REJECTED").length + s.equipment.filter((e) => e.status === "BROKEN_DOWN").length;
+  const equipment = s.equipment.length || broken ? clamp(92 - broken * 18) : null;
+  if (broken) drivers.push({ area: "equipment", text: { en: `${broken} equipment ${plural(broken, "breakdown", "breakdowns")} reported`, az: `${broken} texnika nasazlığı bildirilib` }, impact: -broken * 8, link: R.live, attention: true });
 
   const ncrOpen = s.inspections.filter((i) => i.kind === "NCR" && i.status === "OPEN").length;
-  const safety = clamp(94 - ncrOpen * 2);
+  const incidentsOpen = s.incidents.filter((i) => i.status !== "CLOSED").length;
+  const safety = s.incidents.length || ncrOpen ? clamp(94 - ncrOpen * 2 - incidentsOpen * 6) : null;
+  if (incidentsOpen) drivers.push({ area: "safety", text: { en: `${incidentsOpen} safety ${plural(incidentsOpen, "incident", "incidents")} still open`, az: `${incidentsOpen} təhlükəsizlik hadisəsi hələ açıqdır` }, impact: -incidentsOpen * 6, link: R.safety, attention: true });
 
   const wir = s.inspections.filter((i) => i.kind !== "NCR" && i.inspectedAt);
-  const passRate = wir.length ? wir.filter((i) => i.status === "PASSED" || i.status === "PASSED_WITH_COMMENTS").length / wir.length : 1;
-  const quality = clamp(passRate * 100 - ncrOpen * 5);
-  if (ncrOpen) drivers.push({ area: "quality", text: { en: `${ncrOpen} non-conformance${ncrOpen > 1 ? "s" : ""} open`, az: `${ncrOpen} uyğunsuzluq açıqdır` }, impact: -ncrOpen * 5, link: R.inspections, attention: false });
-  if (passRate > 0.7) drivers.push({ area: "quality", text: { en: `${Math.round(passRate * 100)}% of inspections passed`, az: `Yoxlamaların ${Math.round(passRate * 100)}%-i keçib` }, impact: 4, link: R.inspections, attention: false });
+  const passRate = wir.length ? wir.filter((i) => i.status === "PASSED" || i.status === "PASSED_WITH_COMMENTS").length / wir.length : null;
+  const quality = passRate != null || ncrOpen ? clamp((passRate ?? 1) * 100 - ncrOpen * 5) : null;
+  if (ncrOpen) drivers.push({ area: "quality", text: { en: `${ncrOpen} ${plural(ncrOpen, "non-conformance", "non-conformances")} open`, az: `${ncrOpen} uyğunsuzluq açıqdır` }, impact: -ncrOpen * 5, link: R.inspections, attention: false });
+  if (passRate != null && passRate > 0.7) drivers.push({ area: "quality", text: { en: `${Math.round(passRate * 100)}% of inspections passed`, az: `Yoxlamaların ${Math.round(passRate * 100)}%-i keçib` }, impact: 4, link: R.inspections, attention: false });
 
   const overdueRfi = s.rfis.filter((r) => r.status === "OPEN" && r.dueAt < TODAY).length;
   const pendingApprovals = s.approvals.filter((a) => a.status === "PENDING").length;
-  const risk = clamp(90 - overdueRfi * 14 - pendingApprovals * 3);
-  if (overdueRfi) drivers.push({ area: "risk", text: { en: `${overdueRfi} RFI${overdueRfi > 1 ? "s" : ""} overdue with the designer`, az: `Layihəçidə ${overdueRfi} RFI gecikir` }, impact: -overdueRfi * 14, link: R.rfis, attention: true });
+  const risk = s.rfis.length || s.approvals.length ? clamp(90 - overdueRfi * 14 - pendingApprovals * 3) : null;
+  if (overdueRfi) drivers.push({ area: "risk", text: { en: `${overdueRfi} ${plural(overdueRfi, "RFI", "RFIs")} overdue`, az: `${overdueRfi} RFI gecikir` }, impact: -overdueRfi * 14, link: R.rfis, attention: true });
 
-  const areas: HealthArea[] = [
-    { key: "schedule", label: { en: "Schedule", az: "Qrafik" }, score: schedule, link: R.programme() },
-    { key: "cost", label: { en: "Cost & cash flow", az: "Xərc və pul axını" }, score: cost, link: R.budget },
-    { key: "manpower", label: { en: "Manpower", az: "İşçi qüvvəsi" }, score: manpower, link: R.reports },
-    { key: "materials", label: { en: "Materials", az: "Materiallar" }, score: materials, link: R.inventory },
-    { key: "equipment", label: { en: "Equipment", az: "Texnika" }, score: equipment, link: R.live },
-    { key: "safety", label: { en: "Safety", az: "Təhlükəsizlik" }, score: safety, link: R.inspections },
-    { key: "quality", label: { en: "Quality", az: "Keyfiyyət" }, score: quality, link: R.inspections },
-    { key: "risk", label: { en: "Risk & approvals", az: "Risk və təsdiqlər" }, score: risk, link: R.rfis },
-  ];
+  const scores: Record<string, number | null> = { schedule, cost, manpower, materials, equipment, safety, quality, risk };
+  const areas: HealthArea[] = areaDefs.map((a) => ({ ...a, score: scores[a.key] ?? null }));
   const weights = { schedule: 0.25, cost: 0.15, manpower: 0.1, materials: 0.15, equipment: 0.08, safety: 0.09, quality: 0.08, risk: 0.1 } as Record<string, number>;
-  const score = Math.round(areas.reduce((a, x) => a + (x.score ?? 0) * (weights[x.key] ?? 0), 0));
+  const scored = areas.filter((a) => a.score != null);
+  const wsum = scored.reduce((a, x) => a + (weights[x.key] ?? 0), 0) || 1;
+  const score = Math.round(scored.reduce((a, x) => a + (x.score ?? 0) * (weights[x.key] ?? 0), 0) / wsum);
   const status: Txt = score >= 85 ? { en: "Healthy", az: "Sağlam" } : score >= 72 ? { en: "On track", az: "Qrafikdə" } : score >= 60 ? { en: "Watch", az: "Diqqət" } : score >= 45 ? { en: "At risk", az: "Risk altında" } : { en: "Critical", az: "Kritik" };
   const tone: Tone = score >= 72 ? "ok" : score >= 60 ? "warn" : "bad";
   drivers.sort((a, b) => a.impact - b.impact);
-  return { score, status, tone, areas, drivers, stats: st };
+  return { hasData: true, score, status, tone, areas, drivers, stats: st };
 }
 
 // ---------------------------------------------------------------- billing
 
-/** Value of a building × section at sample rates (for IPC and budget pages). */
-export const sectionWorth = (building: string, section: string) => sectionValue.get(`${building}/${section}`) ?? 0;
+let worthCache: { items: unknown; rates: unknown; map: Map<string, number> } | null = null;
+/** Value of a building × section of the active project (quantity × bill rate), cached until the BOQ or the rates change. */
+export const sectionWorth = (building: string, section: string) => {
+  const items = data.items;
+  const rates = useApp.getState().rates;
+  if (!worthCache || worthCache.items !== items || worthCache.rates !== rates) worthCache = { items, rates, map: sectionValueMap() };
+  return worthCache.map.get(`${building}/${section}`) ?? 0;
+};
 export const sectionName = (id: string, lang: "az" | "en") => {
-  const s = data.sections.find((x) => x.id === id);
+  const s = (data.sections ?? []).find((x) => x.id === id);
   return s ? (lang === "az" ? s.az : s.en) : id;
 };
 

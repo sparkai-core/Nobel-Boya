@@ -1,11 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
-import { NavLink, useLocation, useSearchParams } from "react-router-dom";
+import { Link, NavLink, useLocation, useSearchParams } from "react-router-dom";
 import { Building2, Check, ChevronDown, FileCheck2, FileText, Inbox, LayoutDashboard, Menu, Package, ReceiptText, Truck, Wallet, X, type LucideIcon } from "lucide-react";
-import { Avatar, Toaster, toast, useL } from "../../components/kit";
+import { Avatar, Empty, Toaster, toast, useL } from "../../components/kit";
+import { projectName } from "../../lib/loc";
+import { useVendorDocs } from "../../ops/ext/vendor";
+import { R } from "../../ops/select";
 import { useApp } from "../../lib/store";
-import { useOps } from "../../ops/store";
 import { tradeName } from "../../ops/select";
-import { BUYER, portalVendorId, VP, vendorCounts, vendorView } from "./model";
+import { useOps } from "../../ops/store";
+import { buyerName, portalVendorId, VP, vendorCounts, vendorView } from "./model";
 
 type BadgeKey = "rfqs" | "orders" | "invoice" | "docs" | "queries";
 type NavItem = { to: string; label: string; short: string; icon: LucideIcon; end?: boolean; badge?: BadgeKey; tab?: boolean };
@@ -69,6 +72,7 @@ export function VpShell({ children }: { children: ReactNode }) {
     main.current?.scrollTo({ top: 0 });
   }, [pathname]);
 
+  useVendorDocs((d) => d.docs);
   const vendorId = portalVendorId(s);
   const view = useMemo(() => vendorView(s, vendorId), [s, vendorId]);
   const counts = useMemo(() => (view ? vendorCounts(s, view) : null), [s, view]);
@@ -92,7 +96,7 @@ export function VpShell({ children }: { children: ReactNode }) {
           <img src="./brand/nobel-mark.png" alt="" className="vp-brand-mark" />
           <span>
             <strong>{t("Vendor portal")}</strong>
-            <small>{t("Qobu project")}</small>
+            <small className="truncate">{projectName(lang)}</small>
           </span>
           <button type="button" className="icon-btn vp-side-close" onClick={() => setOpen(false)} aria-label={t("Close menu")}>
             <X size={18} />
@@ -103,7 +107,7 @@ export function VpShell({ children }: { children: ReactNode }) {
             <Avatar name={vendor.name} size={34} />
             <span>
               <strong className="truncate">{vendor.name}</strong>
-              <small className="truncate">{tradeName(vendor.trade, lang)} · {vendor.city}</small>
+              <small className="truncate">{[tradeName(vendor.trade, lang), vendor.city].filter(Boolean).join(" · ")}</small>
             </span>
           </div>
         ) : null}
@@ -145,13 +149,13 @@ export function VpShell({ children }: { children: ReactNode }) {
               <span className="vp-top-names">
                 <strong className="truncate">{vendor.name}</strong>
                 <small className="truncate">
-                  {t("Qobu project")} · {t("buyer")}: {BUYER}
+                  {projectName(lang)} · {t("buyer")}: {buyerName()}
                 </small>
               </span>
             </div>
           ) : null}
           <div className="vp-top-end">
-            <VendorSwitch current={vendorId} />
+            {vendor ? <VendorSwitch current={vendorId} /> : null}
             <div className="lang vp-lang" role="group" aria-label={t("Language")}>
               <button type="button" aria-pressed={lang === "en"} onClick={() => setLang("en")}>
                 EN
@@ -163,13 +167,23 @@ export function VpShell({ children }: { children: ReactNode }) {
           </div>
         </header>
 
-        <div className="vp-content">{children}</div>
+        <div className="vp-content">
+          {vendor ? (
+            children
+          ) : (
+            <div className="k-page vp-page">
+              <Empty icon={<Building2 size={22} />} title={t("No vendors yet")} action={<Link className="btn btn-primary" to={R.newVendor}>{t("Add a vendor")}</Link>}>
+                {t("No vendors yet. Add a vendor in Procurement → Vendors, then open the portal as that vendor.")}
+              </Empty>
+            </div>
+          )}
+        </div>
 
         <footer className="vp-foot">
           <span className="vp-powered">
             {t("Powered by")} <img src="./brand/nobel-logo.png" alt="Nobel" />
           </span>
-          <span className="muted small">{t("Vendor portal for the Qobu project. Demo data is kept in this browser and shared with the buyer's tab.")}</span>
+          <span className="muted small">{t("Vendor portal for {p}. Records are kept in this browser and shared with the buyer's tab.", { p: projectName(lang) })}</span>
         </footer>
       </div>
 
@@ -238,7 +252,7 @@ function VendorSwitch({ current }: { current: string }) {
   return (
     <div className="vp-switch" ref={ref}>
       <button type="button" className="vp-switch-btn" aria-haspopup="listbox" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-        <span className="vp-demo-tag">{t("Demo")}</span>
+        <span className="vp-demo-tag">{t("Preview")}</span>
         <span className="vp-switch-text">
           <small>{t("Viewing as")}</small>
           <b className="truncate">{me?.name ?? current}</b>
@@ -247,7 +261,7 @@ function VendorSwitch({ current }: { current: string }) {
       </button>
       {open ? (
         <div className="vp-switch-pop" role="listbox" aria-label={t("Switch vendor")}>
-          <p className="vp-switch-note">{t("Demo control: pick the vendor whose portal you want to show. Everything they do appears in the buyer's tab.")}</p>
+          <p className="vp-switch-note">{t("Vendors have no login yet: pick the vendor whose portal you want to open. Everything they do appears in the buyer's tab.")}</p>
           <ul>
             {rows.map(({ v, tags }) => (
               <li key={v.id}>

@@ -114,7 +114,7 @@ export function InvoicesPage() {
           <>
             <button type="button" className="btn btn-primary" onClick={() => navigate(MONEY.inbox)}>
               <FileUp size={15} />
-              {t("Add supplier invoices")}
+              {t("Enter an invoice")}
             </button>
             <button type="button" className="btn btn-ghost" onClick={exportBills}>
               <Download size={15} />
@@ -204,7 +204,7 @@ export function InvoicesPage() {
                 })}
               </ul>
             ) : (
-              <p className="pmn-lane-empty">{l.key === "fix" ? t("Every bill matches.") : l.key === "sign" ? t("Nothing waiting for a signature.") : t("Nothing booked and unpaid.")}</p>
+              <p className="pmn-lane-empty">{!s.invoices.length ? t("No bills yet.") : l.key === "fix" ? t("Every bill matches.") : l.key === "sign" ? t("Nothing waiting for a signature.") : t("Nothing booked and unpaid.")}</p>
             )}
             <footer className="pmn-lane-foot">
               <span>{t("Total")}</span>

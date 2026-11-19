@@ -9,11 +9,11 @@ import { fmtMoney, fmtQty, unitLabel } from "../../../lib/format";
 import type { Agreement, OpsData, Txt } from "../../../ops/types";
 import { agreementOfPo, agrOpen, agrUsed, matOf, PR, suppliersOf, VAT } from "./shared";
 import { AgrStatus, CapMeter, VarChip } from "./parts";
+import { buyerLabel, createDirectPoAt, projectTxt, siteTxt } from "../../../ops/ext/proc-client";
 
 type Mode = "DIRECT" | "CALLOFF";
 type DLine = { id: string; material: string | null; description: Txt; qty: number; unit: string; rate: number };
 
-const DELIVER: Txt = { en: "Qobu site, main gate, Absheron district", az: "Qobu meydançası, əsas darvaza, Abşeron rayonu" };
 let uid = 0;
 const nid = () => `nl${++uid}`;
 
@@ -21,7 +21,8 @@ type Init = { mode: Mode; agreementId: string | null; vendorId: string; lines: D
 
 /** Reads ?agreement= / ?from= / ?mr= / ?material= into a starting order. */
 function initialOrder(s: OpsData, p: URLSearchParams, repeat: (ref: string) => string): Init {
-  const eta = (vendorId: string) => addDays(TODAY, s.vendors.find((v) => v.id === vendorId)?.avgDeliveryDays ?? 7);
+  // The vendor's recorded delivery days when known; otherwise a week from today, for the user to change.
+  const eta = (vendorId: string) => addDays(TODAY, s.vendors.find((v) => v.id === vendorId)?.avgDeliveryDays || 7);
   const base: Init = { mode: "DIRECT", agreementId: null, vendorId: "", lines: [], expectedAt: addDays(TODAY, 7), mrId: null, note: "", source: null };
   const agrLines = (a: Agreement, keys?: { key: string; qty: number }[]): DLine[] =>
     (keys ?? a.rates.slice(0, 1).map((r) => ({ key: r.material, qty: r.minQty })))
@@ -71,7 +72,7 @@ export function NewOrderPage() {
   const [vendorId, setVendorId] = useState(init.vendorId);
   const [lines, setLines] = useState<DLine[]>(init.lines);
   const [expectedAt, setExpectedAt] = useState(init.expectedAt);
-  const [deliverTo, setDeliverTo] = useState(x(DELIVER));
+  const [deliverTo, setDeliverTo] = useState(() => x(siteTxt()));
   const [note, setNote] = useState(init.note);
   const [mrId, setMrId] = useState<string | null>(init.mrId);
   const [pickQ, setPickQ] = useState("");
@@ -121,7 +122,7 @@ export function NewOrderPage() {
     setAgrId(a.id);
     setVendorId(a.vendorId);
     setLines((ls) => fromAgreement(a, ls));
-    setExpectedAt(addDays(TODAY, s.vendors.find((v) => v.id === a.vendorId)?.avgDeliveryDays ?? 3));
+    setExpectedAt(addDays(TODAY, s.vendors.find((v) => v.id === a.vendorId)?.avgDeliveryDays || 7));
   };
   const switchMode = (m: Mode) => {
     if (m === mode) return;
@@ -153,16 +154,17 @@ export function NewOrderPage() {
   const issue = () => {
     setTried(true);
     if (blocked || !vendor) return;
-    const id = s.createDirectPo({
-      vendorId: vendor.id,
-      lines: lines.map((l) => ({ material: l.material, description: l.description, qty: l.qty, unit: l.unit, rate: l.rate })),
-      expectedAt,
-      agreementId: mode === "CALLOFF" ? (agr?.id ?? null) : null,
-      mrId,
-      note: note.trim(),
-    });
-    const dt = deliverTo.trim();
-    if (dt && dt !== DELIVER.en && dt !== DELIVER.az) s.patchItem("pos", id, { deliverTo: same(dt) });
+    const id = createDirectPoAt(
+      {
+        vendorId: vendor.id,
+        lines: lines.map((l) => ({ material: l.material, description: l.description, qty: l.qty, unit: l.unit, rate: l.rate })),
+        expectedAt,
+        agreementId: mode === "CALLOFF" ? (agr?.id ?? null) : null,
+        mrId,
+        note: note.trim(),
+      },
+      deliverTo,
+    );
     toast(mode === "CALLOFF" && agr ? t("{po} called off from {a}. {v} sees it in the portal.", { po: id, a: agr.ref, v: vendor.name }) : t("{po} issued to {v}. Waiting for the vendor to accept.", { po: id, v: vendor.name }), "ok");
     navigate(R.order(id));
   };
@@ -232,7 +234,7 @@ export function NewOrderPage() {
                   onChange={(e) => {
                     setVendorId(e.target.value);
                     const v = s.vendors.find((y) => y.id === e.target.value);
-                    if (v) setExpectedAt(addDays(TODAY, v.avgDeliveryDays));
+                    if (v && v.avgDeliveryDays > 0) setExpectedAt(addDays(TODAY, v.avgDeliveryDays));
                   }}
                 >
                   <option value="">{t("Choose a vendor…")}</option>
@@ -265,18 +267,16 @@ export function NewOrderPage() {
                     <Link to={R.vendor(vendor.id)} className="pur-vcard-name">
                       {vendor.name}
                     </Link>
-                    <small>
-                      {tradeName(vendor.trade, lang)} · {vendor.city} · {t("pays {terms}", { terms: vendor.paymentTerms })}
-                    </small>
+                    <small>{[tradeName(vendor.trade, lang), vendor.city, t("pays {terms}", { terms: t(vendor.paymentTerms) })].filter(Boolean).join(" · ")}</small>
                   </div>
                   <dl>
                     <div>
                       <dt>{t("Score")}</dt>
-                      <dd className="num-inline">{vendor.overall.toFixed(1)}</dd>
+                      <dd className="num-inline">{vendor.overall > 0 ? vendor.overall.toFixed(1) : "—"}</dd>
                     </div>
                     <div>
                       <dt>{t("Delivers in")}</dt>
-                      <dd className="num-inline">{t("{n} d", { n: vendor.avgDeliveryDays })}</dd>
+                      <dd className="num-inline">{vendor.avgDeliveryDays > 0 ? t("{n} d", { n: vendor.avgDeliveryDays }) : "—"}</dd>
                     </div>
                   </dl>
                   {vendor.status !== "APPROVED" ? <Badge tone={statusMeta("vendor", vendor.status).tone}>{x(statusMeta("vendor", vendor.status).label)}</Badge> : null}
@@ -434,7 +434,7 @@ export function NewOrderPage() {
 
           <Panel title={t("Delivery")} icon={<Truck size={15} />}>
             <div className="k-form">
-              <Field label={t("Expected delivery")} error={tried && expectedAt < TODAY ? t("In the past") : undefined} hint={vendor ? t("{v} usually delivers in {n} days.", { v: vendor.name, n: vendor.avgDeliveryDays }) : undefined}>
+              <Field label={t("Expected delivery")} error={tried && expectedAt < TODAY ? t("In the past") : undefined} hint={vendor && vendor.avgDeliveryDays > 0 ? t("{v} usually delivers in {n} days.", { v: vendor.name, n: vendor.avgDeliveryDays }) : undefined}>
                 <input className="input" type="date" value={expectedAt} min={TODAY} onChange={(e) => setExpectedAt(e.target.value)} />
               </Field>
               <Field label={t("For material request")} hint={t("Optional. Links the order to the request.")}>
@@ -520,7 +520,7 @@ export function NewOrderPage() {
               {t("Draft")}
             </span>
             <header className="po-lpo-head">
-              <img src="./brand/nobel-logo.png" alt="Nobel" />
+              <strong className="po-lpo-buyer">{buyerLabel(lang)}</strong>
               <div>
                 <span className="po-lpo-kind">{mode === "CALLOFF" ? t("Call-off order") : t("Local purchase order")}</span>
                 <strong className="k-mono">{nextRef}</strong>
@@ -531,13 +531,13 @@ export function NewOrderPage() {
               <div>
                 <span>{t("To")}</span>
                 <strong>{vendor?.name ?? <span className="muted">{t("Choose a vendor…")}</span>}</strong>
-                <small>{vendor ? `${vendor.city} · ${t("TRN")} ${vendor.trn}` : null}</small>
-                <small>{vendor ? `${vendor.contact} · ${vendor.phone}` : null}</small>
+                <small>{vendor ? [vendor.city, vendor.trn ? `${t("TRN")} ${vendor.trn}` : ""].filter(Boolean).join(" · ") : null}</small>
+                <small>{vendor ? [vendor.contact, vendor.phone.replace(/[\s+]|994/g, "") ? vendor.phone : ""].filter(Boolean).join(" · ") : null}</small>
               </div>
               <div>
                 <span>{t("Deliver to")}</span>
                 <strong>{deliverTo || "—"}</strong>
-                <small>{t("Qobu warehouse and administration building")}</small>
+                <small>{x(projectTxt())}</small>
               </div>
             </div>
             <dl className="po-lpo-terms">

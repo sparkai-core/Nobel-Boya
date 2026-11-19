@@ -8,7 +8,7 @@ import { cpm, R } from "../../../ops/select";
 import { fmtMoney, fmtMoneyShort } from "../../../lib/format";
 import { updateChange } from "../../../ops/ext/records";
 import type { ChangeStatus } from "../../../ops/types";
-import { changeCost, NotFound, rfiShownStatus, signed, WORKS_VALUE } from "./shared";
+import { changeCost, NotFound, rfiShownStatus, signed, worksValue } from "./shared";
 import { ChangeLines, type ChangeLine } from "./ChangeLines";
 import { reasonLabel } from "./ChangeDialog";
 
@@ -41,10 +41,12 @@ export function ChangeDetailPage() {
   const actCpm = act ? crit.get(act.id) : undefined;
 
   const approvedOthers = changes.filter((c) => c.status === "APPROVED" && c.id !== change.id).reduce((a, c) => a + changeCost(c), 0);
-  const before = WORKS_VALUE + approvedOthers;
+  const before = worksValue() + approvedOthers;
   const after = before + cost;
   const rejected = change.status === "REJECTED";
-  const deltaW = Math.min(40, Math.max(1.2, (Math.abs(cost) / Math.max(before, after)) * 100 * 25));
+  const base = Math.max(before, after, Math.abs(cost));
+  const deltaW = base > 0 ? Math.min(40, Math.max(1.2, (Math.abs(cost) / base) * 100 * 25)) : 1.2;
+  const wv = worksValue();
   const order = ["DRAFT", "SUBMITTED", "UNDER_REVIEW", "APPROVED"];
   const at = rejected ? 3 : order.indexOf(change.status);
   const life: LifeStep[] = [
@@ -99,7 +101,7 @@ export function ChangeDetailPage() {
         }
         aside={
           <div className="pmr-keyfigs">
-            <KeyFigure label={t("Cost change")} value={<span className="pmr-big">{signed(cost, fmtMoney)} <small className="k-cur">AZN</small></span>} tone={cost > 0 ? "bad" : cost < 0 ? "ok" : undefined} sub={t("{p} of the works value", { p: `${((cost / WORKS_VALUE) * 100).toFixed(2)}%` })} />
+            <KeyFigure label={t("Cost change")} value={<span className="pmr-big">{signed(cost, fmtMoney)} <small className="k-cur">AZN</small></span>} tone={cost > 0 ? "bad" : cost < 0 ? "ok" : undefined} sub={wv > 0 ? t("{p} of the works value", { p: `${((cost / wv) * 100).toFixed(2)}%` }) : undefined} />
             <KeyFigure label={t("Programme")} value={t("{n} days", { n: signed(change.daysDelta, String) })} tone={change.daysDelta > 0 ? "warn" : change.daysDelta < 0 ? "ok" : undefined} />
           </div>
         }
@@ -181,7 +183,7 @@ export function ChangeDetailPage() {
                 <i className={cost >= 0 ? "add" : "cut"} style={{ width: `${deltaW}%` }} />
               </div>
               <p className="muted small">
-                {t("Works value {w} AZN, plus {n} other approved changes.", { w: fmtMoneyShort(WORKS_VALUE), n: changes.filter((c) => c.status === "APPROVED" && c.id !== change.id).length })} {t("The change is drawn 25× larger so it can be seen.")}
+                {t("Works value {w} AZN, plus {n} other approved changes.", { w: fmtMoneyShort(worksValue()), n: changes.filter((c) => c.status === "APPROVED" && c.id !== change.id).length })} {t("The change is drawn 25× larger so it can be seen.")}
               </p>
             </Panel>
 

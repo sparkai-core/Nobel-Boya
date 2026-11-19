@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Dices, Gauge, ListOrdered, Route, SlidersHorizontal } from "lucide-react";
-import { BarList, Badge, PageHero, Panel, useL } from "../../../components/kit";
+import { Dices, Gauge, ListOrdered, Plus, Route, SlidersHorizontal, Upload } from "lucide-react";
+import { BarList, Badge, Empty, PageHero, Panel, useL } from "../../../components/kit";
 import { addDays, diffDays, TODAY } from "../../../ops/dates";
 import { R, type Tone } from "../../../ops/select";
 import { useSchedule } from "./model";
 import { OPTIMISM, simulate } from "./montecarlo";
 
-const RUNS = 2000;
+/** Runs scale down for big programmes so a run stays well under a second. */
+const runsFor = (n: number) => Math.max(200, Math.min(2000, Math.floor(600_000 / Math.max(1, n))));
 
 /**
  * Finish-date outlook: a Monte-Carlo simulation of the remaining work run in the browser, shown as a
@@ -20,7 +21,8 @@ export function FinishRiskPage() {
   const { activities, links, outlook, byId } = useSchedule();
   const [seed, setSeed] = useState(1);
   const [running, setRunning] = useState(false);
-  const res = useMemo(() => simulate(activities, links, RUNS, seed), [activities, links, seed]);
+  const RUNS = runsFor(activities.length);
+  const res = useMemo(() => simulate(activities, links, RUNS, seed), [activities, links, RUNS, seed]);
 
   useEffect(() => {
     if (!running) return;
@@ -31,8 +33,11 @@ export function FinishRiskPage() {
     return () => clearTimeout(id);
   }, [running]);
 
-  const contract = diffDays(TODAY, outlook.contract);
-  const chance = res.finishes.filter((f) => f <= contract).length / res.runs;
+  // Measured against the contract finish when one is set, else against the programme's own finish.
+  const targetDate = outlook.contractKnown ? outlook.contract : outlook.current;
+  const targetWord = outlook.contractKnown ? t("Contract") : t("Programme finish");
+  const contract = diffDays(TODAY, targetDate);
+  const chance = res.runs ? res.finishes.filter((f) => f <= contract).length / res.runs : 0;
   const p10 = res.pct(0.1);
   const p50 = res.pct(0.5);
   const p80 = res.pct(0.8);
@@ -40,10 +45,10 @@ export function FinishRiskPage() {
   const spread = p90 - p10;
   const verdict: { label: string; tone: Tone; text: string } =
     chance >= 0.7
-      ? { label: t("Likely on time"), tone: "ok", text: t("Most runs finish by the contract date.") }
+      ? { label: t("Likely on time"), tone: "ok", text: outlook.contractKnown ? t("Most runs finish by the contract date.") : t("Most runs finish by the programme's own finish date.") }
       : chance >= 0.3
-        ? { label: t("At risk"), tone: "warn", text: t("The contract date is reachable, but not in most runs.") }
-        : { label: t("Likely late"), tone: "bad", text: t("Few runs reach the contract date with the work as planned.") };
+        ? { label: t("At risk"), tone: "warn", text: outlook.contractKnown ? t("The contract date is reachable, but not in most runs.") : t("The programme's finish date is reachable, but not in most runs.") }
+        : { label: t("Likely late"), tone: "bad", text: outlook.contractKnown ? t("Few runs reach the contract date with the work as planned.") : t("Few runs reach the programme's finish date with the work as planned.") };
   const spreadWord = spread <= 14 ? t("Tight") : spread <= 35 ? t("Normal") : t("Wide");
 
   // Histogram bins.
@@ -74,6 +79,34 @@ export function FinishRiskPage() {
     .filter((r) => r.a && r.a.status !== "COMPLETED")
     .sort((a, b) => b.share - a.share)
     .slice(0, 8);
+
+  if (!res.hasWork) {
+    return (
+      <div className="k-page pms">
+        <PageHero eyebrow={t("Project management · Finish risk")} title={t("Finish-date outlook")} subtitle={t("Simulated runs of the remaining work, each with its own durations, pushed through the logic to a finish date.")} art="risk" />
+        <div className="k-panel">
+          <Empty
+            icon={<Gauge size={20} />}
+            title={activities.length ? t("No remaining work to simulate") : t("No programme yet")}
+            action={
+              activities.length ? undefined : (
+                <div className="pms-empty-actions">
+                  <button type="button" className="btn btn-primary" onClick={() => navigate(`${R.planning("activities")}?import=1`)}>
+                    <Upload size={15} /> {t("Import a P6 / MS Project file")}
+                  </button>
+                  <button type="button" className="btn btn-ghost" onClick={() => navigate(`${R.planning("activities")}?add=1`)}>
+                    <Plus size={15} /> {t("Add an activity")}
+                  </button>
+                </div>
+              )
+            }
+          >
+            {activities.length ? t("Every activity is finished.") : t("The finish-date outlook runs on the programme's activities and links.")}
+          </Empty>
+        </div>
+      </div>
+    );
+  }
 
   const marker = (day: number, label: string, cls: string, row: number) => (
     <g className={`pms-mc-mark ${cls}`}>
@@ -108,9 +141,9 @@ export function FinishRiskPage() {
         </div>
         <div className="pms-verdict-figs">
           <div>
-            <span>{t("Chance of finishing by the contract date")}</span>
+            <span>{outlook.contractKnown ? t("Chance of finishing by the contract date") : t("Chance of finishing by the programme finish")}</span>
             <b className="num-inline">{Math.round(chance * 100)}%</b>
-            <small>{d(outlook.contract)}</small>
+            <small>{d(targetDate)}</small>
           </div>
           <div>
             <span>{t("P50 finish")}</span>
@@ -154,14 +187,14 @@ export function FinishRiskPage() {
                   {d(addDays(TODAY, b.from), false)}
                 </text>
               ))}
-              {marker(contract, t("Contract"), "contract", 0)}
+              {marker(contract, targetWord, "contract", 0)}
               {marker(p50, "P50", "p50", 1)}
               {marker(p80, "P80", "p80", 2)}
             </svg>
           </div>
           <div className="pms-legend">
             <span className="lg-mc-ok">{t("Runs on time")}</span>
-            <span className="lg-mc-late">{t("Runs after the contract date")}</span>
+            <span className="lg-mc-late">{outlook.contractKnown ? t("Runs after the contract date") : t("Runs after the programme finish")}</span>
             <span className="lg-mc-cum">{t("Share finished")}</span>
             <span className="lg-mc-p">{t("P50 / P80")}</span>
           </div>

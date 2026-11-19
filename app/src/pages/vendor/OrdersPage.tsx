@@ -7,7 +7,7 @@ import { useOps } from "../../ops/store";
 import { TODAY } from "../../ops/dates";
 import { fmtMoneyShort } from "../../lib/format";
 import type { PurchaseOrder } from "../../ops/types";
-import { BUYER, orderMoney, orderState, useVendor, VP, type OrderStage } from "./model";
+import { buyerName, orderMoney, orderState, useVendor, VP, type OrderStage } from "./model";
 import { DispatchDialog, StageBadge, useEyebrow } from "./parts";
 
 type Filter = "open" | "done" | "all";
@@ -28,7 +28,7 @@ export function VpOrders() {
   const title = (po: PurchaseOrder) => (po.rfqId ? x(s.rfqs.find((r) => r.id === po.rfqId)?.title) : x(po.lines[0]?.description));
   const accept = (po: PurchaseOrder) => {
     vendorAcceptPo(po.id);
-    toast(t("{ref} accepted. {buyer} can see it.", { ref: po.ref, buyer: BUYER }));
+    toast(t("{ref} accepted. {buyer} can see it.", { ref: po.ref, buyer: buyerName() }));
   };
   const waiting = rows.filter((r) => r.st.stage === "accept");
   const onOrder = rows.reduce((a, r) => a + r.m.total, 0);
@@ -107,7 +107,7 @@ export function VpOrders() {
       <PageHero
         eyebrow={eyebrow("Purchase orders")}
         title={t("Purchase orders")}
-        subtitle={t("Orders {buyer} has placed with you: accept them, dispatch the goods and follow the money.", { buyer: BUYER })}
+        subtitle={t("Orders {buyer} has placed with you: accept them, dispatch the goods and follow the money.", { buyer: buyerName() })}
         flow={["Accept", "Dispatch", "Received on site", "Invoice", "Paid"]}
         art="order"
       />
@@ -217,7 +217,7 @@ export function VpOrders() {
             />
           </div>
         }
-        empty={t("No orders here yet. When {buyer} approves one of your quotes, the order appears here.", { buyer: BUYER })}
+        empty={t("No orders here yet. When {buyer} approves one of your quotes, the order appears here.", { buyer: buyerName() })}
       />
 
       {dispatching ? <DispatchDialog open onClose={() => setDispatching(null)} po={dispatching} balance={orderState(s, dispatching, view.invoices).stage === "balance"} /> : null}

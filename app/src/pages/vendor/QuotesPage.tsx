@@ -4,7 +4,7 @@ import { ArrowRight, BarChart3, FileText, Inbox } from "lucide-react";
 import { Badge, Columns, Empty, FilterChips, Money, PageHero, Panel, StatTiles, toneColor, useL } from "../../components/kit";
 import { quoteTotal } from "../../ops/select";
 import { fmtMoneyShort } from "../../lib/format";
-import { BUYER, quoteJourney, useVendor, VP, type Outcome } from "./model";
+import { buyerName, quoteJourney, useVendor, VP, type Outcome } from "./model";
 import { QuoteJourney, useEyebrow } from "./parts";
 
 type Group = "buyer" | "won" | "lost";
@@ -45,7 +45,7 @@ export function VpQuotes() {
 
   return (
     <div className="k-page vp-page">
-      <PageHero eyebrow={eyebrow("My quotes")} title={t("My quotes")} subtitle={t("Every quote you have sent to {buyer} and where it stands now.", { buyer: BUYER })} flow={["Sent", "Read", "With the buyer", "Order"]} art="quotes" />
+      <PageHero eyebrow={eyebrow("My quotes")} title={t("My quotes")} subtitle={t("Every quote you have sent to {buyer} and where it stands now.", { buyer: buyerName() })} flow={["Sent", "Read", "With the buyer", "Order"]} art="quotes" />
 
       <StatTiles
         items={[

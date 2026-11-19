@@ -14,14 +14,11 @@ export const liveActivity = (a: Activity) => (a.status === "IN_PROGRESS" || a.st
 /** Hours booked by a worker over the last seven days. */
 export const weekHours = (att: AttendanceRow[], workerId: string) => att.filter((a) => a.workerId === workerId && WEEK.includes(a.date)).reduce((x, a) => x + a.hours, 0);
 
-/** Output norms from the BOQ labour constants, per unit of measured work. */
-export const NORM: Record<string, number> = { "m³": 0.55, kg: 30, "m²": 1.5 };
-
-export type CrewOutput = { activity: Activity; unit: string; qty: number; manHours: number; rate: number; norm: number; ratio: number; workers: number; days: number };
+export type CrewOutput = { activity: Activity; unit: string; qty: number; manHours: number; rate: number; workers: number; days: number };
 
 /**
  * Output per man-hour by crew over the last seven days: quantities from the daily reports divided by the
- * hours booked in attendance against the same activity. Deterministic, no randomness.
+ * hours booked in attendance against the same activity. Only what was logged; no norms are assumed.
  */
 export function crewOutput(activities: Activity[], workers: Worker[], attendance: AttendanceRow[], reports: DailyReport[]): CrewOutput[] {
   const from = addDays(TODAY, -6);
@@ -35,11 +32,10 @@ export function crewOutput(activities: Activity[], workers: Worker[], attendance
     if (!entries.length) continue;
     const unit = entries[0]!.unit;
     const qty = entries.filter((e) => e.unit === unit).reduce((x, e) => x + e.qty, 0);
-    const norm = NORM[unit] ?? 1;
     const rate = qty / manHours;
-    out.push({ activity: a, unit, qty, manHours, rate, norm, ratio: rate / norm, workers: workers.filter((w) => w.activityId === a.id).length, days: new Set(reps.filter((r) => r.entries.some((e) => e.activityId === a.id)).map((r) => r.date)).size });
+    out.push({ activity: a, unit, qty, manHours, rate, workers: workers.filter((w) => w.activityId === a.id).length, days: new Set(reps.filter((r) => r.entries.some((e) => e.activityId === a.id)).map((r) => r.date)).size });
   }
-  return out.sort((x, y) => y.ratio - x.ratio);
+  return out.sort((x, y) => x.unit.localeCompare(y.unit) || y.rate - x.rate);
 }
 
 /** Workers whose activity has no output in the reports (shown as "no output logged"). */

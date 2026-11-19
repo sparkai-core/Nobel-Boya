@@ -66,7 +66,7 @@ export function ComparePage() {
   const hero = (
     <PageHero
       eyebrow={t("Procurement · Comparison")}
-      title={t("AI vendor comparison")}
+      title={t("Vendor comparison")}
       subtitle={t("Quotes scored on price, delivery, vendor record, reliability, risk and completeness. Set what matters and the pick explains itself.")}
       flow={["Pick the RFQ", "Set priorities", "Read the pick", "Send for approval"]}
       art="compare"

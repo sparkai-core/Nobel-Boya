@@ -22,7 +22,6 @@ const OrderDetailPage = lazy(() => import("../pages/procurement/orders/OrderDeta
 const ReceiptsPage = lazy(() => import("../pages/procurement/orders/ReceiptsPage").then((m) => ({ default: m.ReceiptsPage })));
 const ReceiptDetailPage = lazy(() => import("../pages/procurement/orders/ReceiptDetailPage").then((m) => ({ default: m.ReceiptDetailPage })));
 const InventoryPage = lazy(() => import("../pages/procurement/orders/InventoryPage").then((m) => ({ default: m.InventoryPage })));
-const ExceptionsPage = lazy(() => import("../pages/procurement/orders/ExceptionsPage").then((m) => ({ default: m.ExceptionsPage })));
 const PaymentsPage = lazy(() => import("../pages/procurement/orders/PaymentsPage").then((m) => ({ default: m.PaymentsPage })));
 const PaymentDetailPage = lazy(() => import("../pages/procurement/orders/PaymentDetailPage").then((m) => ({ default: m.PaymentDetailPage })));
 const VendorsPage = lazy(() => import("../pages/procurement/orders/VendorsPage").then((m) => ({ default: m.VendorsPage })));
@@ -42,9 +41,7 @@ const DelaysPage = lazy(() => import("../pages/pm/control/DelaysPage").then((m) 
 const LivePage = lazy(() => import("../pages/pm/control/LivePage").then((m) => ({ default: m.LivePage })));
 const RecoveryPage = lazy(() => import("../pages/pm/control/RecoveryPage").then((m) => ({ default: m.RecoveryPage })));
 const HealthPage = lazy(() => import("../pages/pm/control/HealthPage").then((m) => ({ default: m.HealthPage })));
-const ProgressPage = lazy(() => import("../pages/pm/control/ProgressPage").then((m) => ({ default: m.ProgressPage })));
 const DailyReportsPage = lazy(() => import("../pages/pm/control/DailyReportsPage").then((m) => ({ default: m.DailyReportsPage })));
-const AiSchedulingPage = lazy(() => import("../pages/pm/control/AiSchedulingPage").then((m) => ({ default: m.AiSchedulingPage })));
 const RfisPage = lazy(() => import("../pages/pm/records/RfisPage").then((m) => ({ default: m.RfisPage })));
 const RfiDetailPage = lazy(() => import("../pages/pm/records/RfiDetailPage").then((m) => ({ default: m.RfiDetailPage })));
 const ChangesPage = lazy(() => import("../pages/pm/records/ChangesPage").then((m) => ({ default: m.ChangesPage })));
@@ -70,7 +67,6 @@ const InvoiceInboxPage = lazy(() => import("../pages/procurement/money/InvoiceIn
 const PayRunPage = lazy(() => import("../pages/procurement/money/PayRunPage").then((m) => ({ default: m.PayRunPage })));
 const SchedulePage = lazy(() => import("../pages/procurement/plan/SchedulePage").then((m) => ({ default: m.SchedulePage })));
 const DeliveriesPage = lazy(() => import("../pages/procurement/plan/DeliveriesPage").then((m) => ({ default: m.DeliveriesPage })));
-const ForecastPage = lazy(() => import("../pages/procurement/plan/ForecastPage").then((m) => ({ default: m.ForecastPage })));
 const AnalyticsPage = lazy(() => import("../pages/procurement/plan/AnalyticsPage").then((m) => ({ default: m.AnalyticsPage })));
 const NewOrderPage = lazy(() => import("../pages/procurement/purchasing/NewOrderPage").then((m) => ({ default: m.NewOrderPage })));
 const AgreementsPage = lazy(() => import("../pages/procurement/purchasing/AgreementsPage").then((m) => ({ default: m.AgreementsPage })));
@@ -110,7 +106,8 @@ export function opsRoutes() {
     r("procurement/receipts", <ReceiptsPage />),
     r("procurement/receipts/:id", <ReceiptDetailPage />),
     r("procurement/inventory", <InventoryPage />),
-    r("procurement/exceptions", <ExceptionsPage />),
+    // Pages with no real data source behind them are not offered: they lead home.
+    <Route key="hide-exceptions" path={`${P}/procurement/exceptions`} element={<Navigate to={`${P}/procurement`} replace />} />,
     r("procurement/payments", <PaymentsPage />),
     r("procurement/payments/:id", <PaymentDetailPage />),
     r("procurement/vendors", <VendorsPage />),
@@ -119,7 +116,7 @@ export function opsRoutes() {
     r("procurement/budget", <BudgetPage />),
     r("procurement/schedule", <SchedulePage />),
     r("procurement/deliveries", <DeliveriesPage />),
-    r("procurement/forecast", <ForecastPage />),
+    <Route key="hide-forecast" path={`${P}/procurement/forecast`} element={<Navigate to={`${P}/procurement`} replace />} />,
     r("procurement/analytics", <AnalyticsPage />),
     r("procurement/orders/new", <NewOrderPage />),
     r("procurement/agreements", <AgreementsPage />),
@@ -144,10 +141,10 @@ export function opsRoutes() {
     r("pm/live", <LivePage />),
     r("pm/recovery", <RecoveryPage />),
     r("pm/health", <HealthPage />),
-    r("pm/progress", <ProgressPage />),
+    <Route key="hide-progress" path={`${P}/pm/progress`} element={<Navigate to={`${P}/pm`} replace />} />,
     r("pm/daily-reports", <DailyReportsPage />),
     r("pm/daily-reports/:id", <DailyReportsPage />),
-    r("pm/ai-scheduling", <AiSchedulingPage />),
+    <Route key="hide-ai" path={`${P}/pm/ai-scheduling`} element={<Navigate to={`${P}/pm`} replace />} />,
     r("pm/rfis", <RfisPage />),
     r("pm/rfis/:id", <RfiDetailPage />),
     r("pm/changes", <ChangesPage />),

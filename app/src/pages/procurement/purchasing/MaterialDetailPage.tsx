@@ -129,7 +129,7 @@ export function MaterialDetailPage() {
                       const vp = paid.filter((p) => p.vendorId === v.id);
                       const vpos = pos.filter((p) => p.vendorId === v.id);
                       const ot = onTimeOf(s, s.pos.filter((p) => p.vendorId === v.id && p.status !== "CANCELLED"));
-                      const share = ot.share ?? v.scores.delivery / 100;
+                      const share = ot.share ?? (v.overall > 0 ? v.scores.delivery / 100 : null);
                       return (
                         <tr key={v.id}>
                           <td>
@@ -153,12 +153,16 @@ export function MaterialDetailPage() {
                           </td>
                           <td className="r num-inline">{vpos.length || <span className="muted">—</span>}</td>
                           <td>
+                            {share == null ? (
+                              <span className="muted">—</span>
+                            ) : (
                             <span className="pur-ontime">
                               <Meter value={share} tone={share >= 0.85 ? "ok" : share >= 0.65 ? "warn" : "bad"} />
                               <small className="num-inline">
                                 {Math.round(share * 100)}%{ot.share == null ? ` ${t("score")}` : ""}
                               </small>
                             </span>
+                            )}
                           </td>
                         </tr>
                       );

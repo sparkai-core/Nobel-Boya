@@ -3,7 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { ArrowRightLeft, Camera, ChevronRight, ClipboardCheck, Minus, PackageX, Plus, Receipt, Stamp } from "lucide-react";
 import { Badge, Breadcrumbs, DetailHeader, Dialog, Empty, Field, KeyFigure, KeyVals, NextBar, PageHero, Panel, StatusBadge, StatusSteps, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { PEOPLE } from "../../../ops/seed/pm";
+import { me } from "../../../ops/people";
 import { TODAY } from "../../../ops/dates";
 import { PATHS, R, statusMeta } from "../../../ops/select";
 import { postReceiptOn } from "../../../ops/ext/orders";
@@ -31,7 +31,7 @@ export function ReceiptDetailPage() {
   const g = s.grns.find((v) => v.id === id);
   const po = g ? s.pos.find((p) => p.id === g.poId) : undefined;
   const [rows, setRows] = useState<Record<string, Row>>({});
-  const [by, setBy] = useState(PEOPLE.store);
+  const [by, setBy] = useState(() => me());
   const [on, setOn] = useState(TODAY);
   const [remarks, setRemarks] = useState("");
   const [rest, setRest] = useState<"coming" | "close">("coming");

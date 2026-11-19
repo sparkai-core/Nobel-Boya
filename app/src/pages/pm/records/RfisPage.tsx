@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Check, Plus } from "lucide-react";
+import { Check, MessageCircleQuestion, Plus } from "lucide-react";
 import {
   Avatar,
   Badge,
+  Empty,
   FilterChips,
   PageHero,
   Register,
@@ -124,6 +125,21 @@ export function RfisPage() {
         }
       />
 
+      {!rfis.length ? (
+        <Empty
+          icon={<MessageCircleQuestion size={22} />}
+          title={t("No RFIs raised yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              <Plus size={15} />
+              {t("New RFI")}
+            </button>
+          }
+        >
+          {t("Raise a question to the designer about a drawing. Each RFI links to the sheet it is about and the work it holds up.")}
+        </Empty>
+      ) : (
+        <>
       <RfiClock rfis={rfis} activityCode={(id) => activities.find((a) => a.id === id)?.code ?? null} onOpen={(id) => navigate(R.rfi(id))} />
 
       <StagePath kind="rfi" path={PATHS.rfi} counts={counts} value={stage} onChange={setStage} extras={["OVERDUE"]} />
@@ -150,6 +166,9 @@ export function RfisPage() {
           </>
         }
       />
+
+        </>
+      )}
 
       <SheetLightbox sheetId={sheet} onClose={() => setSheet(null)} />
       <RfiDialog
@@ -274,7 +293,7 @@ function RfiClock({ rfis, activityCode, onOpen }: { rfis: Rfi[]; activityCode: (
       <footer className="pmr-clock-foot">
         <div>
           <small>{t("Average answer time")}</small>
-          <b className="num-inline">{t("{n} days", { n: avg.toFixed(1) })}</b>
+          <b className="num-inline">{allAnswered.length ? t("{n} days", { n: avg.toFixed(1) }) : "—"}</b>
         </div>
         <div className={overdue.length ? "bad" : undefined}>
           <small>{t("Overdue now")}</small>

@@ -6,7 +6,6 @@ import {
   Badge,
   Empty,
   Kebab,
-  Meter,
   Money,
   NextBar,
   Panel,
@@ -25,7 +24,7 @@ import { useOps } from "../../../ops/store";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { budgetOf, PATHS, quoteNet, quoteTotal, R, statusMeta, trailOf, tradeName } from "../../../ops/select";
 import { fmtMoney, fmtMoneyShort, fmtQty, unitLabel } from "../../../lib/format";
-import { confirmReading } from "../../../ops/ext/sourcing";
+import { editQuotePrices } from "../../../ops/ext/sourcing";
 import { approvalFor, gapWords, liveQuotes } from "./shared";
 
 type Tab = "lines" | "checks" | "others" | "history" | "follows";
@@ -73,9 +72,9 @@ export function QuoteDetailPage() {
   };
   const saveEdit = () => {
     const lines = q.lines.map((l) => ({ ...l, unitPrice: Math.max(0, Number(prices[l.key] ?? l.unitPrice) || 0) }));
-    confirmReading(q.id, lines);
+    editQuotePrices(q.id, lines);
     setEditing(false);
-    toast(t("Reading confirmed on {id}", { id: q.id }));
+    toast(t("Prices saved on {id}", { id: q.id }));
   };
   const requestApproval = () => {
     const aid = s.sendForApproval(q.id);
@@ -92,7 +91,7 @@ export function QuoteDetailPage() {
     tone = "bad";
     primary = dupOf ? <button type="button" className="btn btn-primary btn-sm" onClick={() => navigate(R.quote(dupOf.id))}>{t("Open the original")}</button> : null;
   } else if (editing) {
-    text = t("Correct any unit price the reading got wrong, then confirm.");
+    text = t("Change the unit prices to what the vendor quoted, then save.");
     tone = "warn";
     primary = (
       <>
@@ -101,17 +100,17 @@ export function QuoteDetailPage() {
         </button>
         <button type="button" className="btn btn-primary btn-sm" onClick={saveEdit}>
           <CheckCircle2 size={13} />
-          {t("Confirm the reading")}
+          {t("Save prices")}
         </button>
       </>
     );
   } else if (q.status === "NEEDS_REVIEW") {
-    text = t("The reading is only {p}% sure. Check the unit prices against the vendor's file before comparing.", { p: Math.round(q.confidence * 100) });
+    text = t("Check the unit prices against the vendor's quote before comparing.");
     tone = "warn";
     primary = (
       <button type="button" className="btn btn-primary btn-sm" onClick={startEdit}>
         <PencilLine size={13} />
-        {t("Correct the reading")}
+        {t("Edit prices")}
       </button>
     );
   } else if (appr?.status === "PENDING") {
@@ -158,7 +157,7 @@ export function QuoteDetailPage() {
               {v?.name ?? q.vendorId}
             </Link>
             <small>
-              {v ? `${v.city} · ${tradeName(v.trade, lang)} · ${t("TRN")} ${v.trn}` : ""}
+              {v ? [v.city, tradeName(v.trade, lang), v.trn ? `${t("TRN")} ${v.trn}` : ""].filter(Boolean).join(" · ") : ""}
             </small>
             <small>{v ? `${v.email} · ${v.phone}` : ""}</small>
             <div className="ps-qbadges">
@@ -200,7 +199,7 @@ export function QuoteDetailPage() {
         {primary}
         <Kebab
           items={[
-            { label: t("Correct the reading"), icon: <PencilLine size={14} />, disabled: editing || q.duplicate, onClick: startEdit },
+            { label: t("Edit prices"), icon: <PencilLine size={14} />, disabled: editing || q.duplicate, onClick: startEdit },
             { label: t("Open the vendor"), icon: <Store size={14} />, onClick: () => navigate(R.vendor(q.vendorId)) },
             {
               label: t("Copy reference"),
@@ -243,7 +242,6 @@ export function QuoteDetailPage() {
                       <th style={{ textAlign: "right" }}>{t("Qty")}</th>
                       <th style={{ textAlign: "right" }}>{t("Unit price")}</th>
                       <th style={{ textAlign: "right" }}>{t("Amount")}</th>
-                      <th className="hide-900">{t("Reading confidence")}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -265,12 +263,6 @@ export function QuoteDetailPage() {
                           <td style={{ textAlign: "right" }} className="num-inline ps-strong">
                             {fmtMoney(l.qty * price)}
                           </td>
-                          <td className="hide-900">
-                            <span className="ps-conf">
-                              <Meter value={l.confidence} tone={l.confidence < 0.75 ? "bad" : l.confidence < 0.88 ? "warn" : "ok"} label={t("Reading confidence")} />
-                              <b className="num-inline">{Math.round(l.confidence * 100)}%</b>
-                            </span>
-                          </td>
                         </tr>
                       );
                     })}
@@ -291,7 +283,7 @@ export function QuoteDetailPage() {
                   <RingGauge value={Math.round(passShare * 100)} size={84} stroke={8} tone={passShare >= 0.99 ? "ok" : q.checks.some((c) => c.result === "FAILED") ? "bad" : "warn"} label="%" />
                   <div>
                     <strong>{t("{p}% of the rules passed", { p: Math.round(passShare * 100) })}</strong>
-                    <p className="muted small">{t("Checked against the BOQ, the vendor register and the reading itself.")}</p>
+                    <p className="muted small">{t("Checked against the BOQ and the vendor register.")}</p>
                   </div>
                 </div>
                 <ul>
@@ -397,7 +389,7 @@ export function QuoteDetailPage() {
               </div>
               <div>
                 <dt>{t("Vendor score")}</dt>
-                <dd>{v ? `${v.overall.toFixed(1)} / 10` : "—"}</dd>
+                <dd>{v && v.overall > 0 ? `${v.overall.toFixed(1)} / 10` : "—"}</dd>
               </div>
             </dl>
             {q.notes ? <p className="k-note" style={{ marginTop: 12 }}>{x(q.notes)}</p> : null}

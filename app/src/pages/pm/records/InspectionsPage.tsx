@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, Plus, ShieldAlert } from "lucide-react";
+import { ArrowRight, ClipboardCheck, Plus, ShieldAlert } from "lucide-react";
 import {
   Avatar,
+  Empty,
   FilterChips,
   PageHero,
   Register,
@@ -46,7 +47,7 @@ export function InspectionsPage() {
   const statuses = [...new Set(inTab.map((i) => i.status))];
 
   const checked = inspections.filter((i) => i.kind !== "NCR" && i.inspectedAt);
-  const rate = checked.length ? Math.round((checked.filter(passed).length / checked.length) * 100) : 100;
+  const rate = checked.length ? Math.round((checked.filter(passed).length / checked.length) * 100) : null;
   const openNcrs = inspections.filter((i) => i.kind === "NCR" && i.status === "OPEN");
   const act = (id: string | null) => (id ? activities.find((a) => a.id === id) : undefined);
 
@@ -122,9 +123,33 @@ export function InspectionsPage() {
         }
       />
 
+      {!inspections.length ? (
+        <Empty
+          icon={<ClipboardCheck size={22} />}
+          title={t("No inspections yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              <Plus size={15} />
+              {t("Request inspection")}
+            </button>
+          }
+        >
+          {t("Request work (WIR) and material (MIR) inspections with a checklist, record the result, and raise a non-conformance (NCR) when something fails.")}
+        </Empty>
+      ) : (
+        <>
       <section className="pmr-qa" aria-label={t("Quality at a glance")}>
         <div className="pmr-qa-ring">
-          <RingGauge value={rate} size={124} stroke={11} tone={rate >= 85 ? "ok" : rate >= 70 ? "warn" : "bad"} label={t("pass rate")} />
+          {rate == null ? (
+            <div className="k-ring" style={{ width: 124, height: 124, display: "grid", placeItems: "center", textAlign: "center" }}>
+              <span className="muted small">
+                <b style={{ fontSize: 28, display: "block" }}>—</b>
+                {t("no results yet")}
+              </span>
+            </div>
+          ) : (
+            <RingGauge value={rate} size={124} stroke={11} tone={rate >= 85 ? "ok" : rate >= 70 ? "warn" : "bad"} label={t("pass rate")} />
+          )}
           <ul>
             <li>
               <i className="ok" />
@@ -201,6 +226,8 @@ export function InspectionsPage() {
           </>
         }
       />
+        </>
+      )}
 
       <InspectionDialog
         open={creating}

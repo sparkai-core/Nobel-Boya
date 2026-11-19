@@ -6,7 +6,7 @@ import { Drawer } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
 import { addDays, same, TODAY } from "../../../ops/dates";
 import { R } from "../../../ops/select";
-import { PEOPLE } from "../../../ops/seed/pm";
+import { me } from "../../../ops/people";
 import type { Activity, Constraint, ConstraintKind } from "../../../ops/types";
 import { cellOf, KINDS, type Issue } from "./lookahead-model";
 import { freshRef, RP } from "./shared";
@@ -108,8 +108,6 @@ export function ActivityDrawer({ activity, issues, onClose, onAdd }: { activity:
   );
 }
 
-const OWNERS = [PEOPLE.site, PEOPLE.buyer, PEOPLE.engineer, PEOPLE.qa, PEOPLE.planner, PEOPLE.pm];
-
 /** Logs a new constraint against an activity. */
 export function ConstraintDialog({ open, onClose, activities, initialActivity }: { open: boolean; onClose: () => void; activities: Activity[]; initialActivity: string | null }) {
   const { t, x } = useL();
@@ -119,7 +117,7 @@ export function ConstraintDialog({ open, onClose, activities, initialActivity }:
   const [activityId, setActivityId] = useState("");
   const [kind, setKind] = useState<ConstraintKind>("MATERIAL");
   const [text, setText] = useState("");
-  const [owner, setOwner] = useState(OWNERS[0]!);
+  const [owner, setOwner] = useState("");
   const [due, setDue] = useState(addDays(TODAY, 3));
 
   useEffect(() => {
@@ -127,7 +125,7 @@ export function ConstraintDialog({ open, onClose, activities, initialActivity }:
     setActivityId(initialActivity ?? activities[0]?.id ?? "");
     setKind("MATERIAL");
     setText("");
-    setOwner(OWNERS[0]!);
+    setOwner(me());
     setDue(addDays(TODAY, 3));
   }, [open, initialActivity, activities]);
 
@@ -135,7 +133,7 @@ export function ConstraintDialog({ open, onClose, activities, initialActivity }:
   const save = () => {
     if (!act || !text.trim()) return;
     const id = freshRef("CN", (v) => constraints.some((c) => c.id === v), 3);
-    const c: Constraint = { id, activityId: act.id, kind, text: same(text.trim()), status: "OPEN", owner, due, link: null };
+    const c: Constraint = { id, activityId: act.id, kind, text: same(text.trim()), status: "OPEN", owner: owner.trim() || me(), due, link: null };
     addItem("constraints", c);
     pushFeed("PM", { en: `Constraint logged on ${act.code}: ${text.trim()}`, az: `${act.code} üzrə məhdudiyyət qeydə alındı: ${text.trim()}` }, "pm/lookahead");
     toast(t("{id} logged on {code}", { id, code: act.code }));
@@ -187,13 +185,7 @@ export function ConstraintDialog({ open, onClose, activities, initialActivity }:
           <input className="input" value={text} onChange={(e) => setText(e.target.value)} placeholder={t("e.g. Formwork panels not on site")} autoFocus />
         </Field>
         <Field label={t("Owner")}>
-          <select className="input select" value={owner} onChange={(e) => setOwner(e.target.value)}>
-            {OWNERS.map((o) => (
-              <option key={o} value={o}>
-                {o}
-              </option>
-            ))}
-          </select>
+          <input className="input" value={owner} onChange={(e) => setOwner(e.target.value)} />
         </Field>
         <Field label={t("Clear by")}>
           <input type="date" className="input" value={due} min={TODAY} onChange={(e) => setDue(e.target.value)} />

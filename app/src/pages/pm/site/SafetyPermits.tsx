@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { AlertOctagon, ArrowRight, CalendarPlus, Check, Pause, Play, Plus, X as XIcon, Lock } from "lucide-react";
-import { Dialog, Field, toast, useL } from "../../../components/kit";
-import { useOps, ME } from "../../../ops/store";
+import { AlertOctagon, ArrowRight, CalendarPlus, Check, Pause, Play, Plus, Ticket, X as XIcon, Lock } from "lucide-react";
+import { Dialog, Empty, Field, toast, useL } from "../../../components/kit";
+import { useOps, me } from "../../../ops/store";
 import { addDays, diffDays, same, TODAY } from "../../../ops/dates";
 import type { Equipment, Permit, PermitKind, Txt } from "../../../ops/types";
-import { freshRef, PERMIT_KIND, siteLink, siteMeta, ZONES, zoneTxt } from "./shared";
+import { freshRef, PERMIT_KIND, siteLink, siteMeta, ZoneInput, zoneTxt } from "./shared";
 
 const COLS: Permit["status"][] = ["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED", "EXPIRED"];
 
@@ -13,7 +13,7 @@ const COLS: Permit["status"][] = ["DRAFT", "ACTIVE", "SUSPENDED", "CLOSED", "EXP
 export const permitStatus = (p: Permit): Permit["status"] => (p.status === "ACTIVE" && p.to < TODAY ? "EXPIRED" : p.status);
 
 /** Crane out of service in the permit's zone (blocks lifting permits). */
-export const blockingCrane = (p: Permit, equipment: Equipment[]) => (p.kind === "LIFTING" ? equipment.find((e) => e.category === "CRANE" && e.zone.en === p.zone.en && (e.status === "BROKEN_DOWN" || e.status === "MAINTENANCE")) : undefined);
+export const blockingCrane = (p: Permit, equipment: Equipment[]) => (p.kind === "LIFTING" && p.zone.en ? equipment.find((e) => e.category === "CRANE" && e.zone.en === p.zone.en && (e.status === "BROKEN_DOWN" || e.status === "MAINTENANCE")) : undefined);
 
 const T = (en: string, az: string): Txt => ({ en, az });
 const CHECKS: Record<PermitKind, Txt[]> = {
@@ -28,6 +28,24 @@ const CHECKS: Record<PermitKind, Txt[]> = {
 export function PermitsTab({ newOpen, setNewOpen }: { newOpen: boolean; setNewOpen: (v: boolean) => void }) {
   const { t, x } = useL();
   const permits = useOps((s) => s.permits);
+  if (!permits.length)
+    return (
+      <>
+        <Empty
+          icon={<Ticket size={22} />}
+          title={t("No permits to work yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setNewOpen(true)}>
+              <Plus size={15} />
+              {t("New permit")}
+            </button>
+          }
+        >
+          {t("Draft a permit for hot work, work at height, excavation, lifting, confined spaces or electrical work. It goes active once every check is ticked.")}
+        </Empty>
+        <NewPermitDialog open={newOpen} onClose={() => setNewOpen(false)} />
+      </>
+    );
   return (
     <div className="k-stack">
       <div className="k-row">
@@ -130,8 +148,7 @@ function PermitCard({ p }: { p: Permit }) {
       </header>
       <strong className="st-permit-title">{x(p.title)}</strong>
       <span className="small muted">
-        {x(p.zone)}
-        {act ? ` · ${act.code}` : ""} · {p.issuedTo}
+        {[x(p.zone), act?.code, p.issuedTo].filter(Boolean).join(" · ") || "—"}
       </span>
       <div className="st-validity" title={`${d(p.from)} – ${d(p.to)}`}>
         <span className="st-validity-track">
@@ -188,19 +205,20 @@ function PermitCard({ p }: { p: Permit }) {
   );
 }
 
-const BLANK_PERMIT = { kind: "HOT_WORK" as PermitKind, title: "", zone: ZONES[0]!.key, from: TODAY, to: addDays(TODAY, 7), issuedTo: "", activityId: "" };
+const BLANK_PERMIT = { kind: "HOT_WORK" as PermitKind, title: "", zone: "", from: TODAY, to: addDays(TODAY, 7), issuedTo: "", activityId: "" };
 
 function NewPermitDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
   const { t, x } = useL();
   const subs = useOps((s) => s.subs);
+  const company = useOps((s) => s.setup.company);
   const activities = useOps((s) => s.activities);
   const nextRef = useOps((s) => s.nextRef);
   const addItem = useOps((s) => s.addItem);
   const pushFeed = useOps((s) => s.pushFeed);
   const [f, setF] = useState(BLANK_PERMIT);
   useEffect(() => {
-    if (open) setF({ ...BLANK_PERMIT, issuedTo: subs.find((s) => s.status === "ACTIVE")?.name ?? "" });
-  }, [open, subs]);
+    if (open) setF({ ...BLANK_PERMIT, from: TODAY, to: addDays(TODAY, 7) });
+  }, [open]);
   const save = () => {
     if (!f.title.trim()) {
       toast(t("Say what work the permit covers."), "warn");
@@ -220,8 +238,8 @@ function NewPermitDialog({ open, onClose }: { open: boolean; onClose: () => void
       from: f.from,
       to: f.to,
       status: "DRAFT",
-      issuedTo: f.issuedTo || "—",
-      issuedBy: ME,
+      issuedTo: f.issuedTo.trim(),
+      issuedBy: me(),
       activityId: f.activityId || null,
       checks: CHECKS[f.kind].map((item) => ({ item, ok: false })),
     };
@@ -258,16 +276,10 @@ function NewPermitDialog({ open, onClose }: { open: boolean; onClose: () => void
           </select>
         </Field>
         <Field label={t("Where")}>
-          <select className="input select" value={f.zone} onChange={(e) => setF({ ...f, zone: e.target.value })}>
-            {ZONES.map((z) => (
-              <option key={z.key} value={z.key}>
-                {x(z.label)}
-              </option>
-            ))}
-          </select>
+          <ZoneInput id="st-ptw-zone" value={f.zone} onChange={(v) => setF({ ...f, zone: v })} />
         </Field>
         <Field label={t("Work covered")} wide>
-          <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={t("e.g. Welding base plates at grid 3")} />
+          <input className="input" value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} placeholder={t("What work the permit covers")} />
         </Field>
         <Field label={t("Starts")}>
           <input className="input" type="date" value={f.from} onChange={(e) => setF({ ...f, from: e.target.value || TODAY })} />
@@ -275,14 +287,13 @@ function NewPermitDialog({ open, onClose }: { open: boolean; onClose: () => void
         <Field label={t("Ends")}>
           <input className="input" type="date" value={f.to} onChange={(e) => setF({ ...f, to: e.target.value || f.from })} />
         </Field>
-        <Field label={t("Issued to")}>
-          <select className="input select" value={f.issuedTo} onChange={(e) => setF({ ...f, issuedTo: e.target.value })}>
-            {subs.map((s) => (
-              <option key={s.id} value={s.name}>
-                {s.name}
-              </option>
+        <Field label={t("Issued to")} hint={t("The crew or company doing the work.")}>
+          <input className="input" value={f.issuedTo} onChange={(e) => setF({ ...f, issuedTo: e.target.value })} list="st-ptw-to" />
+          <datalist id="st-ptw-to">
+            {[company, ...subs.map((s) => s.name)].filter(Boolean).map((n) => (
+              <option key={n} value={n} />
             ))}
-          </select>
+          </datalist>
         </Field>
         <Field label={t("Activity")}>
           <select className="input select" value={f.activityId} onChange={(e) => setF({ ...f, activityId: e.target.value })}>

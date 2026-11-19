@@ -2,13 +2,29 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { CalendarCheck, CalendarOff, Clock, Eraser, Hammer, PartyPopper } from "lucide-react";
 import { Badge, PageHero, Panel, StatTiles, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { addDays, diffDays, dowShort, monthLong, TODAY, toDate } from "../../../ops/dates";
+import { addDays, diffDays, dowShort, monthLong, PROJECT_FINISH, PROJECT_START, TODAY, toDate } from "../../../ops/dates";
 import type { CalendarDay } from "../../../ops/types";
 import { useSchedule } from "./model";
 
 const WEEK = [1, 2, 3, 4, 5, 6, 0];
-const MONTHS = ["2026-10", "2026-11", "2026-12", "2027-01", "2027-02", "2027-03", "2027-04", "2027-05", "2027-06", "2027-07", "2027-08", "2027-09"];
 type Kind = CalendarDay["kind"];
+
+/** Months to show: the project's start to its finish, at least twelve and at most forty-eight. */
+function monthRange(from: string, to: string) {
+  const out: string[] = [];
+  let y = Number(from.slice(0, 4));
+  let m = Number(from.slice(5, 7));
+  const endKey = to.slice(0, 7);
+  while (out.length < 48 && (out.length < 12 || `${y}-${String(m).padStart(2, "0")}` <= endKey)) {
+    out.push(`${y}-${String(m).padStart(2, "0")}`);
+    m++;
+    if (m > 12) {
+      m = 1;
+      y++;
+    }
+  }
+  return out;
+}
 
 /**
  * Working calendar: the working week, a twelve-month year grid with holidays, shutdowns and extra
@@ -20,7 +36,18 @@ export function CalendarPage() {
   const workweek = useOps((s) => s.workweek);
   const setWorkweek = useOps((s) => s.setWorkweek);
   const setCalendarDay = useOps((s) => s.setCalendarDay);
-  const { outlook } = useSchedule();
+  const { outlook, activities } = useSchedule();
+  const has = activities.length > 0;
+  const MONTHS = useMemo(() => {
+    if (!has && !outlook.contractKnown) return monthRange(TODAY, TODAY);
+    // A long-running job starts the grid a year back, so today stays in view.
+    const yearAgo = addDays(TODAY, -365);
+    const from = !has && PROJECT_START < TODAY ? TODAY : PROJECT_START < addDays(TODAY, -730) ? yearAgo : PROJECT_START;
+    return monthRange(from, outlook.forecast > PROJECT_FINISH ? outlook.forecast : PROJECT_FINISH);
+  }, [has, outlook.contractKnown, outlook.forecast]);
+  const firstMonth = MONTHS[0]!;
+  const lastMonth = MONTHS[MONTHS.length - 1]!;
+  const monthName = (ym: string) => `${monthLong(Number(ym.slice(5, 7)) - 1, lang)} ${ym.slice(0, 4)}`;
   const [pop, setPop] = useState<{ date: string; left: number; top: number } | null>(null);
   const byDate = useMemo(() => new Map(calendar.map((c) => [c.date, c])), [calendar]);
 
@@ -42,6 +69,7 @@ export function CalendarPage() {
   };
   const toForecast = count(TODAY, outlook.forecast);
   const toContract = count(TODAY, outlook.contract);
+  const weekText = [1, 2, 3, 4, 5, 6, 0].filter((w) => workweek.includes(w)).map((w) => dowShort(w, lang)).join(" · ");
   const upcoming = calendar.filter((c) => c.date >= TODAY && c.kind !== "EXTRA").sort((a, b) => a.date.localeCompare(b.date));
   const extras = calendar.filter((c) => c.kind === "EXTRA").sort((a, b) => a.date.localeCompare(b.date));
 
@@ -74,10 +102,14 @@ export function CalendarPage() {
 
       <StatTiles
         items={[
-          { label: t("Working days to the forecast finish"), value: <span className="num-inline">{toForecast.n}</span>, sub: t("{n} calendar days, finish {date}", { n: diffDays(TODAY, outlook.forecast), date: d(outlook.forecast) }), tone: "brand" },
-          { label: t("Working days to the contract date"), value: <span className="num-inline">{toContract.n}</span>, sub: t("{n} fewer than the forecast needs", { n: Math.max(0, toForecast.n - toContract.n) }), tone: toForecast.n > toContract.n ? "bad" : "ok" },
-          { label: t("Lost to holidays and shutdowns"), value: <span className="num-inline">{toForecast.lost}</span>, sub: t("working days before the finish") },
-          { label: t("Working week"), value: <span className="num-inline">{t("{n} days", { n: workweek.length })}</span>, sub: t("08:00–18:00, one hour lunch") },
+          has
+            ? { label: t("Working days to the forecast finish"), value: <span className="num-inline">{toForecast.n}</span>, sub: outlook.forecast >= TODAY ? t("{n} calendar days, finish {date}", { n: diffDays(TODAY, outlook.forecast), date: d(outlook.forecast) }) : t("Forecast finish {date} has passed", { date: d(outlook.forecast) }), tone: "brand" }
+            : { label: t("Working days to the forecast finish"), value: "—", sub: t("No programme yet") },
+          outlook.contractKnown
+            ? { label: t("Working days to the contract date"), value: <span className="num-inline">{toContract.n}</span>, sub: has ? (toForecast.n > toContract.n ? t("{n} fewer than the forecast needs", { n: toForecast.n - toContract.n }) : t("Enough for the forecast")) : d(outlook.contract), tone: has ? (toForecast.n > toContract.n ? "bad" : "ok") : undefined }
+            : { label: t("Working days to the contract date"), value: "—", sub: t("Set the contract finish in Settings") },
+          { label: t("Lost to holidays and shutdowns"), value: has ? <span className="num-inline">{toForecast.lost}</span> : "—", sub: t("working days before the finish") },
+          { label: t("Working week"), value: <span className="num-inline">{t("{n} days", { n: workweek.length })}</span>, sub: weekText },
         ]}
       />
 
@@ -85,7 +117,7 @@ export function CalendarPage() {
         <section className="pms-year-panel">
           <header className="pms-year-head">
             <div>
-              <h2>{t("October 2026 to September 2027")}</h2>
+              <h2>{t("{a} to {b}", { a: monthName(firstMonth), b: monthName(lastMonth) })}</h2>
               <p className="muted small">{t("Click a day to mark it as a holiday, a shutdown or an extra working day.")}</p>
             </div>
             <div className="pms-week" role="group" aria-label={t("Working week")}>
@@ -120,8 +152,10 @@ export function CalendarPage() {
                       const date = `${ym}-${String(i + 1).padStart(2, "0")}`;
                       const e = byDate.get(date);
                       const off = !workweek.includes(toDate(date).getUTCDay());
-                      const cls = ["pms-day", off && e?.kind !== "EXTRA" ? "off" : "", e ? e.kind.toLowerCase() : "", date === TODAY ? "today" : "", date < TODAY ? "past" : "", date === outlook.forecast ? "finish" : "", date === outlook.contract ? "contract" : ""].filter(Boolean).join(" ");
-                      const title = [d(date), e ? x(e.name) : off ? t("Day off") : t("Working day"), date === outlook.forecast ? t("Forecast finish") : "", date === outlook.contract ? t("Contract completion") : ""].filter(Boolean).join(" · ");
+                      const isFinish = has && date === outlook.forecast;
+                      const isContract = outlook.contractKnown && date === outlook.contract;
+                      const cls = ["pms-day", off && e?.kind !== "EXTRA" ? "off" : "", e ? e.kind.toLowerCase() : "", date === TODAY ? "today" : "", date < TODAY ? "past" : "", isFinish ? "finish" : "", isContract ? "contract" : ""].filter(Boolean).join(" ");
+                      const title = [d(date), e ? x(e.name) : off ? t("Day off") : t("Working day"), isFinish ? t("Forecast finish") : "", isContract ? t("Contract completion") : ""].filter(Boolean).join(" · ");
                       return (
                         <button
                           key={date}

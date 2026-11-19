@@ -1,10 +1,10 @@
 import { Fragment, useMemo } from "react";
-import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, BadgeCheck, Gauge, Printer, RotateCcw, Send, Wallet } from "lucide-react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { ArrowLeft, BadgeCheck, Gauge, Printer, RotateCcw, Send, Trash2, Wallet } from "lucide-react";
 import { Kebab, NextBar, StatusBadge, StatusSteps, toast, useL } from "../../../components/kit";
 import { Logo } from "../../../components/ui";
-import { useOps } from "../../../ops/store";
-import { PEOPLE } from "../../../ops/seed";
+import { useOps, me } from "../../../ops/store";
+import { removeDraftIpc, sectionProgress, setIpcTerms } from "../../../ops/ext/records";
 import { ipcAmounts, PATHS, R, sectionName, sectionWorth } from "../../../ops/select";
 import { data } from "../../../data";
 import { buildingName, projectName, projectPlace } from "../../../lib/loc";
@@ -13,15 +13,16 @@ import type { Ipc } from "../../../ops/types";
 import { NotFound } from "./shared";
 import { ipcDue } from "./BillingPage";
 
-const ORDER = ["WH", "AD", "PS", "TK", "SITE"];
 const pc = (v: number) => `${(v * 100).toFixed(1)}%`;
 
 /** One interim payment certificate laid out as the document itself, with the measurement editable while draft. */
 export function IpcDetailPage() {
   const { id = "" } = useParams();
   const { t, d, lang } = useL();
+  const navigate = useNavigate();
   const ipc = useOps((s) => s.ipcs.find((i) => i.id === id));
   const parties = useOps((s) => s.parties);
+  const company = useOps((s) => s.setup.company);
   const activities = useOps((s) => s.activities);
   const setIpcLine = useOps((s) => s.setIpcLine);
   const setIpcStatus = useOps((s) => s.setIpcStatus);
@@ -31,9 +32,10 @@ export function IpcDetailPage() {
 
   const draft = ipc.status === "DRAFT";
   const client = parties.find((p) => p.role === "OWNER")?.name ?? data.project.client;
-  const contractor = parties.find((p) => p.role === "CONTRACTOR")?.name ?? "";
+  const contractor = parties.find((p) => p.role === "CONTRACTOR")?.name ?? company;
   const engineer = parties.find((p) => p.role === "CONSULTANT")?.name ?? data.project.designer;
-  const groups = ORDER.map((b) => ({ b, lines: ipc.lines.filter((l) => l.building === b) })).filter((g) => g.lines.length);
+  const order = [...(data.buildings ?? []).map((b) => b.id), ...ipc.lines.map((l) => l.building)];
+  const groups = [...new Set(order)].map((b) => ({ b, lines: ipc.lines.filter((l) => l.building === b) })).filter((g) => g.lines.length);
   const net = amt.thisPeriod - amt.retention - amt.advance;
 
   const move = (status: Ipc["status"], msg: string) => {
@@ -44,17 +46,22 @@ export function IpcDetailPage() {
   const fillFromSite = () => {
     let n = 0;
     for (const l of ipc.lines) {
-      const acts = activities.filter((a) => a.building === l.building && a.section === l.section);
-      if (!acts.length) continue;
-      const tot = acts.reduce((a, x) => a + x.budget, 0) || 1;
-      const p = acts.reduce((a, x) => a + x.budget * x.pct, 0) / tot / 100;
+      const p = sectionProgress(activities, l.building, l.section);
+      if (p == null) continue;
       if (p > l.pctToDate + 1e-4) {
         setIpcLine(ipc.id, l.building, l.section, Math.round(p * 1000) / 1000);
         n++;
       }
     }
-    toast(n ? t("{n} lines updated from site progress", { n }) : t("The measurement already matches site progress."), n ? "ok" : "neutral");
+    toast(n ? t("{n} lines updated from site progress", { n }) : activities.length ? t("The measurement already matches site progress.") : t("No programme activities to read progress from. Enter the percentages by hand."), n ? "ok" : "neutral");
   };
+  const deleteDraft = () => {
+    if (!window.confirm(t("Delete draft {id}?", { id: ipc.id }))) return;
+    removeDraftIpc(ipc.id);
+    toast(t("{id} deleted", { id: ipc.id }), "neutral");
+    navigate(R.billing);
+  };
+  const setPct = (key: "retention" | "advanceRecovery", v: string) => setIpcTerms(ipc.id, { [key]: Math.max(0, Math.min(100, Number(v) || 0)) / 100 });
 
   return (
     <div className="k-page pmr-cert-page">
@@ -82,9 +89,10 @@ export function IpcDetailPage() {
               <Printer size={14} />
               {t("Print")}
             </button>
+            <Kebab items={[{ label: t("Delete draft"), icon: <Trash2 size={14} />, danger: true, onClick: deleteDraft }]} />
           </NextBar>
         ) : ipc.status === "SUBMITTED" ? (
-          <NextBar tone="warn" text={t("With the engineer. Certify it as the engineer for the demo.")}>
+          <NextBar tone="warn" text={t("With the engineer. Record the certification when the signed certificate comes back.")}>
             <button type="button" className="btn btn-primary" onClick={() => move("CERTIFIED", "{id} certified")}>
               <BadgeCheck size={14} />
               {t("Certify")}
@@ -120,7 +128,7 @@ export function IpcDetailPage() {
         <header className="pmr-cert-head">
           <div className="pmr-cert-brand">
             <Logo size={26} />
-            <span>{contractor}</span>
+            <span>{contractor || <span className="muted small pmr-noprint">{t("Set your company name in Settings")}</span>}</span>
           </div>
           <div className="pmr-cert-title">
             <small>{t("Interim payment certificate")}</small>
@@ -145,7 +153,7 @@ export function IpcDetailPage() {
           </div>
           <div>
             <dt>{t("Contractor")}</dt>
-            <dd>{contractor}</dd>
+            <dd>{contractor || "—"}</dd>
           </div>
           <div>
             <dt>{t("Engineer")}</dt>
@@ -176,6 +184,13 @@ export function IpcDetailPage() {
               </tr>
             </thead>
             <tbody>
+              {!groups.length ? (
+                <tr>
+                  <td colSpan={5} className="muted small">
+                    {t("This project has no priced BOQ sections to measure.")}
+                  </td>
+                </tr>
+              ) : null}
               {groups.map((g) => {
                 const sum = g.lines.reduce((a, l) => a + sectionWorth(l.building, l.section) * (l.pctToDate - l.pctPrev), 0);
                 return (
@@ -234,13 +249,13 @@ export function IpcDetailPage() {
         <div className="pmr-cert-bottom">
           <div className="pmr-cert-sign">
             {[
-              { role: t("Prepared by the contractor"), who: PEOPLE.qs, org: contractor, at: ipc.submittedAt },
-              { role: t("Certified by the engineer"), who: PEOPLE.engineer, org: engineer, at: ipc.certifiedAt },
-              { role: t("Accepted by the client"), who: PEOPLE.client, org: client, at: ipc.status === "PAID" ? ipc.certifiedAt : null },
+              { role: t("Prepared by the contractor"), who: me(), org: contractor || "—", at: ipc.submittedAt },
+              { role: t("Certified by the engineer"), who: "", org: engineer || "—", at: ipc.certifiedAt },
+              { role: t("Accepted by the client"), who: "", org: client || "—", at: ipc.status === "PAID" ? ipc.certifiedAt : null },
             ].map((s) => (
               <div key={s.role} className={s.at ? "signed" : undefined}>
                 <small>{s.role}</small>
-                <b>{s.at ? s.who : " "}</b>
+                <b>{s.at && s.who ? s.who : " "}</b>
                 <span>{s.org}</span>
                 <em>{s.at ? d(s.at) : t("not signed")}</em>
               </div>
@@ -263,11 +278,29 @@ export function IpcDetailPage() {
                 <td>{fmtMoney(amt.thisPeriod)}</td>
               </tr>
               <tr>
-                <th>{t("Less retention {p}", { p: pc(ipc.retention) })}</th>
+                <th>
+                  {draft ? (
+                    <span className="k-row" style={{ gap: 6 }}>
+                      {t("Less retention")}
+                      <input className="input num pmr-noprint" style={{ width: 70 }} type="number" min={0} max={100} step={0.5} value={Math.round(ipc.retention * 1000) / 10} onChange={(e) => setPct("retention", e.target.value)} aria-label={t("Retention, %")} />%
+                    </span>
+                  ) : (
+                    t("Less retention {p}", { p: pc(ipc.retention) })
+                  )}
+                </th>
                 <td>−{fmtMoney(amt.retention)}</td>
               </tr>
               <tr>
-                <th>{t("Less advance recovery {p}", { p: pc(ipc.advanceRecovery) })}</th>
+                <th>
+                  {draft ? (
+                    <span className="k-row" style={{ gap: 6 }}>
+                      {t("Less advance recovery")}
+                      <input className="input num pmr-noprint" style={{ width: 70 }} type="number" min={0} max={100} step={0.5} value={Math.round(ipc.advanceRecovery * 1000) / 10} onChange={(e) => setPct("advanceRecovery", e.target.value)} aria-label={t("Advance recovery, %")} />%
+                    </span>
+                  ) : (
+                    t("Less advance recovery {p}", { p: pc(ipc.advanceRecovery) })
+                  )}
+                </th>
                 <td>−{fmtMoney(amt.advance)}</td>
               </tr>
               <tr className="sub">

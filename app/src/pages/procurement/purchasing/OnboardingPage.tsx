@@ -4,6 +4,7 @@ import { ArrowRight, BadgeCheck, Check, ClipboardCheck, Copy, ExternalLink, Inbo
 import { Avatar, Badge, Breadcrumbs, Dialog, Field, PageHero, RingGauge, StatTiles, toast, useL } from "../../../components/kit";
 import { Drawer } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
+import { approveInviteWith } from "../../../ops/ext/proc-client";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { R, tradeName, TRADES, type Tone } from "../../../ops/select";
 import type { Trade, Txt, VendorInvite } from "../../../ops/types";
@@ -39,7 +40,7 @@ function scoreOf(list: CheckItem[], rating: number) {
 }
 /** Rating implied by a stored score, so the slider reopens where it was left. */
 function ratingFrom(inv: VendorInvite) {
-  if (inv.score == null) return 7;
+  if (inv.score == null) return 0;
   const { chk } = scoreOf(checklistOf(inv), 0);
   return Math.max(0, Math.min(10, Math.round(((inv.score * 10 - chk * 0.7) / 0.3 / 10) * 2) / 2));
 }
@@ -220,6 +221,13 @@ function Prequal({ inv, onDone }: { inv: VendorInvite; onDone: () => void }) {
   const navigate = useNavigate();
   const s = useOps();
   const [rating, setRating] = useState(() => ratingFrom(inv));
+  // Register details the buyer types in when approving (nothing is filled in for them).
+  const noteOf = (key: string) => {
+    const c = checklistOf(inv).find((y) => y.key === key);
+    return c && !isNa(c) ? (c.note ?? "") : "";
+  };
+  const [facts, setFacts] = useState(() => ({ trn: /^\d{10}$/.test(noteOf("trn").trim()) ? noteOf("trn").trim() : "", licence: "", city: "", phone: "" }));
+  const badTrn = facts.trn.trim() !== "" && !/^\d{10}$/.test(facts.trn.trim());
   const list = checklistOf(inv);
   const sc = scoreOf(list, rating);
   const link = inviteLink(inv.id);
@@ -236,7 +244,8 @@ function Prequal({ inv, onDone }: { inv: VendorInvite; onDone: () => void }) {
 
   const approve = () => {
     save(list);
-    const vid = s.approveInvite(inv.id);
+    if (badTrn) return;
+    const vid = approveInviteWith(inv.id, facts);
     if (!vid) return;
     toast(t("{c} approved as a vendor with portal access.", { c: inv.company }), "ok", { label: t("Open vendor"), onClick: () => navigate(R.vendor(vid)) });
     onDone();
@@ -348,8 +357,24 @@ function Prequal({ inv, onDone }: { inv: VendorInvite; onDone: () => void }) {
       ) : (
         <>
           {mustFail.length ? <p className="k-field-error pur-mt">{t("{list} must be OK before approval.", { list: mustFail.map((c) => x(c.label)).join(", ") })}</p> : sc.missing ? <p className="k-text-warn small pur-mt">{t("{n} papers missing. You can still approve and chase them later.", { n: sc.missing })}</p> : null}
+          <h3 className="pur-pq-h">{t("Register details")}</h3>
+          <p className="muted small">{t("What goes on the vendor record. Leave a field empty if you do not have it yet; you can edit the vendor later.")}</p>
+          <div className="k-form">
+            <Field label={t("TRN")} error={badTrn ? t("TRN is 10 digits") : undefined}>
+              <input className="input k-mono" inputMode="numeric" maxLength={10} value={facts.trn} onChange={(e) => setFacts((f) => ({ ...f, trn: e.target.value.replace(/\D/g, "") }))} />
+            </Field>
+            <Field label={t("Trade licence number")}>
+              <input className="input k-mono" value={facts.licence} onChange={(e) => setFacts((f) => ({ ...f, licence: e.target.value }))} />
+            </Field>
+            <Field label={t("City")}>
+              <input className="input" value={facts.city} onChange={(e) => setFacts((f) => ({ ...f, city: e.target.value }))} />
+            </Field>
+            <Field label={t("Phone")}>
+              <input className="input" type="tel" value={facts.phone} onChange={(e) => setFacts((f) => ({ ...f, phone: e.target.value }))} />
+            </Field>
+          </div>
           <div className="pur-pq-actions">
-            <button type="button" className="btn btn-primary" disabled={mustFail.length > 0} onClick={approve}>
+            <button type="button" className="btn btn-primary" disabled={mustFail.length > 0 || badTrn} onClick={approve}>
               <BadgeCheck size={15} />
               {t("Approve")}
             </button>

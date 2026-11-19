@@ -1,13 +1,15 @@
 import { useMemo } from "react";
 import { useOps, type OpsState } from "../../ops/store";
-import { addDays, diffDays, TODAY } from "../../ops/dates";
+import { diffDays, TODAY } from "../../ops/dates";
 import { poReceivedShare, poTotal, R, type Tone } from "../../ops/select";
-import { docUploadsOf } from "../../ops/ext/vendor";
+import { docLabel, useVendorDocs } from "../../ops/ext/vendor";
+import { buyerLabel } from "../../ops/ext/proc-client";
 import type { GoodsReceipt, Invitation, Invoice, Payment, PurchaseOrder, Quotation, Rfq, Txt, Vendor } from "../../ops/types";
 
 /** Derived, vendor-side views of the shared ops store. Everything here is read-only. */
 
-export const BUYER = "Qobu Tikinti MMC";
+/** The buyer the vendor works with: the user's company (Settings → Project setup), read at render time. */
+export const buyerName = () => buyerLabel();
 
 const B = R.vendorPortal;
 export const VP = {
@@ -103,15 +105,17 @@ export function vendorView(s: OpsState, id: string): VendorView | null {
   };
 }
 
-/** The vendor the portal shows: the demo switcher's pick, else V-02 (Qafqaz Armatur, the default demo vendor). */
+/** The vendor the portal shows: the switcher's pick, else the first vendor ("" when there are none). */
 export function portalVendorId(s: Pick<OpsState, "vendors" | "vendorAs">) {
   if (s.vendors.some((v) => v.id === s.vendorAs)) return s.vendorAs;
-  return s.vendors.some((v) => v.id === "V-02") ? "V-02" : (s.vendors[0]?.id ?? "V-02");
+  return s.vendors[0]?.id ?? "";
 }
 
 /** The whole store plus the vendor the portal is showing. */
 export function useVendor() {
   const s = useOps();
+  // Documents live in their own store: re-render when one is added.
+  useVendorDocs((d) => d.docs);
   const id = portalVendorId(s);
   const view = useMemo(() => vendorView(s, id), [s, id]);
   return { s, view };
@@ -231,28 +235,16 @@ export const payState = (p: Payment): PayState => (p.status === "PAID" ? "paid" 
 export type DocState = "valid" | "expiring" | "expired" | "missing";
 export type VendorDoc = { key: string; label: Txt; ref: string | null; expires: string | null; state: DocState; sentAt: string | null; file: string | null; required: boolean; daysLeft: number | null };
 
-const INSURANCE_DAYS: Record<string, number> = { "V-03": 12, "V-02": -6, "V-06": 26, "V-13": -48 };
-const ISO_DAYS: Record<string, number> = { "V-02": 20, "V-08": -15 };
-
-/** Compliance documents the buyer keeps on file for a vendor, with expiry flags; uploads renew them. */
-export function vendorDocs(s: OpsState, v: Vendor): VendorDoc[] {
-  const n = Number(v.id.slice(2)) || 1;
-  const uploads = docUploadsOf(s.feed, v.id);
-  const raw: Omit<VendorDoc, "state" | "sentAt" | "file" | "daysLeft">[] = [
-    { key: "licence", label: { en: "Trade licence", az: "Ticarət lisenziyası" }, ref: v.licence, expires: v.licence ? addDays(TODAY, 140 + n * 17) : null, required: true },
-    { key: "vat", label: { en: "VAT registration certificate", az: "ƏDV qeydiyyat şəhadətnaməsi" }, ref: v.trn, expires: null, required: true },
-    { key: "insurance", label: { en: "Public liability insurance", az: "Mülki məsuliyyət sığortası" }, ref: `SG-2026-${1000 + n * 311}`, expires: addDays(TODAY, INSURANCE_DAYS[v.id] ?? 45 + ((n * 29) % 200)), required: true },
-    { key: "iso", label: { en: "ISO 9001 quality certificate", az: "ISO 9001 keyfiyyət sertifikatı" }, ref: n % 5 === 4 ? null : `ISO-9001-${7000 + n * 41}`, expires: n % 5 === 4 ? null : addDays(TODAY, ISO_DAYS[v.id] ?? 210 + n * 11), required: false },
-    { key: "hse", label: { en: "HSE policy", az: "ƏMSE siyasəti" }, ref: `HSE-${2025 + (n % 2)}-${String(n).padStart(2, "0")}`, expires: addDays(TODAY, 60 + ((n * 23) % 280)), required: true },
-  ];
-  return raw.map((d) => {
-    const up = uploads.get(d.key);
-    const expires = up?.expires ?? d.expires;
-    const ref = up ? (d.ref ?? up.file) : d.ref;
-    const left = expires ? diffDays(TODAY, expires) : null;
-    const state: DocState = !ref ? "missing" : left != null && left < 0 ? "expired" : left != null && left <= 30 ? "expiring" : "valid";
-    return { ...d, ref, expires, state, sentAt: up?.at ?? null, file: up?.file ?? null, daysLeft: left };
-  });
+/** Compliance documents actually added for a vendor, newest first, with expiry flags. */
+export function vendorDocs(_s: OpsState, v: Vendor): VendorDoc[] {
+  return useVendorDocs
+    .getState()
+    .docs.filter((d) => d.vendorId === v.id)
+    .map((d) => {
+      const left = d.expires ? diffDays(TODAY, d.expires) : null;
+      const state: DocState = left != null && left < 0 ? "expired" : left != null && left <= 30 ? "expiring" : "valid";
+      return { key: d.id, label: docLabel(d), ref: d.ref || null, expires: d.expires, state, sentAt: d.addedAt, file: d.file || null, required: false, daysLeft: left };
+    });
 }
 
 export const DOC_META: Record<DocState, { label: string; tone: Tone }> = {
@@ -273,7 +265,7 @@ export function vendorCounts(s: OpsState, view: VendorView) {
   const accept = stages.filter((x) => x === "accept").length;
   const dispatch = stages.filter((x) => x === "dispatch" || x === "balance").length;
   const invoice = view.pos.filter((p) => canInvoice(s, p, view.invoices)).length;
-  const docs = vendorDocs(s, view.vendor).filter((d) => d.required && d.state !== "valid").length;
+  const docs = vendorDocs(s, view.vendor).filter((d) => d.state !== "valid").length;
   const queries = view.invoices.filter(queried).length;
   return { rfqs, accept, dispatch, invoice, docs, queries, orders: accept + dispatch, total: rfqs + accept + dispatch + invoice + queries };
 }

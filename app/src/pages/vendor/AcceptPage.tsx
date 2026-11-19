@@ -6,7 +6,8 @@ import { useApp } from "../../lib/store";
 import { useOps } from "../../ops/store";
 import { addDays, TODAY } from "../../ops/dates";
 import { tradeName } from "../../ops/select";
-import { BUYER, VP } from "./model";
+import { projectName } from "../../lib/loc";
+import { buyerName, VP } from "./model";
 
 /** Invite links stay valid for 14 days. */
 const VALID_DAYS = 14;
@@ -32,7 +33,7 @@ export function VpAccept() {
     if (!inv) return;
     patchItem("invites", inv.id, { status: "IN_REVIEW" });
     pushFeed("VENDOR", { en: `${inv.company} accepted the portal invite and sent its documents for review`, az: `${inv.company} portal dəvətini qəbul etdi və sənədlərini yoxlamaya göndərdi` }, "procurement/vendors/onboarding", inv.company);
-    toast(t("Welcome, {company}. {buyer} is checking your documents.", { company: inv.company, buyer: BUYER }));
+    toast(t("Welcome, {company}. {buyer} is checking your documents.", { company: inv.company, buyer: buyerName() }));
     navigate(VP.home);
   };
 
@@ -51,7 +52,7 @@ export function VpAccept() {
           <img src="./brand/nobel-mark.png" alt="" />
           <span>
             <strong>{t("Vendor portal")}</strong>
-            <small>{t("Qobu project")}</small>
+            <small>{projectName(lang)}</small>
           </span>
         </header>
 
@@ -59,7 +60,7 @@ export function VpAccept() {
           <>
             <span className="vp-join-kicker">{t("Invitation {id}", { id: inv.id })}</span>
             <h1>{t("Join the portal")}</h1>
-            <p className="vp-join-lead">{t("{buyer} invites {company} to work with them on the Qobu project through the vendor portal.", { buyer: BUYER, company: inv.company })}</p>
+            <p className="vp-join-lead">{t("{buyer} invites {company} to work with them on {project} through the vendor portal.", { buyer: buyerName(), company: inv.company, project: projectName(lang) })}</p>
             <dl className="vp-join-facts">
               <div>
                 <dt>{t("Company")}</dt>
@@ -108,13 +109,13 @@ export function VpAccept() {
               {t("Accept invite and open the portal")}
               <ArrowRight size={16} />
             </button>
-            <p className="vp-join-note">{t("After you join, {buyer} checks your trade licence, insurance and references before the first order.", { buyer: BUYER })}</p>
+            <p className="vp-join-note">{t("After you join, {buyer} checks your trade licence, insurance and references before the first order.", { buyer: buyerName() })}</p>
           </>
         ) : state === "joined" && inv ? (
           <div className="vp-join-state ok">
             <CheckCircle2 size={28} />
             <h1>{t("{company} has already joined", { company: inv.company })}</h1>
-            <p>{inv.status === "APPROVED" ? t("You are an approved supplier. Open the portal to see requests and orders.") : t("{buyer} is checking your documents. You can open the portal meanwhile.", { buyer: BUYER })}</p>
+            <p>{inv.status === "APPROVED" ? t("You are an approved supplier. Open the portal to see requests and orders.") : t("{buyer} is checking your documents. You can open the portal meanwhile.", { buyer: buyerName() })}</p>
             <button type="button" className="btn btn-primary" onClick={() => navigate(VP.home)}>
               {t("Open the portal")}
               <ArrowRight size={15} />
@@ -124,7 +125,7 @@ export function VpAccept() {
           <div className="vp-join-state warn">
             <Clock3 size={28} />
             <h1>{t("This invite has expired")}</h1>
-            <p>{inv.status === "REJECTED" ? t("This invitation was withdrawn by {buyer}.", { buyer: BUYER }) : t("The link was valid until {date}. Ask {buyer} to send a new one.", { date: d(until), buyer: BUYER })}</p>
+            <p>{inv.status === "REJECTED" ? t("This invitation was withdrawn by {buyer}.", { buyer: buyerName() }) : t("The link was valid until {date}. Ask {buyer} to send a new one.", { date: d(until), buyer: buyerName() })}</p>
           </div>
         ) : (
           <div className="vp-join-state bad">
@@ -133,7 +134,7 @@ export function VpAccept() {
             <p>{id ? t("No invitation {id} was found. Check the link in your e-mail.", { id }) : t("The link has no invitation in it. Open it again from your e-mail.")}</p>
             {open.length ? (
               <div className="vp-join-demo">
-                <span>{t("Demo: open invitations")}</span>
+                <span>{t("Open invitations")}</span>
                 {open.map((i) => (
                   <Link key={i.id} to={VP.accept(i.id)}>
                     {i.id} · {i.company}

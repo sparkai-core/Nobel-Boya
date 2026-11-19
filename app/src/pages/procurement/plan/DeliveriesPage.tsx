@@ -252,7 +252,7 @@ export function DeliveriesPage() {
               })}
             </ul>
           ) : (
-            <Empty title={t("Nothing lands late.")}>{t("Every open line arrives before the programme needs it.")}</Empty>
+            lines.length ? <Empty title={t("Nothing lands late.")}>{t("Every open line arrives before the programme needs it.")}</Empty> : <Empty title={t("No open order lines")}>{t("Lines appear here once a purchase order is issued.")}</Empty>
           )}
         </Panel>
         <Panel title={t("Vendor on-time record")} icon={<Clock3 size={16} />} sub={t("Receipts posted by the PO date, plus balances already past due. 'In full' excludes short or damaged drops.")}>

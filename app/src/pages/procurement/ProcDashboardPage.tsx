@@ -1,7 +1,9 @@
 import { useMemo } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, BadgeCheck, ClipboardList, ExternalLink, FileStack, PackageCheck, Plus, Send, ShieldAlert, ShoppingCart, Truck, Wallet, Zap } from "lucide-react";
+import { ArrowRight, BadgeCheck, Building2, ClipboardList, ExternalLink, FileStack, PackageCheck, Plus, Send, ShoppingCart, Truck, Wallet, Zap } from "lucide-react";
 import { Avatar, Badge, CountUp, Money, PageHero, Panel, StatTiles, useL } from "../../components/kit";
+import { projectName } from "../../lib/loc";
+import { hasScore } from "../../ops/ext/proc-client";
 import { useOps } from "../../ops/store";
 import { addDays, diffDays, TODAY } from "../../ops/dates";
 import { budgetOf, paymentGate, poLate, poNet, poReceivedShare, poTotal, quoteTotal, R, to, tradeName, vendorStats } from "../../ops/select";
@@ -55,8 +57,6 @@ export function ProcDashboardPage() {
       items.push({ key: m.id, icon: ClipboardList, tone: diffDays(TODAY, m.neededBy) < 45 ? "warn" : "brand", title: t("Send {ref} to vendors", { ref: m.ref }), sub: `${x(m.title)} · ${t("needed")} ${d(m.neededBy)}`, action: t("Create RFQ"), to: R.newRfq(m.id), weight: 60 - diffDays(TODAY, m.neededBy) / 10 });
     for (const p of s.pos.filter((x2) => x2.dispatchedAt && (x2.status === "ISSUED" || x2.status === "PART_RECEIVED")))
       items.push({ key: `g-${p.id}`, icon: Truck, tone: "brand", title: t("{ref} is at the gate", { ref: p.ref }), sub: `${s.vendors.find((v) => v.id === p.vendorId)?.name ?? ""} · ${p.dispatchNote ?? t("dispatched")}`, action: t("Receive"), to: R.order(p.id), weight: 70 });
-    for (const e of s.exceptions.filter((x2) => x2.status === "open"))
-      items.push({ key: e.id, icon: ShieldAlert, tone: e.severity === "critical" ? "bad" : "warn", title: x(e.detail), sub: `${e.id} · ${e.quoteId}`, action: t("Review"), to: R.exceptions, weight: e.severity === "critical" ? 75 : 50 });
     for (const p of s.payments.filter((x2) => x2.status === "READY"))
       items.push({ key: p.id, icon: Wallet, tone: p.dueDate < TODAY ? "bad" : "brand", title: t("Pay {ref}", { ref: p.ref }), sub: `${s.vendors.find((v) => v.id === p.vendorId)?.name ?? ""} · ${fmtMoneyShort(p.amount)} AZN · ${t("due")} ${d(p.dueDate)}`, action: t("Pay"), to: R.payment(p.id), weight: p.dueDate < TODAY ? 90 : 40 });
     return items.sort((a, b) => b.weight - a.weight);
@@ -110,9 +110,9 @@ export function ProcDashboardPage() {
   return (
     <div className="k-page ph">
       <PageHero
-        eyebrow={t("Procurement · Qobu")}
+        eyebrow={`${t("Procurement")} · ${projectName(lang)}`}
         title={t("Procurement")}
-        subtitle={t("Every request, quote, order, delivery and payment on the Qobu project, traced back to the bill of quantities.")}
+        subtitle={t("Every request, quote, order, delivery and payment on {p}, traced back to the bill of quantities.", { p: projectName(lang) })}
         flow={["Request", "RFQ", "Quotes", "Approve", "Order", "Receive", "Pay"]}
         art="procurement"
         actions={
@@ -128,6 +128,24 @@ export function ProcDashboardPage() {
           </>
         }
       />
+
+      {!s.vendors.length || (!s.mrs.length && !s.pos.length) ? (
+        <div className="k-callout k-tone-brand">
+          <Building2 size={15} />
+          <span>
+            <b>{t("Start here.")}</b>{" "}
+            {!s.vendors.length ? (
+              <>
+                {t("Add your first vendor, then raise a material request or place an order directly.")} <Link to={R.newVendor}>{t("Add vendor")}</Link>
+              </>
+            ) : (
+              <>
+                {t("Raise a material request to get quotes, or place an order directly with a vendor.")} <Link to={R.newRequest}>{t("New request")}</Link> · <Link to={to("procurement/orders/new")}>{t("New purchase order")}</Link>
+              </>
+            )}
+          </span>
+        </div>
+      ) : null}
 
       <section className="ph-chain" aria-label={t("The chain right now")}>
         {chain.map((c, i) => {
@@ -160,8 +178,10 @@ export function ProcDashboardPage() {
       <StatTiles
         items={[
           { label: t("Committed on orders"), value: <Money value={money.committed} short />, sub: t("incl. VAT, {n} orders", { n: s.pos.filter((p) => p.status !== "CANCELLED").length }) },
-          { label: t("Against the BOQ budget"), value: <span className={money.saving >= 0 ? "k-up" : "k-down"}>{money.saving >= 0 ? "−" : "+"}{fmtMoneyShort(Math.abs(money.saving))} <small className="k-cur">AZN</small></span>, sub: money.saving >= 0 ? t("bought under the BOQ rates") : t("over the BOQ rates"), tone: money.saving >= 0 ? "ok" : "bad" },
-          { label: t("Paid to vendors"), value: <Money value={money.paid} short />, sub: t("{p} of committed", { p: `${Math.round((money.paid / Math.max(1, money.committed)) * 100)}%` }) },
+          money.budget > 0
+            ? { label: t("Against the BOQ budget"), value: <span className={money.saving >= 0 ? "k-up" : "k-down"}>{money.saving >= 0 ? "−" : "+"}{fmtMoneyShort(Math.abs(money.saving))} <small className="k-cur">AZN</small></span>, sub: money.saving >= 0 ? t("bought under the BOQ rates") : t("over the BOQ rates"), tone: money.saving >= 0 ? "ok" : "bad" }
+            : { label: t("Against the BOQ budget"), value: "—", sub: t("no orders on BOQ materials yet") },
+          { label: t("Paid to vendors"), value: <Money value={money.paid} short />, sub: money.committed > 0 ? t("{p} of committed", { p: `${Math.round((money.paid / money.committed) * 100)}%` }) : t("nothing ordered yet") },
           { label: t("Goods still to arrive"), value: <Money value={money.outstanding} short />, sub: t("on open orders"), onClick: () => navigate(R.receipts) },
         ]}
       />
@@ -195,6 +215,7 @@ export function ProcDashboardPage() {
           </Panel>
 
           <Panel title={t("Budget against orders, by trade")} icon={<PackageCheck size={15} />} actions={<Link to={R.budget} className="k-link-btn">{t("Budget page")} <ArrowRight size={13} /></Link>}>
+            {!byTrade.length ? <p className="muted small">{t("The open project's BOQ has no priced materials.")}</p> : null}
             <div className="ph-trades">
               {byTrade.map(([trade, v]) => (
                 <div key={trade} className="ph-trade">
@@ -238,6 +259,7 @@ export function ProcDashboardPage() {
                 ))}
               </div>
               <p className="muted small">
+                {!deliveries.items.length ? `${t("No open orders.")} ` : null}
                 {t("Red trucks are past their delivery date. Filled trucks have been dispatched by the vendor.")}
               </p>
             </div>
@@ -246,6 +268,7 @@ export function ProcDashboardPage() {
 
         <div className="k-stack">
           <Panel title={t("Live activity")} icon={<Zap size={15} />} sub={t("Buyer and vendor portal events, newest first.")}>
+            {!feed.length ? <p className="muted small">{t("Nothing has happened yet. Records you create appear here.")}</p> : null}
             <ol className="ph-feed">
               {feed.map((f) => (
                 <li key={f.id}>
@@ -263,6 +286,7 @@ export function ProcDashboardPage() {
           </Panel>
 
           <Panel title={t("Top vendors by order value")} icon={<Wallet size={15} />} pad={false} actions={<Link to={R.vendors} className="k-link-btn">{t("All")} <ArrowRight size={13} /></Link>}>
+            {!topVendors.length ? <p className="k-panel-body muted">{s.vendors.length ? t("No orders placed yet.") : <>{t("No vendors yet.")} <Link to={R.newVendor}>{t("Add vendor")}</Link></>}</p> : null}
             <ul className="ph-vendors">
               {topVendors.map(({ v, st }) => (
                 <li key={v.id}>
@@ -275,7 +299,7 @@ export function ProcDashboardPage() {
                       </small>
                     </span>
                     <span className="ph-vendor-score" title={t("Vendor score out of 10")}>
-                      {v.overall.toFixed(1)}
+                      {hasScore(v) ? v.overall.toFixed(1) : "—"}
                     </span>
                     <span className="num-inline ph-vendor-value">{fmtMoneyShort(st.ordered)}</span>
                   </Link>
@@ -285,6 +309,7 @@ export function ProcDashboardPage() {
           </Panel>
 
           <Panel title={t("Payments falling due")} icon={<Wallet size={15} />} pad={false}>
+            {!s.payments.some((p) => p.status !== "PAID") ? <p className="k-panel-body muted">{t("No payments due. A payment is scheduled when an order is issued.")}</p> : null}
             <ul className="ph-pays">
               {s.payments
                 .filter((p) => p.status !== "PAID")

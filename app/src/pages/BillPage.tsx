@@ -1,7 +1,8 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { Search, Scale, Upload } from "lucide-react";
-import { data } from "../data";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { ArrowRight, ClipboardPlus, Search, Scale, Upload, X } from "lucide-react";
+import { data, P } from "../data";
+import { sendBillLines } from "../ops/ext/bill-request";
 import type { Method } from "../data/types";
 import { useBoq, type Line } from "../lib/boq";
 import { fmtMoney, fmtNum, fmtQty, unitLabel } from "../lib/format";
@@ -33,6 +34,30 @@ export function BillPage() {
   const [comparison, setComparison] = useState<any>(null);
   const [showCmpModal, setShowCmpModal] = useState(false);
   const [uploadingCmp, setUploadingCmp] = useState(false);
+  const navigate = useNavigate();
+  // Picking lines for a material request: off until the user starts it.
+  const [picking, setPicking] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
+  const togglePick = (ids: string[]) =>
+    setPicked((prev) => {
+      const next = new Set(prev);
+      const all = ids.every((id) => next.has(id));
+      for (const id of ids) {
+        if (all) next.delete(id);
+        else next.add(id);
+      }
+      return next;
+    });
+  const stopPicking = () => {
+    setPicking(false);
+    setPicked(new Set());
+  };
+  const requestPicked = () => {
+    const lines = boq.lines.filter((l) => picked.has(l.id));
+    if (!lines.length) return;
+    sendBillLines(lines.map((l) => ({ material: l.rateKey || null, description: { en: l.en, az: l.az }, qty: l.qty, unit: l.unit, building: l.building, code: l.code })));
+    navigate(`${P}/procurement/requests/new?bill=1`);
+  };
 
   useEffect(() => {
     if (!activeProjectId) {
@@ -123,6 +148,7 @@ export function BillPage() {
   }, [selectedId]);
 
   const shownTotal = visible.reduce((a, l) => a + l.amount, 0);
+  const pickedTotal = boq.lines.reduce((a, l) => (picked.has(l.id) ? a + l.amount : a), 0);
   const compact = narrow && Boolean(selected);
   const span = compact ? 2 : 4;
 
@@ -137,7 +163,27 @@ export function BillPage() {
           </>
         }
         actions={
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {picking ? (
+              <button type="button" className="btn btn-ghost" onClick={stopPicking}>
+                <X size={15} />
+                <span>{t("Cancel")}</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="btn btn-primary"
+                title={t("Pick bill lines and send them to procurement as a material request")}
+                onClick={() => {
+                  setPicking(true);
+                  setParam("line", null);
+                }}
+              >
+                <ClipboardPlus size={15} />
+                <span>{t("Create material request")}</span>
+              </button>
+            )}
+
             {comparison?.has_comparison ? (
               <button
                 type="button"
@@ -193,6 +239,16 @@ export function BillPage() {
         />
       </div>
 
+      {picking ? (
+        <div className="bill-pick-hint" role="status">
+          <span className="bill-pick-step">{t("Step 1 of 2")}</span>
+          <span>{t("Tick the bill lines to order. Click a section row to tick all its lines.")}</span>
+          <button type="button" className="bill-pick-link" onClick={() => togglePick(visible.map((l) => l.id))} disabled={!visible.length}>
+            {visible.length && visible.every((l) => picked.has(l.id)) ? t("Unpick shown") : t("Pick all shown")}
+          </button>
+        </div>
+      ) : null}
+
       <div className="bill-table scroll" ref={tableRef}>
         {!visible.length ? (
           <Empty title={t("No lines match")}>{t("Clear the search or choose another filter.")}</Empty>
@@ -243,14 +299,22 @@ export function BillPage() {
                       if (!sLines.length) return null;
                       return (
                         <Fragment key={s.id}>
-                          <tr className="row-section">
+                          <tr className={`row-section${picking ? " pickable" : ""}`} onClick={picking ? () => togglePick(sLines.map((l) => l.id)) : undefined}>
                             <td className="num">{s.code}</td>
                             <td colSpan={span}>{lang === "az" ? s.az : s.en}</td>
                             <td className="num">{fmtMoney(s.total)}</td>
                             {compact ? null : <td />}
                           </tr>
                           {sLines.map((l) => (
-                            <LineRow key={l.id} line={l} lang={lang} compact={compact} selected={l.id === selectedId} onSelect={() => setParam("line", l.id === selectedId ? null : l.id)} />
+                            <LineRow
+                              key={l.id}
+                              line={l}
+                              lang={lang}
+                              compact={compact}
+                              selected={picking ? picked.has(l.id) : l.id === selectedId}
+                              picking={picking}
+                              onSelect={() => (picking ? togglePick([l.id]) : setParam("line", l.id === selectedId ? null : l.id))}
+                            />
                           ))}
                         </Fragment>
                       );
@@ -262,6 +326,33 @@ export function BillPage() {
           </table>
         )}
       </div>
+
+      {picking ? (
+        <div className="bill-pick-foot">
+          <div className="bill-pick-sum">
+            {picked.size ? (
+              <>
+                <strong>{t("{n} lines picked", { n: picked.size })}</strong>
+                <span>{t("{a} AZN at bill rates", { a: fmtMoney(pickedTotal) })}</span>
+              </>
+            ) : (
+              <span>{t("No lines picked yet")}</span>
+            )}
+          </div>
+          <div className="bill-pick-actions">
+            {picked.size ? (
+              <button type="button" className="btn btn-ghost" onClick={() => setPicked(new Set())}>
+                {t("Clear")}
+              </button>
+            ) : null}
+            <button type="button" className="btn btn-primary bill-pick-go" onClick={requestPicked} disabled={!picked.size}>
+              <ClipboardPlus size={15} />
+              <span>{picked.size ? t("Create material request ({n})", { n: picked.size }) : t("Tick at least one line")}</span>
+              {picked.size ? <ArrowRight size={15} /> : null}
+            </button>
+          </div>
+        </div>
+      ) : null}
 
       <Drawer
         open={Boolean(selected)}
@@ -283,13 +374,16 @@ export function BillPage() {
   );
 }
 
-function LineRow({ line, lang, compact, selected, onSelect }: { line: Line; lang: "az" | "en"; compact: boolean; selected: boolean; onSelect: () => void }) {
+function LineRow({ line, lang, compact, selected, picking = false, onSelect }: { line: Line; lang: "az" | "en"; compact: boolean; selected: boolean; picking?: boolean; onSelect: () => void }) {
   const t = useT();
   const sheets = [...new Set(line.items.flatMap((i) => i.src.map((s) => s.sheet)))];
   const finding = line.checks.find((c) => c.severity === "error") ?? line.checks.find((c) => c.severity === "warn");
   return (
     <tr data-line={line.id} className={`row-line${selected ? " selected" : ""}`} onClick={onSelect} tabIndex={0} onKeyDown={(e) => e.key === "Enter" && onSelect()}>
-      <td className="num code">{line.code}</td>
+      <td className="num code">
+        {picking ? <input type="checkbox" className="bill-pick-box" checked={selected} readOnly tabIndex={-1} aria-label={t("Pick for a material request")} /> : null}
+        {line.code}
+      </td>
       <td className="desc">
         <span>{lang === "az" ? line.az : line.en}</span>
         {finding ? <span className={`flag flag-${finding.severity}`}>{finding.severity === "error" ? t("Error") : finding.kind === "review" ? t("Review") : finding.kind === "missing" ? t("Missing") : t("Conflict")}</span> : null}

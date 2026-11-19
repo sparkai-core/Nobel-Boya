@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { FileCheck2, Plane, Plus } from "lucide-react";
-import { Avatar, CountUp, FilterChips, PageHero, Panel, Register, SearchBox, StatTiles, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
+import { Avatar, CountUp, Empty, FilterChips, PageHero, Panel, Register, SearchBox, StatTiles, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import type { Submittal } from "../../../ops/types";
 import { Runway } from "./Runway";
@@ -110,14 +110,31 @@ export function SubmittalsPage() {
       <StatTiles
         items={[
           { label: t("Open"), value: <CountUp value={submittals.filter((s) => !subApproved(s)).length} />, sub: t("not approved yet") },
-          { label: t("With the reviewer"), value: <CountUp value={inReview} />, sub: t("submitted or under review"), tone: "warn", onClick: () => setStage("UNDER_REVIEW") },
+          { label: t("With the reviewer"), value: <CountUp value={inReview} />, sub: t("submitted or under review"), tone: inReview ? "warn" : "neutral", onClick: () => setStage("UNDER_REVIEW") },
           { label: t("Past final due"), value: <CountUp value={late.length} />, sub: t("the material will arrive late"), tone: late.length ? "bad" : "ok", onClick: () => setChip("late") },
           { label: t("Ready for procurement"), value: <CountUp value={ready.length} />, sub: t("approved, no request raised"), tone: ready.length ? "brand" : "neutral", onClick: () => setChip("ready") },
         ]}
       />
 
       <Panel title={t("Submittal runway")} icon={<Plane size={15} />} sub={t("Each bar runs from the submit-by date to the final due date (approve by then) and on to the day the material is needed on site.")} pad={false}>
-        {runwayRows.length ? <Runway items={runwayRows} activities={activities} /> : <p className="pg-empty">{t("No submittals match these filters.")}</p>}
+        {runwayRows.length ? (
+          <Runway items={runwayRows} activities={activities} />
+        ) : submittals.length ? (
+          <p className="pg-empty">{t("No submittals match these filters.")}</p>
+        ) : (
+          <Empty
+            icon={<FileCheck2 size={20} />}
+            title={t("No submittals yet")}
+            action={
+              <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+                <Plus size={15} />
+                {t("New submittal")}
+              </button>
+            }
+          >
+            {t("Log the shop drawings, samples and data sheets that need approval before ordering.")}
+          </Empty>
+        )}
       </Panel>
 
       <SubStagePath counts={counts} value={stage} onChange={setStage} />
@@ -144,7 +161,7 @@ export function SubmittalsPage() {
         }
         empty={
           <span className="pg-empty-inline">
-            <FileCheck2 size={16} /> {t("No submittals match these filters.")}
+            <FileCheck2 size={16} /> {submittals.length ? t("No submittals match these filters.") : t("No submittals yet")}
           </span>
         }
       />

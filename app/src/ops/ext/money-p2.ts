@@ -51,7 +51,7 @@ export const VENDOR_INV_STATUS: Record<Invoice["status"], Meta> = {
 
 export const SOURCE_LABEL: Record<Invoice["source"], Txt> = {
   PORTAL: { en: "Vendor portal", az: "Təchizatçı portalı" },
-  UPLOAD: { en: "Uploaded", az: "Yüklənib" },
+  UPLOAD: { en: "Entered by hand", az: "Əl ilə daxil edilib" },
   EMAIL: { en: "E-mail", az: "E-poçt" },
 };
 

@@ -7,7 +7,7 @@ import { paymentGate } from "../../ops/select";
 import { fmtMoney, fmtMoneyShort } from "../../lib/format";
 import { invTotal, VENDOR_INV_STATUS } from "../../ops/ext/money-p2";
 import type { Payment, PurchaseOrder } from "../../ops/types";
-import { BUYER, canInvoice, payState, useVendor, VP, type PayState } from "./model";
+import { buyerName, canInvoice, payState, useVendor, VP, type PayState } from "./model";
 import { InvoiceDialog, useEyebrow } from "./parts";
 
 const KIND: Record<Payment["kind"], string> = { ADVANCE: "Advance", ON_DELIVERY: "On delivery", RETENTION: "Retention" };
@@ -100,7 +100,7 @@ export function VpPayments() {
 
   return (
     <div className="k-page vp-page">
-      <PageHero eyebrow={eyebrow("Payments")} title={t("Payments")} subtitle={t("When {buyer} pays you, what is coming and what is held.", { buyer: BUYER })} flow={["Delivered", "Invoice", "Released", "Paid"]} art="pay" />
+      <PageHero eyebrow={eyebrow("Payments")} title={t("Payments")} subtitle={t("When {buyer} pays you, what is coming and what is held.", { buyer: buyerName() })} flow={["Delivered", "Invoice", "Released", "Paid"]} art="pay" />
 
       <StatTiles
         items={[
@@ -179,7 +179,7 @@ export function VpPayments() {
             ) : null}
           </>
         ) : (
-          <p className="muted">{t("No payments scheduled yet. They are set when {buyer} issues an order.", { buyer: BUYER })}</p>
+          <p className="muted">{t("No payments scheduled yet. They are set when {buyer} issues an order.", { buyer: buyerName() })}</p>
         )}
       </Panel>
 

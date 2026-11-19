@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import { Check, Megaphone, Minus, PenLine, Plus, Users, X as XIcon } from "lucide-react";
-import { Badge, Columns, Dialog, Field, Panel, RingGauge, toast, useL } from "../../../components/kit";
-import { useOps, ME } from "../../../ops/store";
+import { Badge, Columns, Dialog, Empty, Field, Panel, RingGauge, toast, useL } from "../../../components/kit";
+import { useOps, me } from "../../../ops/store";
 import { addDays, same, TODAY } from "../../../ops/dates";
 import type { ToolboxTalk, Txt } from "../../../ops/types";
-import { freshRef, WEEK, ZONES, zoneTxt } from "./shared";
+import { freshRef, WEEK, ZoneInput, zoneTxt } from "./shared";
 
 // ---------------------------------------------------------------- toolbox talks
 
@@ -15,6 +15,25 @@ export function ToolboxTab({ logOpen, setLogOpen }: { logOpen: boolean; setLogOp
   const sorted = [...talks].sort((a, b) => b.date.localeCompare(a.date));
   const max = Math.max(1, ...talks.map((k) => k.attendees));
   const thisWeek = talks.filter((k) => WEEK.includes(k.date));
+
+  if (!talks.length)
+    return (
+      <>
+        <Empty
+          icon={<Megaphone size={22} />}
+          title={t("No toolbox talks logged")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setLogOpen(true)}>
+              <Plus size={15} />
+              {t("Log toolbox talk")}
+            </button>
+          }
+        >
+          {t("Record each briefing: the topic, where it was given, who gave it and how many people attended.")}
+        </Empty>
+        <LogTalkDialog open={logOpen} onClose={() => setLogOpen(false)} />
+      </>
+    );
 
   return (
     <div className="k-stack">
@@ -40,9 +59,7 @@ export function ToolboxTab({ logOpen, setLogOpen }: { logOpen: boolean; setLogOp
                 </span>
                 <span className="k-cell-title">
                   <strong>{x(k.topic)}</strong>
-                  <small>
-                    {x(k.zone)} · {k.by} · {rel(k.date)}
-                  </small>
+                  <small>{[x(k.zone), k.by, rel(k.date)].filter(Boolean).join(" · ")}</small>
                 </span>
                 <span className="st-talk-att">
                   <span className="st-talk-bar">
@@ -76,10 +93,13 @@ export function ToolboxTab({ logOpen, setLogOpen }: { logOpen: boolean; setLogOp
   );
 }
 
+/** Common briefing subjects, offered as suggestions only. */
 const TOPICS: Txt[] = [
-  { en: "Crane down: no lifts without a valid inspection", az: "Kran işləmir: etibarlı yoxlama olmadan qaldırma yoxdur" },
-  { en: "Helmets and vests at the gate", az: "Darvazada kaska və jilet" },
-  { en: "Rain and flooded pits", az: "Yağış və su basmış çuxurlar" },
+  { en: "Working at height", az: "Hündürlükdə iş" },
+  { en: "Personal protective equipment", az: "Fərdi mühafizə vasitələri" },
+  { en: "Manual handling", az: "Yüklərin əllə daşınması" },
+  { en: "Excavations and open edges", az: "Qazıntılar və açıq kənarlar" },
+  { en: "Hot work and fire safety", az: "Odlu işlər və yanğın təhlükəsizliyi" },
 ];
 
 function LogTalkDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
@@ -87,17 +107,21 @@ function LogTalkDialog({ open, onClose }: { open: boolean; onClose: () => void }
   const nextRef = useOps((s) => s.nextRef);
   const addItem = useOps((s) => s.addItem);
   const pushFeed = useOps((s) => s.pushFeed);
-  const [f, setF] = useState({ topic: "", zone: ZONES[0]!.key, attendees: "24", date: TODAY, by: ME });
+  const [f, setF] = useState({ topic: "", zone: "", attendees: "", date: TODAY, by: me() });
   useEffect(() => {
-    if (open) setF({ topic: "", zone: ZONES[0]!.key, attendees: "24", date: TODAY, by: ME });
+    if (open) setF({ topic: "", zone: "", attendees: "", date: TODAY, by: me() });
   }, [open]);
   const save = () => {
     if (!f.topic.trim()) {
       toast(t("Add the topic of the talk."), "warn");
       return;
     }
+    if (!(Number(f.attendees) >= 1)) {
+      toast(t("Enter how many people attended."), "warn");
+      return;
+    }
     const id = freshRef(() => nextRef("TBT", 1), (r) => useOps.getState().toolbox.some((k) => k.id === r));
-    const talk: ToolboxTalk = { id, date: f.date, topic: same(f.topic.trim()), by: f.by.trim() || ME, attendees: Math.max(1, Math.round(Number(f.attendees) || 1)), zone: zoneTxt(f.zone) };
+    const talk: ToolboxTalk = { id, date: f.date, topic: same(f.topic.trim()), by: f.by.trim() || me(), attendees: Math.max(1, Math.round(Number(f.attendees) || 1)), zone: zoneTxt(f.zone) };
     addItem("toolbox", talk, true);
     pushFeed("PM", { en: `Toolbox talk held: ${talk.topic.en} (${talk.attendees} people)`, az: `Təlimat keçirildi: ${talk.topic.az} (${talk.attendees} nəfər)` }, "pm/safety?tab=toolbox");
     toast(t("Toolbox talk logged: {n} people", { n: talk.attendees }));
@@ -131,13 +155,7 @@ function LogTalkDialog({ open, onClose }: { open: boolean; onClose: () => void }
           ))}
         </div>
         <Field label={t("Where")}>
-          <select className="input select" value={f.zone} onChange={(e) => setF({ ...f, zone: e.target.value })}>
-            {ZONES.map((z) => (
-              <option key={z.key} value={z.key}>
-                {x(z.label)}
-              </option>
-            ))}
-          </select>
+          <ZoneInput id="st-tbt-zone" value={f.zone} onChange={(v) => setF({ ...f, zone: v })} />
         </Field>
         <Field label={t("People who attended")}>
           <input className="input" type="number" min={1} value={f.attendees} onChange={(e) => setF({ ...f, attendees: e.target.value })} />
@@ -165,14 +183,12 @@ const WALK: { group: Txt; items: Txt[] }[] = [
 const walkText = (score: number) => ({ en: `Weekly site walk signed off, week to ${TODAY}: score ${score}%`, az: `Həftəlik meydança baxışı imzalandı, ${TODAY} tarixinədək həftə: bal ${score}%` });
 const WALK_PREFIX = `Weekly site walk signed off, week to ${TODAY}`;
 
-/** Defaults that reflect the seeded story (crane down, diesel spill, a PPE breach waiting). */
-const START: Record<string, Answer> = { "2-0": "ISSUE", "2-2": "ISSUE", "3-0": "ISSUE", "1-0": "OK", "0-0": "OK" };
 
 export function AuditsTab() {
   const { t, x, d, stamp } = useL();
   const feed = useOps((s) => s.feed);
   const pushFeed = useOps((s) => s.pushFeed);
-  const [ans, setAns] = useState<Record<string, Answer>>(START);
+  const [ans, setAns] = useState<Record<string, Answer>>({});
   const signed = feed.find((f) => f.text.en.startsWith(WALK_PREFIX));
   const all = WALK.flatMap((g, gi) => g.items.map((_, ii) => `${gi}-${ii}`));
   const ok = all.filter((k) => ans[k] === "OK").length;
@@ -226,7 +242,7 @@ export function AuditsTab() {
       </Panel>
       <Panel title={t("Walk score")}>
         <div className="st-walk-score">
-          <RingGauge value={signed ? Number(/(\d+)%$/.exec(signed.text.en)?.[1] ?? score) : score} size={132} stroke={11} tone={score >= 80 ? "ok" : score >= 60 ? "warn" : "bad"} label={t("score")} />
+          <RingGauge value={signed ? Number(/(\d+)%$/.exec(signed.text.en)?.[1] ?? score) : score} size={132} stroke={11} tone={ok + issues === 0 ? "muted" : score >= 80 ? "ok" : score >= 60 ? "warn" : "bad"} label={t("score")} />
           <div className="st-walk-figs">
             <span>
               <b className="num-inline k-text-ok">{ok}</b> {t("in order")}

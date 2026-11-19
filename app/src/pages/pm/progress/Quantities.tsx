@@ -4,7 +4,7 @@ import { Panel, useL } from "../../../components/kit";
 import { data } from "../../../data";
 import { fmtNum, unitLabel } from "../../../lib/format";
 import type { Activity } from "../../../ops/types";
-import { plannedAt } from "./shared";
+import { plannedAt, weightOf } from "./shared";
 
 const GROUPS: { key: string; label: string; unit: string; match: (rate: string) => boolean }[] = [
   { key: "conc", label: "Concrete", unit: "m³", match: (r) => r.startsWith("conc_") },
@@ -27,8 +27,9 @@ export function Quantities({ activities }: { activities: Activity[] }) {
       const k = keyOf(it.building, it.section);
       if (share.has(k)) continue;
       const acts = activities.filter((a) => a.building === it.building && a.section === it.section);
-      const bud = acts.reduce((x, a) => x + a.budget, 0);
-      share.set(k, bud > 0 ? { done: acts.reduce((x, a) => x + a.budget * a.pct, 0) / bud / 100, plan: acts.reduce((x, a) => x + a.budget * plannedAt(a), 0) / bud } : { done: 0, plan: 0 });
+      const w = weightOf(acts);
+      const bud = acts.reduce((x, a) => x + w(a), 0);
+      share.set(k, bud > 0 ? { done: acts.reduce((x, a) => x + w(a) * a.pct, 0) / bud / 100, plan: acts.reduce((x, a) => x + w(a) * plannedAt(a), 0) / bud } : { done: 0, plan: 0 });
     }
     return GROUPS.map((g) => {
       const items = data.items.filter((it) => g.match(it.rate));
@@ -41,6 +42,7 @@ export function Quantities({ activities }: { activities: Activity[] }) {
 
   return (
     <Panel title={t("Quantities installed against the BOQ")} icon={<Boxes size={15} />} sub={t("Estimated from the % complete of the activities carrying each BOQ section. The tick marks what the baseline planned by today.")}>
+      {!rows.length ? <p className="muted small">{t("The BOQ of this project has no concrete, reinforcement, steel, masonry or roof sheeting items to track.")}</p> : null}
       <ul className="pg-qty">
         {rows.map((r) => {
           const gap = r.pct - r.planPct;

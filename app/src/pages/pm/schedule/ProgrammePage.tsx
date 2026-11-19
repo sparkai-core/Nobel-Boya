@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { ChevronDown, ChevronRight, Crosshair, Flag, Save } from "lucide-react";
-import { Dialog, FilterChips, GanttCore, PageHero, SearchBox, toast, useL, useSearch, type GanttBar, type GanttLink, type GanttRow, type Zoom } from "../../../components/kit";
+import { ChevronDown, ChevronRight, Crosshair, Flag, ListPlus, Pencil, Plus, Save, Upload } from "lucide-react";
+import { Dialog, Empty, FilterChips, GanttCore, PageHero, SearchBox, toast, useL, useSearch, type GanttBar, type GanttLink, type GanttRow, type Zoom } from "../../../components/kit";
 import { Drawer, Segmented } from "../../../components/ui";
 import { useMedia } from "../../../lib/useMedia";
 import { useOps } from "../../../ops/store";
@@ -11,6 +11,9 @@ import type { Activity } from "../../../ops/types";
 import { dateOf, durOf, lateness, milestoneRows, MS_TONE, ownerShort, rollup, slipDays, useSchedule, wbsChildren } from "./model";
 import { ProjectRunStrip } from "./ProjectRunStrip";
 import { TaskPanel } from "./TaskPanel";
+import { ActivityDialog } from "../planning/ActivityDialog";
+import { MilestoneDialog } from "./MilestoneDialog";
+import { UNASSIGNED } from "../planning/model";
 
 type Filter = "all" | "progress" | "blocked" | "critical" | "late" | "milestones" | "done" | "notstarted";
 type View = { baseline: boolean; actual: boolean; forecast: boolean; critical: boolean; links: boolean };
@@ -25,7 +28,7 @@ export function ProgrammePage() {
   const [params, setParams] = useSearchParams();
   const taskId = params.get("task");
   const filter = (params.get("filter") as Filter | null) ?? "all";
-  const { activities, links, milestones, wbs, subs, cp, outlook, byId } = useSchedule();
+  const { activities, links, milestones, wbs, subs, cp, outlook, byId, weight } = useSchedule();
   const setBaseline = useOps((s) => s.setBaseline);
   const wide = useMedia("(min-width: 760px)");
   const [q, setQ] = useState("");
@@ -34,6 +37,10 @@ export function ProgrammePage() {
   const [nonce, setNonce] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [confirm, setConfirm] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [editing, setEditing] = useState<Activity | null>(null);
+  const [addingMs, setAddingMs] = useState(false);
+  const has = activities.length > 0;
 
   const setParam = (k: string, v: string | null) => {
     const p = new URLSearchParams(params);
@@ -111,17 +118,27 @@ export function ProgrammePage() {
           : undefined,
       };
     };
+    const nodeIds = new Set(wbs.map((n) => n.id));
+    const own = new Map<string, Activity[]>();
+    const loose: Activity[] = [];
+    for (const a of activities) {
+      if (nodeIds.has(a.wbsId)) own.set(a.wbsId, [...(own.get(a.wbsId) ?? []), a]);
+      else loose.push(a);
+    }
+    const subtreeOf = new Map<string, Activity[]>();
+    const collect = (id: string, guard = 0): Activity[] => {
+      if (subtreeOf.has(id)) return subtreeOf.get(id)!;
+      subtreeOf.set(id, []);
+      const list = [...(own.get(id) ?? []), ...(guard > 60 ? [] : (kids.get(id) ?? []).flatMap((k) => collect(k.id, guard + 1)))];
+      subtreeOf.set(id, list);
+      return list;
+    };
     const walk = (nodeId: string, level: number) => {
-      const node = wbs.find((n) => n.id === nodeId);
+      const node = nodeId === UNASSIGNED.id ? UNASSIGNED : wbs.find((n) => n.id === nodeId);
       if (!node) return;
-      const subtree: Activity[] = [];
-      const collect = (id: string) => {
-        for (const a of activities) if (a.wbsId === id) subtree.push(a);
-        for (const k of kids.get(id) ?? []) collect(k.id);
-      };
-      collect(nodeId);
+      const subtree = nodeId === UNASSIGNED.id ? loose : collect(nodeId);
       if (!subtree.some((a) => visible.has(a.id))) return;
-      const r = rollup(subtree, cp);
+      const r = rollup(subtree, cp, weight);
       const open = !collapsed.has(nodeId);
       out.push({
         id: `g:${nodeId}`,
@@ -137,10 +154,14 @@ export function ProgrammePage() {
         cells: wide ? [<b key="p">{Math.round(r.pct)}%</b>, <span key="o" className="k-text-muted">{t("{n} tasks", { n: r.count })}</span>, <span key="s" />] : undefined,
       });
       if (!open) return;
-      for (const a of activities.filter((z) => z.wbsId === nodeId && visible.has(z.id)).sort((p, q2) => p.start.localeCompare(q2.start))) out.push(actRow(a, level + 1));
-      for (const k of kids.get(nodeId) ?? []) walk(k.id, level + 1);
+      const mine = nodeId === UNASSIGNED.id ? loose : (own.get(nodeId) ?? []);
+      for (const a of mine.filter((z) => visible.has(z.id)).sort((p, q2) => p.start.localeCompare(q2.start))) out.push(actRow(a, level + 1));
+      if (nodeId !== UNASSIGNED.id) for (const k of kids.get(nodeId) ?? []) walk(k.id, level + 1);
     };
-    if (filter !== "milestones") for (const top of kids.get("W0") ?? kids.get(null) ?? []) walk(top.id, 0);
+    if (filter !== "milestones") {
+      for (const top of wbs.filter((n) => !n.parentId || !nodeIds.has(n.parentId))) walk(top.id, 0);
+      if (loose.length) walk(UNASSIGNED.id, 0);
+    }
 
     const msShown = filter === "all" || filter === "milestones" ? msRows.filter((r) => !q || `${r.m.code} ${r.m.name.en} ${r.m.name.az}`.toLowerCase().includes(q.toLowerCase())) : [];
     if (msShown.length) {
@@ -165,7 +186,7 @@ export function ProgrammePage() {
           });
     }
     return out;
-  }, [activities, wbs, kids, visible, collapsed, view, cp, wide, filter, msRows, q, subs, isCrit, t, x, d]);
+  }, [activities, wbs, kids, visible, collapsed, view, cp, weight, wide, filter, msRows, q, subs, isCrit, t, x, d]);
 
   const ganttLinks: GanttLink[] = useMemo(() => {
     if (!view.links) return [];
@@ -215,14 +236,24 @@ export function ProgrammePage() {
       <PageHero
         eyebrow={t("Project management · Programme")}
         title={t("Programme")}
-        subtitle={t("Every activity of the Qobu job against its baseline, grouped by the work breakdown. Click a bar to update progress.")}
+        subtitle={t("Every activity of the project against its baseline, grouped by the work breakdown. Click a bar to update progress.")}
         flow={["Plan", "Baseline", "Track progress", "Forecast the finish"]}
         art="programme"
         actions={
-          <button type="button" className="btn btn-ghost" onClick={() => setConfirm(true)}>
-            <Save size={15} />
-            {t("Set baseline")}
-          </button>
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <Plus size={15} />
+              {t("Add activity")}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setAddingMs(true)}>
+              <Flag size={15} />
+              {t("Add milestone")}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={() => setConfirm(true)} disabled={!has}>
+              <Save size={15} />
+              {t("Set baseline")}
+            </button>
+          </>
         }
       />
 
@@ -263,7 +294,24 @@ export function ProgrammePage() {
           </div>
         </div>
 
-        {rows.length ? (
+        {!has && !milestones.length ? (
+          <Empty
+            icon={<ListPlus size={20} />}
+            title={t("No programme yet")}
+            action={
+              <div className="pms-empty-actions">
+                <button type="button" className="btn btn-primary" onClick={() => navigate(`${R.planning("activities")}?import=1`)}>
+                  <Upload size={15} /> {t("Import a P6 / MS Project file")}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => setAdding(true)}>
+                  <Plus size={15} /> {t("Add an activity")}
+                </button>
+              </div>
+            }
+          >
+            {t("Import a Primavera P6 (.xer / .xml) or MS Project (.xml) file, or add activities by hand.")}
+          </Empty>
+        ) : rows.length ? (
           <div className="pms-gantt">
             <GanttCore
               key={`${zoom}-${nonce}`}
@@ -279,7 +327,7 @@ export function ProgrammePage() {
               rowHeight={36}
               height={640}
               cellHeaders={wide ? [t("Done"), t("Owner"), t("Slip")] : []}
-              markers={[{ date: outlook.contract, label: t("Contract finish"), tone: "bad" }]}
+              markers={outlook.contractKnown ? [{ date: outlook.contract, label: t("Contract finish"), tone: "bad" }] : []}
             />
           </div>
         ) : (
@@ -311,8 +359,28 @@ export function ProgrammePage() {
       </section>
 
       <Drawer open={!!task} onClose={() => setParam("task", null)} title={task ? x(task.name) : ""} kicker={task ? `${task.code} · ${t("Activity")}` : undefined} width={460}>
-        {task ? <TaskPanel key={task.id} task={task} onOpen={(id) => setParam("task", id)} /> : null}
+        {task ? (
+          <>
+            <div className="pms-task-edit">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(task)}>
+                <Pencil size={13} /> {t("Edit or delete")}
+              </button>
+            </div>
+            <TaskPanel key={task.id} task={task} onOpen={(id) => setParam("task", id)} />
+          </>
+        ) : null}
       </Drawer>
+
+      <ActivityDialog open={adding} onClose={() => setAdding(false)} onSaved={(id) => setParam("task", id)} />
+      <ActivityDialog
+        open={!!editing}
+        activity={editing}
+        onClose={() => {
+          setEditing(null);
+          if (taskId && !useOps.getState().activities.some((a) => a.id === taskId)) setParam("task", null);
+        }}
+      />
+      <MilestoneDialog open={addingMs} onClose={() => setAddingMs(false)} />
 
       <Dialog
         open={confirm}
@@ -339,9 +407,11 @@ export function ProgrammePage() {
         }
       >
         <p>{t("The current dates of all {n} activities become the new baseline, and milestone baselines move to their forecasts. Slip is then measured from today's programme.", { n: activities.length })}</p>
-        <div className="k-callout k-tone-warn" style={{ marginTop: 12 }}>
-          <span>{t("The programme finishes {n} days after the contract date today. A new baseline hides that slip from the variance columns.", { n: Math.max(0, outlook.lateDays) })}</span>
-        </div>
+        {outlook.contractKnown && outlook.lateDays > 0 ? (
+          <div className="k-callout k-tone-warn" style={{ marginTop: 12 }}>
+            <span>{t("The programme finishes {n} days after the contract date today. A new baseline hides that slip from the variance columns.", { n: outlook.lateDays })}</span>
+          </div>
+        ) : null}
       </Dialog>
     </div>
   );

@@ -73,6 +73,10 @@ export function UpdateGrid() {
 
   const fillFromReports = () => {
     const approved = reports.filter((r) => r.status === "APPROVED");
+    if (!approved.length) {
+      toast(t("No approved daily reports yet."), "neutral");
+      return;
+    }
     let n = 0;
     const next = { ...drafts };
     for (const a of rows) {

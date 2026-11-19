@@ -1,6 +1,6 @@
 import { data } from "../../../data";
 import { addDays, diffDays, monthShort, TODAY } from "../../../ops/dates";
-import { cpm, poReceivedShare, type Cpm, type Tone } from "../../../ops/select";
+import { cpm, poReceivedShare, tradeName, type Cpm, type Tone } from "../../../ops/select";
 import type { Activity, MaterialRequest, OpsData, PurchaseOrder, Quotation, Rfq, Trade, Txt } from "../../../ops/types";
 import type { Lang } from "../../../lib/i18n";
 
@@ -11,8 +11,6 @@ export const RFQ_DAYS = 10;
 export const APPROVAL_DAYS = 3;
 /** Safety days between delivery and the activity start. */
 export const BUFFER_DAYS = 2;
-
-const T = (en: string, az: string): Txt => ({ en, az });
 
 /** BOQ sections each trade buys for (used to find the activity a delivery feeds). */
 export const TRADE_SECTIONS: Record<Trade, string[]> = {
@@ -30,37 +28,12 @@ export const TRADE_SECTIONS: Record<Trade, string[]> = {
 
 // ---------------------------------------------------------------- procurement packages
 
-type PkgDef = {
-  key: string;
-  name: Txt;
-  /** Activity code whose start is the "required on site" date. */
-  need: string;
-  /** Other activities whose requests belong to this package. */
-  also?: string[];
-  building: string | null;
-  sections: string[];
-  /** Restrict to these BOQ rate keys (default: every rate in the building × sections). */
-  materials?: string[];
-  trade: Trade;
-};
-
-const DEFS: PkgDef[] = [
-  { key: "wh-footings", name: T("Ready-mix for warehouse footings", "Anbar bünövrələri üçün hazır beton"), need: "WH-120", building: "WH", sections: ["sub"], materials: ["conc_fdn", "conc_blind"], trade: "Concrete" },
-  { key: "rebar", name: T("Rebar for footings, columns and frame", "Bünövrə, dirək və karkas armaturu"), need: "WH-125", also: ["AD-125"], building: null, sections: ["rebar"], trade: "Reinforcement" },
-  { key: "embeds", name: T("Anchor bolts and embedded plates", "Anker boltları və gömülü lövhələr"), need: "WH-140", building: "WH", sections: ["steel"], materials: ["steel_embed"], trade: "Steel" },
-  { key: "wh-columns", name: T("Ready-mix for warehouse columns", "Anbar dirəkləri üçün hazır beton"), need: "WH-140", building: "WH", sections: ["frame"], materials: ["conc_col"], trade: "Concrete" },
-  { key: "ad-frame", name: T("Ready-mix for the admin frame", "İnzibati bina karkası üçün hazır beton"), need: "AD-130", also: ["AD-140", "AD-150"], building: "AD", sections: ["frame"], trade: "Concrete" },
-  { key: "trusses", name: T("Steel trusses and bracing", "Metal fermalar və bərkidicilər"), need: "WH-160", also: ["WH-150"], building: "WH", sections: ["steel"], materials: ["steel_struct"], trade: "Steel" },
-  { key: "limestone", name: T("Sawn limestone for warehouse walls", "Anbar divarları üçün kəsilmiş əhəng daşı"), need: "WH-180", building: "WH", sections: ["masonry"], materials: ["wall_limestone"], trade: "Masonry" },
-  { key: "roof", name: T("Roof sheeting and rainwater goods", "Dam örtüyü və su axıdıcılar"), need: "WH-170", building: "WH", sections: ["roof"], materials: ["roof_sheet", "gutter", "downpipe", "flashing", "rain_elbow", "rain_funnel", "rain_clamp"], trade: "Roofing" },
-  { key: "fire-pumps", name: T("Fire pumps and pump-station pipework", "Yanğın nasosları və nasosxana boruları"), need: "PS-120", building: "PS", sections: ["plumb"], trade: "Building services" },
-  { key: "wh-elec", name: T("Warehouse electrical and low current", "Anbar elektrik və zəif cərəyan sistemləri"), need: "WH-210", building: "WH", sections: ["elec", "lowcur"], trade: "Building services" },
-  { key: "ad-elec", name: T("Admin electrical: cables and boards", "İnzibati bina elektriki: kabellər və lövhələr"), need: "AD-190", also: ["AD-220"], building: "AD", sections: ["elec"], trade: "Building services" },
-  { key: "wh-fire", name: T("Warehouse firefighting and fire alarm", "Anbar yanğınsöndürmə və siqnalizasiya"), need: "WH-220", building: "WH", sections: ["fire", "alarm"], trade: "Building services" },
-  { key: "pvc", name: T("PVC windows and doors, admin building", "İnzibati bina üçün PVC pəncərə və qapılar"), need: "AD-180", building: "AD", sections: ["openings"], trade: "Doors and windows" },
-  { key: "tiles", name: T("Porcelain and ceramic tiles", "Keramoqranit və keramik plitələr"), need: "AD-210", building: "AD", sections: ["finish"], materials: ["floor_porcelain", "floor_tile", "wall_tile"], trade: "Finishes" },
-  { key: "asphalt", name: T("Asphalt and kerbs for the yard", "Həyət üçün asfalt və bordyurlar"), need: "SW-130", also: ["SW-120"], building: "SITE", sections: ["ext"], materials: ["asphalt_coarse", "asphalt_fine", "kerb"], trade: "External works" },
-];
+/**
+ * Procurement packages come from the project's own BOQ: one per trade that has priced materials.
+ * The date the site needs them is the start of the earliest programme activity in the BOQ sections
+ * where those materials are measured; with no such activity, the earliest needed-by date on a request
+ * for them; else the date the user sets. Nothing is assumed.
+ */
 
 export type PkgStatus = "NONE" | "MR" | "RFQ" | "QUOTED" | "ORDERED" | "DELIVERED";
 export const PKG_PATH: PkgStatus[] = ["NONE", "MR", "RFQ", "QUOTED", "ORDERED", "DELIVERED"];
@@ -73,25 +46,28 @@ export const PKG_STATUS: Record<PkgStatus, { label: string; tone: Tone }> = {
   DELIVERED: { label: "Delivered", tone: "ok" },
 };
 
-export type LeadSource = "submittal" | "index" | "vendors";
+export type LeadSource = "submittal" | "index" | "vendors" | "user";
+export type NeedSource = "user" | "activity" | "request";
 
 export type Pkg = {
   key: string;
   name: Txt;
-  act: Activity;
+  /** Earliest open programme activity that uses the package's materials, if any. */
+  act: Activity | null;
   actIds: string[];
   building: string | null;
   trade: Trade;
   materials: string[];
-  /** BOQ value of the package at sample rates. */
+  /** BOQ value of the package at the bill rates. */
   value: number;
-  required: string;
-  lead: number;
-  leadSource: LeadSource;
-  latestRfq: string;
-  latestPo: string;
+  required: string | null;
+  requiredFrom: NeedSource | null;
+  lead: number | null;
+  leadSource: LeadSource | null;
+  latestRfq: string | null;
+  latestPo: string | null;
   /** Days from today to the latest PO date (negative = passed). */
-  float: number;
+  float: number | null;
   status: PkgStatus;
   mrs: MaterialRequest[];
   rfqs: Rfq[];
@@ -105,43 +81,57 @@ export type Pkg = {
   /** Latest PO date falls within the next 14 days and nothing is ordered. */
   dueSoon: boolean;
   /** If ordered today: when it would be on site. */
-  ifToday: string;
+  ifToday: string | null;
   /** First PO issue date and expected delivery, when ordered. */
   orderedAt: string | null;
   expectedAt: string | null;
   cpm: Cpm | undefined;
 };
 
+/** A package with every date known (it can be drawn on the timeline). */
+export type DatedPkg = Pkg & { required: string; lead: number; latestRfq: string; latestPo: string; float: number; ifToday: string };
+export const isDated = (p: Pkg): p is DatedPkg => p.required != null && p.lead != null && p.latestPo != null && p.latestRfq != null;
+
 const median = (xs: number[]) => {
-  if (!xs.length) return 14;
+  if (!xs.length) return null;
   const s = [...xs].sort((a, b) => a - b);
   const m = Math.floor(s.length / 2);
   return s.length % 2 ? s[m]! : Math.round((s[m - 1]! + s[m]!) / 2);
 };
 
-/** Lead time a trade's approved vendors usually need (median of their average delivery days). */
+/** Lead time a trade's approved vendors usually need (median of the delivery days recorded on them), if any. */
 export function tradeLead(s: Pick<OpsData, "vendors">, trade: Trade) {
-  return median(s.vendors.filter((v) => v.status === "APPROVED" && v.trade === trade).map((v) => v.avgDeliveryDays));
+  return median(s.vendors.filter((v) => v.status === "APPROVED" && v.avgDeliveryDays > 0 && (v.trade === trade || v.trades.includes(trade))).map((v) => v.avgDeliveryDays));
 }
 
-/** The procurement packages: one per activity that needs bought materials, back-scheduled from its start. */
-export function buildPackages(s: OpsData): Pkg[] {
+/** The procurement packages: one per BOQ trade, back-scheduled from the day the site needs it when that is known. */
+export function buildPackages(s: OpsData, overrides: (key: string) => { needBy: string | null; leadDays: number | null } = () => ({ needBy: null, leadDays: null })): Pkg[] {
   const cp = cpm(s.activities, s.links);
   const taken = new Set<string>();
   const out: Pkg[] = [];
-  for (const def of DEFS) {
-    const act = s.activities.find((a) => a.code === def.need);
-    if (!act) continue;
-    const actIds = [act.id, ...(def.also ?? []).map((c) => s.activities.find((a) => a.code === c)?.id).filter((x): x is string => !!x)];
-    const items = data.items.filter((it) => (!def.building || it.building === def.building) && def.sections.includes(it.section) && (!def.materials || def.materials.includes(it.rate)));
-    const materials = def.materials ?? [...new Set(items.map((i) => i.rate))];
-    const mats = new Set(materials);
-    const value = items.reduce((a, it) => a + it.qty * (data.rates[it.rate]?.rate ?? 0), 0);
+  const trades = [...new Set(s.materials.filter((m) => m.rate > 0 && m.budgetQty > 0).map((m) => m.trade))];
+  for (const trade of trades) {
+    const key = trade;
+    const mats = new Set(s.materials.filter((m) => m.trade === trade).map((m) => m.key));
+    const materials = [...mats];
+    const items = data.items.filter((it) => mats.has(it.rate));
+    const sections = new Set(items.map((i) => i.section));
+    const buildings = new Set(items.map((i) => i.building));
+    const value = s.materials.filter((m) => mats.has(m.key)).reduce((a, m) => a + m.rate * m.budgetQty, 0);
     const hit = (lines: { material: string | null }[]) => lines.some((l) => l.material != null && mats.has(l.material));
 
-    const mrs = s.mrs.filter((m) => m.status !== "CANCELLED" && hit(m.lines) && ((m.activityId != null && actIds.includes(m.activityId)) || !def.building || m.building === def.building));
+    const linked = s.activities.filter((a) => !a.isMilestone && a.section != null && sections.has(a.section) && (!a.building || buildings.has(a.building)));
+    const mrs = s.mrs.filter((m) => m.status !== "CANCELLED" && hit(m.lines));
+    for (const m of mrs) {
+      const a = m.activityId ? s.activities.find((x) => x.id === m.activityId) : undefined;
+      if (a && !linked.includes(a)) linked.push(a);
+    }
+    const open = linked.filter((a) => a.status !== "COMPLETED").sort((a, b) => a.start.localeCompare(b.start));
+    const act = open[0] ?? [...linked].sort((a, b) => a.start.localeCompare(b.start))[0] ?? null;
+    const actIds = linked.map((a) => a.id);
+
     const mrIds = new Set(mrs.map((m) => m.id));
-    const rfqs = s.rfqs.filter((r) => r.status !== "CANCELLED" && ((r.mrId != null && mrIds.has(r.mrId)) || (r.mrId == null && hit(r.lines) && !def.building)));
+    const rfqs = s.rfqs.filter((r) => r.status !== "CANCELLED" && ((r.mrId != null && mrIds.has(r.mrId)) || (r.mrId == null && hit(r.lines))));
     const rfqIds = new Set(rfqs.map((r) => r.id));
     const quotes = s.quotes.filter((q) => !q.duplicate && q.rfqId != null && rfqIds.has(q.rfqId));
     const pos = s.pos.filter((p) => {
@@ -155,32 +145,37 @@ export function buildPackages(s: OpsData): Pkg[] {
       return false;
     });
     const pendingApproval = s.approvals.find((a) => a.status === "PENDING" && quotes.some((q) => q.id === a.quoteId));
-    const approvalPending = !!pendingApproval;
+
+    const ov = overrides(key);
+    const mrNeed = mrs.map((m) => m.neededBy).filter(Boolean).sort()[0] ?? null;
+    const required = ov.needBy ?? (act ? act.start : mrNeed);
+    const requiredFrom: NeedSource | null = ov.needBy ? "user" : act ? "activity" : mrNeed ? "request" : null;
 
     const sub = s.submittals.find((x) => (x.material != null && mats.has(x.material)) || (x.activityId != null && actIds.includes(x.activityId)));
     const series = s.priceSeries.find((p) => p.material != null && mats.has(p.material));
-    const lead = sub ? sub.leadDays : series ? series.leadDays : tradeLead(s, def.trade);
-    const leadSource: LeadSource = sub ? "submittal" : series ? "index" : "vendors";
+    const vendorLead = tradeLead(s, trade);
+    const lead = ov.leadDays ?? (sub ? sub.leadDays : series ? series.leadDays : vendorLead);
+    const leadSource: LeadSource | null = ov.leadDays != null ? "user" : sub ? "submittal" : series ? "index" : vendorLead != null ? "vendors" : null;
 
-    const required = act.start;
-    const latestPo = addDays(required, -(lead + BUFFER_DAYS));
-    const latestRfq = addDays(latestPo, -(RFQ_DAYS + APPROVAL_DAYS));
+    const latestPo = required != null && lead != null ? addDays(required, -(lead + BUFFER_DAYS)) : null;
+    const latestRfq = latestPo ? addDays(latestPo, -(RFQ_DAYS + APPROVAL_DAYS)) : null;
     const delivered = pos.length > 0 && pos.every((p) => p.status === "CLOSED" || poReceivedShare(p) >= 0.999);
     const status: PkgStatus = delivered ? "DELIVERED" : pos.length ? "ORDERED" : quotes.length ? "QUOTED" : rfqs.length ? "RFQ" : mrs.length ? "MR" : "NONE";
-    const float = diffDays(TODAY, latestPo);
+    const float = latestPo ? diffDays(TODAY, latestPo) : null;
     const ordered = status === "ORDERED" || status === "DELIVERED";
     const firstPo = [...pos].sort((a, b) => a.issuedAt.localeCompare(b.issuedAt))[0];
     const lastExpected = pos.reduce<string | null>((m, p) => (m == null || p.expectedAt > m ? p.expectedAt : m), null);
     out.push({
-      key: def.key,
-      name: def.name,
+      key,
+      name: { en: tradeName(trade, "en"), az: tradeName(trade, "az") },
       act,
       actIds,
-      building: def.building,
-      trade: def.trade,
+      building: buildings.size === 1 ? [...buildings][0]! : null,
+      trade,
       materials,
       value,
       required,
+      requiredFrom,
       lead,
       leadSource,
       latestRfq,
@@ -191,17 +186,17 @@ export function buildPackages(s: OpsData): Pkg[] {
       rfqs,
       quotes,
       pos,
-      approvalPending,
+      approvalPending: !!pendingApproval,
       approvalId: pendingApproval?.id ?? null,
-      late: !ordered && float < 0,
-      dueSoon: !ordered && float >= 0 && float <= 14,
-      ifToday: addDays(TODAY, lead),
+      late: !ordered && float != null && float < 0,
+      dueSoon: !ordered && float != null && float >= 0 && float <= 14,
+      ifToday: lead != null ? addDays(TODAY, lead) : null,
       orderedAt: firstPo?.issuedAt ?? null,
       expectedAt: lastExpected,
-      cpm: cp.get(act.id),
+      cpm: act ? cp.get(act.id) : undefined,
     });
   }
-  return out.sort((a, b) => a.required.localeCompare(b.required));
+  return out.sort((a, b) => (a.required ?? "9999").localeCompare(b.required ?? "9999") || b.value - a.value);
 }
 
 // ---------------------------------------------------------------- deliveries
@@ -214,10 +209,10 @@ export function expectedOf(s: Pick<OpsData, "expedites">, po: PurchaseOrder) {
   return promised ?? po.expectedAt;
 }
 
-export type NeedSource = "request" | "submittal" | "trade";
+export type DeliveryNeedSource = "request" | "submittal" | "trade";
 
 /** The programme activity an order feeds: via its request, a submittal for the material, or the trade. */
-export function needOf(s: OpsData, po: PurchaseOrder): { act: Activity; source: NeedSource } | null {
+export function needOf(s: OpsData, po: PurchaseOrder): { act: Activity; source: DeliveryNeedSource } | null {
   const mr = po.mrId ? s.mrs.find((m) => m.id === po.mrId) : undefined;
   const viaMr = mr?.activityId ? s.activities.find((a) => a.id === mr.activityId) : undefined;
   if (viaMr) return { act: viaMr, source: "request" };
@@ -246,7 +241,7 @@ export type DueLine = {
   expected: string;
   need: string | null;
   act: Activity | null;
-  source: NeedSource | null;
+  source: DeliveryNeedSource | null;
   /** Expected − need, in days (positive = arrives after the site needs it). */
   gap: number | null;
 };

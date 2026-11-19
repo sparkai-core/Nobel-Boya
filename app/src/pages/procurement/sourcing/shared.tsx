@@ -11,7 +11,8 @@ import type { Approval, Invitation, InvitationStatus, OpsData, Quotation, Rfq, T
 export type TFn = ReturnType<typeof useL>["t"];
 export type XFn = ReturnType<typeof useL>["x"];
 
-export const BUILDINGS = data.buildings.map((b) => b.id);
+/** Building ids of the open project (read each time: the project can change). */
+export const buildingIds = () => (data.buildings ?? []).map((b) => b.id);
 
 export const reducedMotion = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
 
@@ -29,7 +30,7 @@ export const vendorsFor = (vendors: Vendor[], trade: Trade) => vendors.filter((v
 
 /** Average delivery days of the approved vendors of a trade. */
 export function tradeLeadDays(vendors: Vendor[], trade: Trade) {
-  const list = vendorsFor(vendors, trade).filter((v) => v.status === "APPROVED");
+  const list = vendorsFor(vendors, trade).filter((v) => v.status === "APPROVED" && v.avgDeliveryDays > 0);
   if (!list.length) return null;
   return Math.round(list.reduce((a, v) => a + v.avgDeliveryDays, 0) / list.length);
 }
@@ -152,7 +153,7 @@ export function pickStory(rows: Scored[], t: TFn, x: XFn): { summary: string; wi
   if (dd > 0) parts.push(t("It delivers in {days} days, {n} days sooner than {other}.", { days: top.quote.deliveryDays, n: dd, other: second.vendor.name }));
   else if (dd < 0) parts.push(t("It needs {days} days to deliver, {n} days longer than {other}.", { days: top.quote.deliveryDays, n: -dd, other: second.vendor.name }));
   else parts.push(t("Delivery matches {other} at {days} days.", { days: top.quote.deliveryDays, other: second.vendor.name }));
-  parts.push(t("Its vendor record scores {a} out of 10 against {b} for {other}.", { a: top.vendor.overall.toFixed(1), b: second.vendor.overall.toFixed(1), other: second.vendor.name }));
+  if (top.vendor.overall > 0 && second.vendor.overall > 0) parts.push(t("Its vendor record scores {a} out of 10 against {b} for {other}.", { a: top.vendor.overall.toFixed(1), b: second.vendor.overall.toFixed(1), other: second.vendor.name }));
   const riskLabel = x(statusMeta("risk", top.quote.risk === "LOW" ? top.vendor.risk : top.quote.risk).label);
   parts.push(top.factors.risk >= 80 ? t("{risk} on both the vendor and the quote.", { risk: riskLabel }) : t("Watch the risk: {risk} on the vendor or the quote.", { risk: riskLabel.toLowerCase() }));
   if (top.score - second.score <= 3) parts.push(t("The race is close: {other} is only {n} points behind.", { other: second.vendor.name, n: top.score - second.score }));
@@ -166,7 +167,7 @@ export function pickStory(rows: Scored[], t: TFn, x: XFn): { summary: string; wi
   add(top.vendor.overall - second.vendor.overall, t("Stronger vendor record"), t("Weaker vendor record"));
   add(top.factors.reliability - second.factors.reliability, t("More reliable"), t("Less reliable"));
   add(top.factors.risk - second.factors.risk, t("Lower risk"), t("Higher risk"));
-  add(top.factors.completeness - second.factors.completeness, t("More complete reading"), t("Less complete reading"));
+  add(top.factors.completeness - second.factors.completeness, t("More lines priced"), t("Fewer lines priced"));
   return { summary: parts.join(" "), wins, gives };
 }
 
@@ -176,12 +177,6 @@ export function gapWords(t: TFn, total: number, lowest: number) {
   return t("+{p}% over lowest", { p: Math.max(1, Math.round((total / Math.max(1, lowest) - 1) * 100)) });
 }
 
-/** Deterministic 0–1 hash used to vary the simulated vendor document. */
-export function hash01(s: string) {
-  let h = 2166136261;
-  for (const c of s) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
-  return (h % 10_000) / 10_000;
-}
 
 export const totalOf = quoteTotal;
 

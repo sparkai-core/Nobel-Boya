@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { CalendarClock, Check, ClipboardList, Mail, Send, Users } from "lucide-react";
 import { Badge, Field, LineItemsEditor, PageHero, Panel, StatusBadge, toast, useL, type DraftLine } from "../../../components/kit";
-import { ME, useOps } from "../../../ops/store";
+import { me, useOps } from "../../../ops/store";
 import { addDays, TODAY } from "../../../ops/dates";
 import { budgetOf, R, statusMeta, TRADES, tradeName } from "../../../ops/select";
 import { fmtMoneyShort, fmtQty, unitLabel } from "../../../lib/format";
 import type { Trade } from "../../../ops/types";
 import { vendorsFor } from "./shared";
+import { buyerLabel, hasScore, projectTxt, siteTxt } from "../../../ops/ext/proc-client";
 
 type Filter = "trade" | "all" | "picked";
 
@@ -179,7 +180,11 @@ export function RfqNewPage() {
               </div>
             </div>
             <ul className="ps-vpick">
-              {list.length === 0 ? <li className="ps-col-empty">{t("No vendors match.")}</li> : null}
+              {list.length === 0 ? (
+                <li className="ps-col-empty">
+                  {vendors.length ? t("No vendors match.") : t("No vendors yet.")} <Link to={R.newVendor}>{t("Add a vendor")}</Link>
+                </li>
+              ) : null}
               {list.map((v) => {
                 const on = picked.includes(v.id);
                 const off = v.status === "DISQUALIFIED";
@@ -193,17 +198,17 @@ export function RfqNewPage() {
                       <span className="ps-vname">
                         <strong className="truncate">{v.name}</strong>
                         <small>
-                          {tradeName(v.trade, lang)} · {v.city}
+                          {[tradeName(v.trade, lang), v.city].filter(Boolean).join(" · ")}
                           {v.portal ? ` · ${t("on the portal")}` : ""}
                         </small>
                       </span>
                       {v.status !== "APPROVED" ? <StatusBadge kind="vendor" status={v.status} /> : null}
                       <span className="ps-vstat" title={t("Vendor score out of 10")}>
-                        <b>{v.overall.toFixed(1)}</b>
+                        <b>{hasScore(v) ? v.overall.toFixed(1) : "—"}</b>
                         <small>/10</small>
                       </span>
                       <span className="ps-vstat hide-900">
-                        <b>{v.avgDeliveryDays}</b>
+                        <b>{v.avgDeliveryDays > 0 ? v.avgDeliveryDays : "—"}</b>
                         <small>{t("days")}</small>
                       </span>
                       <Badge tone={risk.tone}>{x(risk.label)}</Badge>
@@ -228,10 +233,10 @@ export function RfqNewPage() {
         <aside className="ps-ticket-wrap">
           <div className="ps-letter" aria-label={t("Invitation preview")}>
             <header className="ps-letter-head">
-              <span className="ps-letter-logo">N</span>
+              <span className="ps-letter-logo">{buyerLabel(lang).slice(0, 1).toUpperCase()}</span>
               <span>
-                <strong>Nobel</strong>
-                <small>{t("Qobu warehouse and administration building")}</small>
+                <strong>{buyerLabel(lang)}</strong>
+                <small>{x(projectTxt())}</small>
               </span>
               <Mail size={16} className="muted" />
             </header>
@@ -244,7 +249,7 @@ export function RfqNewPage() {
               <span className="muted">{t("To")}:</span>{" "}
               {pickedVendors.length ? pickedVendors.map((v) => v.name).join(", ") : <span className="ps-ph">{t("pick vendors")}</span>}
             </p>
-            <p>{t("Please quote for the items below, delivered to the Qobu site, by {date}.", { date: d(due) })}</p>
+            <p>{t("Please quote for the items below, delivered to {site}, by {date}.", { site: x(siteTxt()), date: d(due) })}</p>
             <p className={title.trim() ? "ps-letter-subject" : "ps-letter-subject ps-ph"}>{title.trim() || t("Untitled RFQ")}</p>
             <ol className="ps-ticket-lines">
               {lines.length ? (
@@ -266,8 +271,8 @@ export function RfqNewPage() {
             {note.trim() ? <p className="ps-letter-note">{note}</p> : null}
             <p className="muted small">{t("Prices in AZN, VAT shown separately. Say how long the price holds and your delivery time.")}</p>
             <footer className="ps-letter-sign">
-              <span>{ME}</span>
-              <small>{t("Project manager, Nobel")}</small>
+              <span>{me()}</span>
+              <small>{buyerLabel(lang)}</small>
             </footer>
             <div className="ps-letter-foot">
               <span>

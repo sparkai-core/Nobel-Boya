@@ -2,6 +2,7 @@ import { Plus, Trash2 } from "lucide-react";
 import { useL } from "../../../components/kit";
 import { data } from "../../../data";
 import { same } from "../../../ops/dates";
+import { qtyByRateMap, rateFor } from "../../../ops/seed/util";
 import { fmtMoney, fmtQty, unitLabel } from "../../../lib/format";
 import { rateDesc, rateGroup } from "../../../lib/loc";
 import type { ChangeOrder } from "../../../ops/types";
@@ -11,11 +12,13 @@ export type ChangeLine = ChangeOrder["lines"][number];
 
 const UNITS = ["m²", "m³", "m", "kg", "ədəd", "dəst"];
 
-const GROUPS = (() => {
+/** BOQ rate lines of the active project grouped by trade; lines measured in this BOQ come first. Read fresh. */
+function rateGroups() {
+  const used = qtyByRateMap();
   const m = new Map<string, string[]>();
-  for (const [k, r] of Object.entries(data.rates)) m.set(r.group, [...(m.get(r.group) ?? []), k]);
+  for (const [k, r] of Object.entries(data.rates ?? {})) if (!used.size || used.has(k)) m.set(r.group, [...(m.get(r.group) ?? []), k]);
   return [...m.entries()];
-})();
+}
 
 /** Change order lines: qty Δ × rate = amount. Editable while the change is a draft. */
 export function ChangeLines({ lines, onChange, editable }: { lines: ChangeLine[]; onChange?: (lines: ChangeLine[]) => void; editable: boolean }) {
@@ -26,7 +29,7 @@ export function ChangeLines({ lines, onChange, editable }: { lines: ChangeLine[]
   const addRate = (key: string) => {
     const r = data.rates[key];
     if (!r) return;
-    onChange?.([...lines, { itemId: null, description: { en: r.en, az: rateDesc(key, "az") }, unit: r.unit, qtyDelta: 1, rate: r.rate }]);
+    onChange?.([...lines, { itemId: null, description: { en: r.en, az: rateDesc(key, "az") }, unit: r.unit, qtyDelta: 0, rate: rateFor(key) }]);
   };
 
   return (
@@ -116,17 +119,17 @@ export function ChangeLines({ lines, onChange, editable }: { lines: ChangeLine[]
         <div className="pmr-lines-add">
           <select className="input select" value="" onChange={(e) => e.target.value && addRate(e.target.value)} aria-label={t("Add a line from a BOQ rate")}>
             <option value="">{t("Add a line from a BOQ rate…")}</option>
-            {GROUPS.map(([g, keys]) => (
+            {rateGroups().map(([g, keys]) => (
               <optgroup key={g} label={rateGroup(g, lang)}>
                 {keys.map((k) => (
                   <option key={k} value={k}>
-                    {rateDesc(k, lang)} · {fmtMoney(data.rates[k]!.rate)} / {unitLabel(data.rates[k]!.unit, lang)}
+                    {rateDesc(k, lang)} · {fmtMoney(rateFor(k))} / {unitLabel(data.rates[k]!.unit, lang)}
                   </option>
                 ))}
               </optgroup>
             ))}
           </select>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange?.([...lines, { itemId: null, description: same(""), unit: "m²", qtyDelta: 1, rate: 0 }])}>
+          <button type="button" className="btn btn-ghost btn-sm" onClick={() => onChange?.([...lines, { itemId: null, description: same(""), unit: "m²", qtyDelta: 0, rate: 0 }])}>
             <Plus size={13} />
             {t("Blank line")}
           </button>

@@ -1,12 +1,13 @@
 import { Fragment, useMemo } from "react";
-import { CheckCircle2, Gauge, Stamp } from "lucide-react";
-import { Avatar, Badge, BarList, Panel, toast, useL } from "../../../components/kit";
+import { BadgeCheck, CheckCircle2, Gauge, Stamp } from "lucide-react";
+import { Avatar, Badge, BarList, Empty, Panel, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, TODAY } from "../../../ops/dates";
 import { fmtMoney } from "../../../lib/format";
 import type { Worker } from "../../../ops/types";
 import { WEEK } from "./shared";
 import { certState, crewOutput, crewsWithoutOutput, onSite, timesheetText, weekHours, type CertState } from "./workforce-model";
+import { employerName } from "../../../ops/ext/site-p2";
 
 const fmt = (v: number) => Math.round(v).toLocaleString("en-US");
 
@@ -16,18 +17,18 @@ export function TimesheetsTab() {
   const { t, x, d } = useL();
   const workers = useOps((s) => s.workers);
   const subs = useOps((s) => s.subs);
+  const company = useOps((s) => s.setup.company);
   const attendance = useOps((s) => s.attendance);
   const feed = useOps((s) => s.feed);
   const pushFeed = useOps((s) => s.pushFeed);
   const groups = [...new Set(workers.map((w) => w.employer))].map((emp) => {
-    const sub = subs.find((s) => s.id === emp);
     const list = workers.filter((w) => w.employer === emp);
     const rows = list.map((w) => {
       const hours = weekHours(attendance, w.id);
       const days = WEEK.filter((day) => onSite(attendance.find((a) => a.date === day && a.workerId === w.id)?.status ?? null)).length;
       return { w, hours, days, cost: hours * w.rate };
     });
-    const name = sub?.name ?? emp;
+    const name = employerName(emp, subs, company, t("Own staff"));
     const text = timesheetText(name);
     return { emp, name, rows, hours: rows.reduce((a, r) => a + r.hours, 0), cost: rows.reduce((a, r) => a + r.cost, 0), approved: feed.some((f) => f.text.en === text.en), text };
   });
@@ -153,6 +154,13 @@ export function ComplianceTab() {
 
   const renew = useRenewCert();
 
+  if (!all.length)
+    return (
+      <Empty icon={<BadgeCheck size={22} />} title={t("No certificates recorded")}>
+        {t("Open a worker and use Edit to add their tickets and licences with expiry dates. Renewals then show here.")}
+      </Empty>
+    );
+
   return (
     <div className="k-stack">
       <Panel title={t("Certificate expiry, next 90 days")} sub={t("Each dot is one worker's certificate. Red ones have already expired; amber ones run out within 30 days.")}>
@@ -277,16 +285,15 @@ export function ProductivityTab() {
   const reports = useOps((s) => s.reports);
   const crews = useMemo(() => crewOutput(activities, workers, attendance, reports), [activities, workers, attendance, reports]);
   const idle = crewsWithoutOutput(activities, workers, crews);
-  const scale = Math.max(1.6, ...crews.map((c) => c.ratio * 1.1));
-  const normAt = (1 / scale) * 100;
+  const top = (unit: string) => Math.max(1e-9, ...crews.filter((c) => c.unit === unit).map((c) => c.rate));
   const dec = (v: number) => (v >= 10 ? v.toFixed(1) : v.toFixed(2));
 
   return (
-    <Panel title={t("Output per man-hour by crew")} icon={<Gauge size={15} />} sub={t("Quantities from the daily reports divided by attendance hours on the same activity, {from} – {to}, against the BOQ labour norm.", { from: d(addDays(TODAY, -6), false), to: d(TODAY, false) })}>
+    <Panel title={t("Output per man-hour by crew")} icon={<Gauge size={15} />} sub={t("Quantities from the daily reports divided by attendance hours on the same activity, {from} – {to}.", { from: d(addDays(TODAY, -6), false), to: d(TODAY, false) })}>
       {crews.length ? (
         <ul className="st-prod">
           {crews.map((c, i) => {
-            const tone = c.ratio >= 1 ? "ok" : c.ratio >= 0.8 ? "warn" : "bad";
+            const tone = "brand";
             return (
               <li key={c.activity.id} style={{ animationDelay: `${i * 60}ms` }}>
                 <span className="st-prod-label k-cell-title">
@@ -296,25 +303,20 @@ export function ProductivityTab() {
                   <small>{t("{w} workers · {h} man-hours · {q} {u} in {n} days", { w: c.workers, h: fmt(c.manHours), q: fmt(c.qty), u: c.unit, n: c.days })}</small>
                 </span>
                 <span className="st-prod-track">
-                  <i className={`st-prod-bar k-grow-x k-tone-${tone}`} style={{ width: `${Math.min(100, (c.ratio / scale) * 100)}%` }} />
-                  <i className="st-prod-norm" style={{ left: `${normAt}%` }}>
-                    <span>
-                      {t("Norm")} {dec(c.norm)}
-                    </span>
-                  </i>
+                  <i className={`st-prod-bar k-grow-x k-tone-${tone}`} style={{ width: `${Math.min(100, (c.rate / top(c.unit)) * 100)}%` }} />
                 </span>
                 <span className="st-prod-val">
                   <strong className={`num-inline k-text-${tone}`}>
                     {dec(c.rate)} {c.unit}/{t("mh")}
                   </strong>
-                  <small>{t("{p}% of norm", { p: Math.round(c.ratio * 100) })}</small>
+                  <small>{t("{n} days logged", { n: c.days })}</small>
                 </span>
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="muted small">{t("No crew output was logged in the daily reports this week.")}</p>
+        <p className="muted small">{t("No crew output yet. It shows once daily reports log quantities and attendance books hours against the same activity.")}</p>
       )}
       {idle.length ? (
         <p className="small muted st-prod-note">

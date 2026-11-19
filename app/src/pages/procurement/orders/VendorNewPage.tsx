@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Building2, Check, Globe, Mail, Phone, User } from "lucide-react";
 import { Avatar, Badge, Field, PageHero, Panel, StatusBadge, toast, useL } from "../../../components/kit";
-import { useOps } from "../../../ops/store";
+import { addVendor } from "../../../ops/ext/proc-client";
 import { same } from "../../../ops/dates";
 import { R, TRADES, tradeName } from "../../../ops/select";
 import type { Trade, VendorStatus } from "../../../ops/types";
@@ -13,12 +13,11 @@ const TERMS = ["15 days", "30 days", "45 days", "60 days", "On delivery", "Month
 export function VendorNewPage() {
   const { t, lang } = useL();
   const navigate = useNavigate();
-  const createVendor = useOps((s) => s.createVendor);
   const [f, setF] = useState({
     name: "",
     trade: "Concrete" as Trade,
     trades: [] as Trade[],
-    city: "Bakı",
+    city: "",
     trn: "",
     licence: "",
     contact: "",
@@ -34,7 +33,7 @@ export function VendorNewPage() {
 
   const errors = {
     name: !f.name.trim() ? t("Required") : undefined,
-    trn: !/^\d{10}$/.test(f.trn.trim()) ? t("TRN is 10 digits") : undefined,
+    trn: f.trn.trim() && !/^\d{10}$/.test(f.trn.trim()) ? t("TRN is 10 digits") : undefined,
     contact: !f.contact.trim() ? t("Required") : undefined,
     email: f.email && !/^\S+@\S+\.\S+$/.test(f.email) ? t("Check the email address") : undefined,
   };
@@ -44,7 +43,7 @@ export function VendorNewPage() {
   const save = () => {
     setTried(true);
     if (!valid) return;
-    const id = createVendor({
+    const id = addVendor({
       name: f.name.trim(),
       trade: f.trade,
       trades: [f.trade, ...f.trades.filter((x) => x !== f.trade)],
@@ -79,7 +78,7 @@ export function VendorNewPage() {
         <Panel title={t("Vendor details")} icon={<Building2 size={15} />}>
           <div className="k-form">
             <Field label={t("Vendor name")} wide error={tried ? errors.name : undefined}>
-              <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={t("e.g. Şirvan Beton MMC")} />
+              <input className="input" value={f.name} onChange={(e) => set("name", e.target.value)} placeholder={t("Company's legal name")} />
             </Field>
             <Field label={t("Trade")}>
               <select className="input select" value={f.trade} onChange={(e) => set("trade", e.target.value as Trade)}>
@@ -213,9 +212,9 @@ export function VendorNewPage() {
               ) : null}
             </ul>
             <div className="po-preview-score">
-              <span>{t("Starting score")}</span>
-              <b className="num-inline">7.0 / 10</b>
-              <small>{t("Builds from orders, receipts and payments.")}</small>
+              <span>{t("Score")}</span>
+              <b className="num-inline">—</b>
+              <small>{t("Not scored yet. Score the vendor on its page once you have worked with them.")}</small>
             </div>
           </div>
         </aside>

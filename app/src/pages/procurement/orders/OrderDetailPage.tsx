@@ -20,6 +20,7 @@ import {
   useL,
 } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
+import { buyerLabel, projectTxt } from "../../../ops/ext/proc-client";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { paymentGate, PATHS, poLate, poNet, poTotal, R, trailOf } from "../../../ops/select";
 import { fmtMoney, fmtQty, unitLabel } from "../../../lib/format";
@@ -185,7 +186,7 @@ export function OrderDetailPage() {
 
           <article className="po-lpo" aria-label={t("Local purchase order")}>
             <header className="po-lpo-head">
-              <img src="./brand/nobel-logo.png" alt="Nobel" />
+              <strong className="po-lpo-buyer">{buyerLabel(lang)}</strong>
               <div>
                 <span className="po-lpo-kind">{t("Local purchase order")}</span>
                 <strong className="k-mono">{po.ref}</strong>
@@ -196,13 +197,13 @@ export function OrderDetailPage() {
               <div>
                 <span>{t("To")}</span>
                 <strong>{vendor?.name}</strong>
-                <small>{vendor ? `${vendor.city} · ${t("TRN")} ${vendor.trn}` : null}</small>
-                <small>{vendor ? `${vendor.contact} · ${vendor.phone}` : null}</small>
+                <small>{vendor ? [vendor.city, vendor.trn ? `${t("TRN")} ${vendor.trn}` : ""].filter(Boolean).join(" · ") : null}</small>
+                <small>{vendor ? [vendor.contact, vendor.phone.replace(/[\s+]|994/g, "") ? vendor.phone : ""].filter(Boolean).join(" · ") : null}</small>
               </div>
               <div>
                 <span>{t("Deliver to")}</span>
                 <strong>{x(po.deliverTo)}</strong>
-                <small>{t("Qobu warehouse and administration building")}</small>
+                <small>{x(projectTxt())}</small>
               </div>
             </div>
             <dl className="po-lpo-terms">

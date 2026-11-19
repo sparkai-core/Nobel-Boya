@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { AlertTriangle, BadgeCheck, ClipboardCheck, ClipboardList, Clock, Coins, UserMinus, Users } from "lucide-react";
-import { CountUp, PageHero, StatTiles, TabBar, toneColor, useL } from "../../../components/kit";
+import { AlertTriangle, BadgeCheck, ClipboardCheck, ClipboardList, Clock, Coins, UserMinus, UserPlus, Users } from "lucide-react";
+import { CountUp, Empty, PageHero, StatTiles, TabBar, toneColor, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { TODAY } from "../../../ops/dates";
 import type { AttendanceStatus } from "../../../ops/types";
@@ -10,6 +10,7 @@ import { certState, liveActivity, onSite, statusOn } from "./workforce-model";
 import { ATT_ORDER, LogAttendanceDialog, RollCallDialog } from "./RollCall";
 import { AllocationsTab, AttendanceTab, WorkersTab } from "./WorkforceTabs";
 import { ComplianceTab, ProductivityTab, TimesheetsTab } from "./WorkforceMore";
+import { WorkerDialog } from "./SiteDialogs";
 
 type Tab = "workers" | "attendance" | "allocations" | "timesheets" | "compliance" | "productivity";
 const TABS: Tab[] = ["workers", "attendance", "allocations", "timesheets", "compliance", "productivity"];
@@ -39,6 +40,7 @@ export function WorkforcePage() {
     );
   const [rolling, setRolling] = useState(false);
   const [logging, setLogging] = useState(false);
+  const [adding, setAdding] = useState(false);
 
   // ------------------------------------------------------------ today
   const today = useMemo(() => {
@@ -69,6 +71,7 @@ export function WorkforcePage() {
     .filter((r) => r.short > 0)
     .sort((p, q) => q.short - p.short);
   const totalShort = shortfall.reduce((s, r) => s + r.short, 0);
+  const liveCount = activities.filter(liveActivity).length;
   const stripKeys: (AttendanceStatus | "NONE")[] = [...ATT_ORDER, "NONE"];
 
   return (
@@ -76,23 +79,46 @@ export function WorkforcePage() {
       <PageHero
         eyebrow={t("Site · Workforce")}
         title={t("Workforce")}
-        subtitle={t("Who is on the Qobu site today, where each crew works, what their hours cost and whose tickets run out next.")}
+        subtitle={t("Who is on site today, where each crew works, what their hours cost and whose tickets run out next.")}
         flow={["Roll call", "Allocate", "Timesheets", "Approve"]}
         art="subs"
         actions={
           <>
-            <button type="button" className="btn btn-primary" onClick={() => setRolling(true)}>
-              <ClipboardCheck size={15} />
-              {t("Take roll call")}
+            {workers.length ? (
+              <button type="button" className="btn btn-primary" onClick={() => setRolling(true)}>
+                <ClipboardCheck size={15} />
+                {t("Take roll call")}
+              </button>
+            ) : null}
+            <button type="button" className={workers.length ? "btn btn-ghost" : "btn btn-primary"} onClick={() => setAdding(true)}>
+              <UserPlus size={15} />
+              {t("Add worker")}
             </button>
-            <button type="button" className="btn btn-ghost" onClick={() => setLogging(true)}>
-              <ClipboardList size={15} />
-              {t("Log attendance")}
-            </button>
+            {workers.length ? (
+              <button type="button" className="btn btn-ghost" onClick={() => setLogging(true)}>
+                <ClipboardList size={15} />
+                {t("Log attendance")}
+              </button>
+            ) : null}
           </>
         }
       />
 
+      {!workers.length ? (
+        <Empty
+          icon={<Users size={22} />}
+          title={t("No workers registered yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <UserPlus size={15} />
+              {t("Add worker")}
+            </button>
+          }
+        >
+          {t("Add the people on site, your own staff and subcontractor crews. Roll call, timesheets and certificate tracking start from this list.")}
+        </Empty>
+      ) : (
+        <>
       <section className="st-today k-rise">
         <div className="st-today-main">
           <span className="k-eyebrow">{t("Workforce today")} · {d(TODAY)}</span>
@@ -133,7 +159,7 @@ export function WorkforcePage() {
           <li className={expiring.length ? "warn" : "ok"}>
             <BadgeCheck size={16} />
             <button type="button" onClick={() => setTab("compliance")}>
-              <strong>{expiring.length ? t("{n} certificates expire within 30 days", { n: expiring.length }) : t("Certificates are in date")}</strong>
+              <strong>{expiring.length ? t("{n} certificates expire within 30 days", { n: expiring.length }) : certs.length ? t("Certificates are in date") : t("No certificates recorded")}</strong>
               <small>{expired.length ? t("{n} already expired: {names}", { n: expired.length, names: expired.map((c) => c.w.name).join(", ") }) : t("Nothing has expired")}</small>
             </button>
           </li>
@@ -141,14 +167,14 @@ export function WorkforcePage() {
             <UserMinus size={16} />
             <button type="button" onClick={() => setTab("attendance")}>
               <strong>{absent.length ? t("{n} absent today", { n: absent.length }) : t("No absences today")}</strong>
-              <small>{absent.length ? absent.map((w) => w.name).join(", ") : t("Everyone booked is accounted for")}</small>
+              <small>{absent.length ? absent.map((w) => w.name).join(", ") : today.get("NONE")?.length === workers.length ? t("No roll call taken today yet") : t("Everyone booked is accounted for")}</small>
             </button>
           </li>
           <li className={totalShort ? "bad" : "ok"}>
             <AlertTriangle size={16} />
             <button type="button" onClick={() => setTab("allocations")}>
-              <strong>{totalShort ? t("Crews {n} short of the programme", { n: totalShort }) : t("Crews match the programme")}</strong>
-              <small>{shortfall.slice(0, 3).map((r) => t("{code}: {h} of {p}", { code: r.a.code, h: r.here, p: r.a.crew })).join(" · ") || t("Planned crews are on site")}</small>
+              <strong>{totalShort ? t("Crews {n} short of the programme", { n: totalShort }) : liveCount ? t("Crews match the programme") : t("No activities running now")}</strong>
+              <small>{shortfall.slice(0, 3).map((r) => t("{code}: {h} of {p}", { code: r.a.code, h: r.here, p: r.a.crew })).join(" · ") || (liveCount ? t("Planned crews are on site") : t("Crews are compared once the programme has running activities"))}</small>
             </button>
           </li>
         </ul>
@@ -184,9 +210,12 @@ export function WorkforcePage() {
         {tab === "compliance" ? <ComplianceTab /> : null}
         {tab === "productivity" ? <ProductivityTab /> : null}
       </div>
+        </>
+      )}
 
       <RollCallDialog open={rolling} onClose={() => setRolling(false)} />
       <LogAttendanceDialog open={logging} onClose={() => setLogging(false)} />
+      <WorkerDialog open={adding} onClose={() => setAdding(false)} />
     </div>
   );
 }

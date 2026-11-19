@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
-import { Activity as Pulse, Megaphone, Plus, ScanEye, ShieldAlert, ShieldCheck, Ticket } from "lucide-react";
+import { Activity as Pulse, Megaphone, Plus, ShieldAlert, ShieldCheck, Ticket } from "lucide-react";
 import { CountUp, PageHero, StatTiles, TabBar, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, PROJECT_START, TODAY } from "../../../ops/dates";
@@ -8,27 +8,25 @@ import type { Incident } from "../../../ops/types";
 import { INCIDENT_KIND, isRestDay, WEEK } from "./shared";
 import { IncidentsTab } from "./SafetyIncidents";
 import { permitStatus, PermitsTab } from "./SafetyPermits";
-import { PpeCamera } from "./PpeCamera";
 import { AuditsTab, ToolboxTab } from "./SafetyMore";
 
-type Tab = "incidents" | "permits" | "toolbox" | "ppe" | "audits";
-const TABS: Tab[] = ["incidents", "permits", "toolbox", "ppe", "audits"];
+type Tab = "incidents" | "permits" | "toolbox" | "audits";
+const TABS: Tab[] = ["incidents", "permits", "toolbox", "audits"];
 const KIND_TONE: Record<Incident["kind"], string> = { LOST_TIME: "bad", FIRST_AID: "warn", NEAR_MISS: "info", PROPERTY: "warn", ENVIRONMENT: "warn" };
 const KIND_RANK: Incident["kind"][] = ["LOST_TIME", "FIRST_AID", "PROPERTY", "ENVIRONMENT", "NEAR_MISS"];
-/** Hours before the first daily report (5–18 Oct): about 30 people a day. */
-const EARLY_HOURS = 12 * 30 * 9;
+/** Hours counted for the incident rate: a present day is 8 hours, a half day 4. */
+const SAFETY_HOURS = { PRESENT: 8, HALF: 4 } as Record<string, number>;
 
 /**
  * Safety / HSE: days without a lost-time injury drawn as a day strip, the HSE figures, then incidents,
- * permits to work, toolbox talks, the PPE camera AI and the weekly site walk.
+ * permits to work, toolbox talks and the weekly site walk.
  */
 export function SafetyPage() {
   const { t, x, d } = useL();
   const incidents = useOps((s) => s.incidents);
   const permits = useOps((s) => s.permits);
   const toolbox = useOps((s) => s.toolbox);
-  const ppe = useOps((s) => s.ppeChecks);
-  const reports = useOps((s) => s.reports);
+  const attendance = useOps((s) => s.attendance);
   const [params, setParams] = useSearchParams();
   const tabParam = params.get("tab") as Tab | null;
   const tab: Tab = tabParam && TABS.includes(tabParam) ? tabParam : "incidents";
@@ -47,24 +45,29 @@ export function SafetyPage() {
 
   // ------------------------------------------------------------ figures
   const lastLti = incidents.filter((i) => i.kind === "LOST_TIME").map((i) => i.date).sort().pop() ?? null;
-  const safeDays = diffDays(lastLti ?? PROJECT_START, TODAY);
-  const hours = useMemo(() => reports.reduce((a, r) => a + r.labour.reduce((s, l) => s + l.count, 0) * 9, 0) + EARLY_HOURS, [reports]);
+  // Count from the last lost-time injury, else from the first day on site: the project start once it has
+  // passed, or the first attendance or incident on record. Nothing to count from means "—".
+  const firstRecord = [...attendance.map((a) => a.date), ...incidents.map((i) => i.date)].filter((v) => v <= TODAY).sort()[0] ?? null;
+  const countFrom = lastLti ?? (PROJECT_START < TODAY ? PROJECT_START : firstRecord);
+  const safeDays = countFrom ? Math.max(0, diffDays(countFrom, TODAY)) : null;
+  const hours = useMemo(() => attendance.reduce((a, r) => a + (SAFETY_HOURS[r.status] ?? 0), 0), [attendance]);
   const recordable = incidents.filter((i) => i.kind === "LOST_TIME").length;
-  const trir = hours ? (recordable * 200_000) / hours : 0;
+  const trir = hours ? (recordable * 200_000) / hours : null;
   const open = incidents.filter((i) => i.status !== "CLOSED");
   const active = permits.filter((p) => permitStatus(p) === "ACTIVE");
   const suspended = permits.filter((p) => p.status === "SUSPENDED");
   const talks = toolbox.filter((k) => WEEK.includes(k.date));
-  const waiting = ppe.filter((p) => p.status === "WAITING");
 
   const days = useMemo(() => {
     const out: { day: string; worst: Incident | null; n: number }[] = [];
-    for (let day = PROJECT_START; day <= TODAY; day = addDays(day, 1)) {
+    const from = PROJECT_START < TODAY ? PROJECT_START : firstRecord;
+    if (!from) return out;
+    for (let day = from; day <= TODAY; day = addDays(day, 1)) {
       const list = incidents.filter((i) => i.date === day).sort((a, b) => KIND_RANK.indexOf(a.kind) - KIND_RANK.indexOf(b.kind));
       out.push({ day, worst: list[0] ?? null, n: list.length });
     }
     return out;
-  }, [incidents]);
+  }, [incidents, firstRecord]);
 
   const newAction =
     tab === "permits" ? (
@@ -96,17 +99,11 @@ export function SafetyPage() {
       <PageHero
         eyebrow={t("Site · Safety")}
         title={t("Safety and HSE")}
-        subtitle={t("Incidents and their investigations, permits to work, toolbox talks, PPE checks from the site cameras and the weekly site walk.")}
+        subtitle={t("Incidents and their investigations, permits to work, toolbox talks and the weekly site walk.")}
         flow={["Permit", "Brief", "Watch the site", "Report", "Close out"]}
         art="inspection"
         actions={
-          <>
-            {newAction}
-            <button type="button" className="btn btn-ghost" onClick={() => setTab("ppe")}>
-              <ScanEye size={15} />
-              {t("PPE cameras")}
-            </button>
-          </>
+          <>{newAction}</>
         }
       />
 
@@ -115,11 +112,17 @@ export function SafetyPage() {
           <span className="k-eyebrow">
             <ShieldCheck size={13} /> {t("Days without a lost-time injury")}
           </span>
-          <strong className="num-inline">
-            <CountUp value={safeDays} />
-          </strong>
-          <small>{lastLti ? t("Last one on {date}", { date: d(lastLti) }) : t("None since the project started on {date}", { date: d(PROJECT_START) })}</small>
+          <strong className="num-inline">{safeDays == null ? "—" : <CountUp value={safeDays} />}</strong>
+          <small>
+            {lastLti
+              ? t("Last one on {date}", { date: d(lastLti) })
+              : countFrom
+                ? t("None recorded since {date}", { date: d(countFrom) })
+                : t("Counting starts with the first day on site: take a roll call or set the planned start.")}
+          </small>
         </div>
+        {days.length ? (
+        <>
         <div className="st-pulse-days">
           {days.map((x2, i) => (
             <i
@@ -138,15 +141,16 @@ export function SafetyPage() {
           <span className="k-tone-warn">{t("First aid or damage")}</span>
           <span className="k-tone-bad">{t("Lost time")}</span>
         </div>
+        </>
+        ) : null}
       </section>
 
       <StatTiles
         items={[
-          { label: t("TRIR"), icon: <Pulse size={14} />, value: <span className="num-inline">{trir.toFixed(2)}</span>, sub: t("{r} recordable in {h}k hours", { r: recordable, h: Math.round(hours / 1000) }), tone: recordable ? "bad" : "ok" },
+          { label: t("TRIR"), icon: <Pulse size={14} />, value: <span className="num-inline">{trir == null ? "—" : trir.toFixed(2)}</span>, sub: hours ? t("{r} recordable in {h} man-hours", { r: recordable, h: hours.toLocaleString("en-US") }) : t("needs attendance hours"), tone: trir == null ? "neutral" : recordable ? "bad" : "ok" },
           { label: t("Open incidents"), icon: <ShieldAlert size={14} />, value: <CountUp value={open.length} />, sub: t("{n} under investigation", { n: incidents.filter((i) => i.status === "INVESTIGATING").length }), tone: open.length ? "warn" : "ok", onClick: () => setTab("incidents") },
           { label: t("Active permits"), icon: <Ticket size={14} />, value: <CountUp value={active.length} />, sub: suspended.length ? t("{n} suspended", { n: suspended.length }) : t("none suspended"), tone: suspended.length ? "bad" : "neutral", onClick: () => setTab("permits") },
           { label: t("Toolbox talks this week"), icon: <Megaphone size={14} />, value: <CountUp value={talks.length} />, sub: t("{n} attendances", { n: talks.reduce((a, k) => a + k.attendees, 0) }), onClick: () => setTab("toolbox") },
-          { label: t("PPE alerts waiting"), icon: <ScanEye size={14} />, value: <CountUp value={waiting.length} />, sub: t("from {n} cameras", { n: new Set(ppe.map((p) => p.camera)).size }), tone: waiting.length ? "bad" : "ok", onClick: () => setTab("ppe") },
         ]}
       />
 
@@ -157,7 +161,6 @@ export function SafetyPage() {
           { value: "incidents", label: t("Incidents"), count: open.length || undefined },
           { value: "permits", label: t("Permits to work"), count: active.length || undefined },
           { value: "toolbox", label: t("Toolbox talks") },
-          { value: "ppe", label: t("PPE camera AI"), count: waiting.length || undefined },
           { value: "audits", label: t("Audits") },
         ]}
       />
@@ -166,7 +169,6 @@ export function SafetyPage() {
         {tab === "incidents" ? <IncidentsTab logOpen={logInc} setLogOpen={setLogInc} /> : null}
         {tab === "permits" ? <PermitsTab newOpen={newPermit} setNewOpen={setNewPermit} /> : null}
         {tab === "toolbox" ? <ToolboxTab logOpen={logTalk} setLogOpen={setLogTalk} /> : null}
-        {tab === "ppe" ? <PpeCamera /> : null}
         {tab === "audits" ? <AuditsTab /> : null}
       </div>
     </div>

@@ -1,9 +1,10 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { AlertTriangle, Check, ChevronRight, Cloud, CloudRain, FilePlus2, HardHat, Image as ImageIcon, Package, Plus, Printer, Send, Sun, Thermometer, Truck, Wind, X as XIcon } from "lucide-react";
+import { AlertTriangle, Check, ChevronLeft, ChevronRight, Cloud, CloudRain, FilePlus2, HardHat, Image as ImageIcon, Package, Plus, Printer, Send, Sun, Thermometer, Trash2, Truck, Wind, X as XIcon } from "lucide-react";
 import { Badge, Empty, Field, PageHero, Panel, StatusSteps, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { dowShort, monthLong, same, toDate, TODAY } from "../../../ops/dates";
+import { me } from "../../../ops/people";
 import { PATHS, R, statusMeta } from "../../../ops/select";
 import { sheetImage } from "../../../data";
 import { rateName } from "../../../ops/seed/util";
@@ -18,7 +19,14 @@ const PLANT: PlantStatus[] = ["WORKING", "IDLE", "STANDBY", "BROKEN_DOWN"];
 const PLANT_LABEL: Record<PlantStatus, string> = { WORKING: "Working", IDLE: "Idle", STANDBY: "Standby", BROKEN_DOWN: "Broken down" };
 const PLANT_TONE: Record<PlantStatus, "ok" | "muted" | "warn" | "bad"> = { WORKING: "ok", IDLE: "muted", STANDBY: "warn", BROKEN_DOWN: "bad" };
 const SEVERITIES: DailyReport["blockers"][number]["severity"][] = ["LOW", "MEDIUM", "HIGH", "CRITICAL"];
-const MONTHS = ["2026-10", "2026-11"];
+const WEATHERS: Weather[] = ["SUNNY", "CLOUDY", "RAIN", "WIND"];
+
+/** "YYYY-MM" of the month `n` months from `month`. */
+function shiftMonth(month: string, n: number) {
+  const d = toDate(`${month}-01`);
+  const m = new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + n, 1));
+  return `${m.getUTCFullYear()}-${String(m.getUTCMonth() + 1).padStart(2, "0")}`;
+}
 
 export function DailyReportsPage() {
   const { t, x, d } = useL();
@@ -30,7 +38,16 @@ export function DailyReportsPage() {
 
   const byDate = useMemo(() => new Map(reports.map((r) => [r.date, r])), [reports]);
   const report = reports.find((r) => r.id === id) ?? (id ? undefined : (byDate.get(TODAY) ?? reports[reports.length - 1]));
-  const pickedDate = report?.date ?? (id?.startsWith("DR-") ? id.slice(3) : TODAY);
+  const asked = report?.date ?? (id?.startsWith("DR-") ? id.slice(3) : TODAY);
+  const pickedDate = /^\d{4}-\d{2}-\d{2}$/.test(asked) ? asked : TODAY;
+  // Two months on the calendar, ending with the month of the picked day; arrows move back and forth.
+  const [anchor, setAnchor] = useState(pickedDate.slice(0, 7));
+  useEffect(() => {
+    const m = pickedDate.slice(0, 7);
+    setAnchor((a) => (m === a || m === shiftMonth(a, -1) ? a : m));
+  }, [pickedDate]);
+  const months = [shiftMonth(anchor, -1), anchor];
+  const thisMonth = TODAY.slice(0, 7);
 
   const startToday = () => {
     const last = reports[reports.length - 1];
@@ -38,9 +55,9 @@ export function DailyReportsPage() {
       id: `DR-${TODAY}`,
       date: TODAY,
       status: "DRAFT",
-      author: last?.author ?? "",
-      weather: "CLOUDY",
-      tempC: last?.tempC ?? 12,
+      author: me(),
+      weather: last?.weather ?? "SUNNY",
+      tempC: last?.tempC ?? 0,
       conditions: last?.conditions ?? same(""),
       entries: [],
       labour: last?.labour ?? [],
@@ -80,7 +97,17 @@ export function DailyReportsPage() {
 
       <div className="pmc-dr">
         <aside className="pmc-cal-col">
-          {MONTHS.map((m) => (
+          <div className="k-row" style={{ justifyContent: "space-between" }}>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={() => setAnchor((a) => shiftMonth(a, -1))}>
+              <ChevronLeft size={14} />
+              {t("Earlier")}
+            </button>
+            <button type="button" className="btn btn-ghost btn-sm" disabled={anchor >= thisMonth} onClick={() => setAnchor((a) => shiftMonth(a, 1))}>
+              {t("Later")}
+              <ChevronRight size={14} />
+            </button>
+          </div>
+          {months.map((m) => (
             <MonthGrid key={m} month={m} picked={pickedDate} byDate={byDate} holidays={calendar} onPick={(r) => navigate(R.report(r.id))} />
           ))}
           <ul className="pmc-cal-key">
@@ -99,8 +126,8 @@ export function DailyReportsPage() {
             <ReportDoc key={report.id} report={report} />
           ) : (
             <Panel>
-              <Empty icon={<FilePlus2 size={20} />} title={t("No report for {date}", { date: d(pickedDate) })} action={pickedDate === TODAY ? <button type="button" className="btn btn-primary" onClick={startToday}>{t("Start today's report")}</button> : undefined}>
-                {toDate(pickedDate).getUTCDay() === 0 ? t("Sundays are not working days.") : t("The site did not file a report that day.")}
+              <Empty icon={<FilePlus2 size={20} />} title={reports.length ? t("No report for {date}", { date: d(pickedDate) }) : t("No daily reports yet")} action={pickedDate === TODAY ? <button type="button" className="btn btn-primary" onClick={startToday}>{t("Start today's report")}</button> : undefined}>
+                {!reports.length ? t("Start today's report: weather, work done, people, plant, materials and blockers. Days with a report show on the calendar.") : toDate(pickedDate).getUTCDay() === 0 ? t("Sundays are not working days.") : t("The site did not file a report that day.")}
               </Empty>
             </Panel>
           )}
@@ -159,23 +186,33 @@ function ReportDoc({ report }: { report: DailyReport }) {
   const saveReport = useOps((s) => s.saveReport);
   const setReportStatus = useOps((s) => s.setReportStatus);
   const logProgress = useOps((s) => s.logProgress);
+  const removeItem = useOps((s) => s.removeItem);
+  const navigate = useNavigate();
   const editable = report.date === TODAY && report.status === "DRAFT";
   const act = (id: string) => activities.find((a) => a.id === id);
   const W = WEATHER_ICON[report.weather];
 
   const [delayFor, setDelayFor] = useState<DelayDraft | null>(null);
-  const live = activities.filter((a) => a.status === "IN_PROGRESS" || a.status === "BLOCKED").sort((a, b) => a.code.localeCompare(b.code));
+  // Activities that can take progress today: running ones first, then the ones not started yet.
+  const live = activities
+    .filter((a) => !a.isMilestone && a.status !== "COMPLETED")
+    .sort((a, b) => (a.status === "NOT_STARTED" ? 1 : 0) - (b.status === "NOT_STARTED" ? 1 : 0) || a.code.localeCompare(b.code));
   const [entryAct, setEntryAct] = useState(live[0]?.id ?? "");
   const entryA = act(entryAct);
-  const [entryPct, setEntryPct] = useState(entryA ? Math.min(100, entryA.pct + 3) : 0);
+  const [entryPct, setEntryPct] = useState(entryA ? entryA.pct : 0);
   const [entryQty, setEntryQty] = useState(0);
   const [entryUnit, setEntryUnit] = useState("m³");
   const [entryNote, setEntryNote] = useState("");
   const [labTrade, setLabTrade] = useState("");
-  const [labCount, setLabCount] = useState(4);
+  const [labCount, setLabCount] = useState(1);
+  const [plantName, setPlantName] = useState("");
+  const [plantHours, setPlantHours] = useState(8);
+  const [matKey, setMatKey] = useState("");
+  const [matQty, setMatQty] = useState(0);
+  const [cond, setCond] = useState(x(report.conditions));
   const [blkText, setBlkText] = useState("");
   const [blkSev, setBlkSev] = useState<DailyReport["blockers"][number]["severity"]>("MEDIUM");
-  const [blkOwner, setBlkOwner] = useState("");
+  const [blkOwner, setBlkOwner] = useState(() => me());
   const [blkDue, setBlkDue] = useState(TODAY);
   const [notes, setNotes] = useState(report.notes ? x(report.notes) : "");
 
@@ -206,7 +243,29 @@ function ReportDoc({ report }: { report: DailyReport }) {
     saveReport({ ...r, blockers: [...r.blockers, { text: same(blkText.trim()), severity: blkSev, owner: blkOwner.trim() || "—", due: blkDue, status: "OPEN" }] });
     toast(t("Blocker added"), "warn");
     setBlkText("");
-    setBlkOwner("");
+    setBlkOwner(me());
+  };
+  const addPlant = () => {
+    if (!plantName.trim()) return;
+    const r = fresh();
+    saveReport({ ...r, plant: [...r.plant, { name: same(plantName.trim()), status: "WORKING", hours: Math.max(0, plantHours) }] });
+    toast(t("Plant added"));
+    setPlantName("");
+  };
+  const addMaterial = () => {
+    const m = materials.find((v) => v.key === matKey);
+    if (!m || matQty <= 0) return;
+    const r = fresh();
+    const found = r.materials.find((l) => l.key === m.key);
+    saveReport({ ...r, materials: found ? r.materials.map((l) => (l === found ? { ...l, qty: l.qty + matQty } : l)) : [...r.materials, { key: m.key, qty: matQty, unit: m.unit }] });
+    toast(t("Material added"));
+    setMatQty(0);
+  };
+  const setWeather = (patch: Partial<Pick<DailyReport, "weather" | "tempC" | "conditions">>) => saveReport({ ...fresh(), ...patch });
+  const deleteDraft = () => {
+    removeItem("reports", report.id);
+    toast(t("Draft report deleted"), "muted");
+    navigate(R.reports);
   };
   const saveNotes = () => {
     saveReport({ ...fresh(), notes: notes.trim() ? same(notes.trim()) : null });
@@ -248,15 +307,20 @@ function ReportDoc({ report }: { report: DailyReport }) {
           <span className="k-eyebrow">{t("Daily site report")}</span>
           <h2>{d(report.date)}</h2>
           <p className="muted small">
-            {t("Filed by {name}", { name: report.author })} · {report.id}
+            {t("Filed by {name}", { name: report.author || "—" })} · {report.id}
           </p>
         </div>
         <div className="pmc-doc-actions">
           {report.status === "DRAFT" ? (
-            <button type="button" className="btn btn-primary" onClick={() => status("SUBMITTED", t("Report sent for approval"))}>
-              <Send size={15} />
-              {t("Submit for approval")}
-            </button>
+            <>
+              <button type="button" className="btn btn-primary" onClick={() => status("SUBMITTED", t("Report sent for approval"))}>
+                <Send size={15} />
+                {t("Submit for approval")}
+              </button>
+              <button type="button" className="icon-btn" onClick={deleteDraft} aria-label={t("Delete draft")} title={t("Delete draft")}>
+                <Trash2 size={16} />
+              </button>
+            </>
           ) : report.status === "SUBMITTED" ? (
             <>
               <button type="button" className="btn btn-primary" onClick={() => status("APPROVED", t("Report approved"))}>
@@ -281,6 +345,24 @@ function ReportDoc({ report }: { report: DailyReport }) {
         </div>
       </header>
       <StatusSteps kind="report" path={PATHS.report} status={report.status === "REJECTED" ? "SUBMITTED" : report.status} rejected={report.status === "REJECTED"} />
+
+      {editable ? (
+        <div className="pmc-doc-add">
+          <Field label={t("Weather")}>
+            <select className="input select" value={report.weather} onChange={(e) => setWeather({ weather: e.target.value as Weather })}>
+              {WEATHERS.map((w) => (
+                <option key={w} value={w}>{t(WEATHER_LABEL[w])}</option>
+              ))}
+            </select>
+          </Field>
+          <Field label={t("Temperature (°C)")}>
+            <input className="input num-inline" type="number" value={report.tempC} onChange={(e) => setWeather({ tempC: Math.round(Number(e.target.value) || 0) })} />
+          </Field>
+          <Field label={t("Site conditions")}>
+            <input className="input" value={cond} onChange={(e) => setCond(e.target.value)} onBlur={() => cond !== x(report.conditions) && setWeather({ conditions: same(cond.trim()) })} placeholder={t("e.g. Ground dry, access road open")} />
+          </Field>
+        </div>
+      ) : null}
 
       <section className="pmc-doc-wx">
         <span className="pmc-wx">
@@ -346,16 +428,24 @@ function ReportDoc({ report }: { report: DailyReport }) {
         ) : (
           <p className="muted small">{t("No work logged yet.")}</p>
         )}
-        {editable ? (
+        {editable && !live.length ? (
+          <p className="muted small">
+            {t("Work is logged against the programme activities, and there are none open yet.")}{" "}
+            <Link to={R.programme()} className="k-link-btn">
+              {t("Open the programme")}
+            </Link>
+          </p>
+        ) : null}
+        {editable && live.length ? (
           <div className="pmc-doc-add">
-            <Field label={t("Activity in progress")}>
+            <Field label={t("Activity")}>
               <select
                 className="input select"
                 value={entryAct}
                 onChange={(e) => {
                   setEntryAct(e.target.value);
                   const a = act(e.target.value);
-                  if (a) setEntryPct(Math.min(100, a.pct + 3));
+                  if (a) setEntryPct(a.pct);
                 }}
               >
                 {live.map((a) => (
@@ -401,6 +491,7 @@ function ReportDoc({ report }: { report: DailyReport }) {
                 <b className="num-inline">{l.count}</b>
               </li>
             ))}
+            {!report.labour.length ? <li className="muted">{t("No people recorded")}</li> : null}
             <li className="total">
               <span>{t("Total")}</span>
               <b className="num-inline">{people}</b>
@@ -430,7 +521,17 @@ function ReportDoc({ report }: { report: DailyReport }) {
                 <small className="num-inline">{p.hours} {t("h")}</small>
               </li>
             ))}
+            {!report.plant.length ? <li className="muted">{t("No plant recorded")}</li> : null}
           </ul>
+          {editable ? (
+            <div className="pmc-inline-add">
+              <input className="input" value={plantName} onChange={(e) => setPlantName(e.target.value)} placeholder={t("Machine")} aria-label={t("Machine")} />
+              <input className="input num-inline" type="number" min={0} value={plantHours} onChange={(e) => setPlantHours(Math.max(0, Number(e.target.value) || 0))} aria-label={t("Hours")} title={t("Hours")} />
+              <button type="button" className="icon-btn" onClick={addPlant} aria-label={t("Add plant")} disabled={!plantName.trim()}>
+                <Plus size={16} />
+              </button>
+            </div>
+          ) : null}
         </section>
         <section className="pmc-doc-sec">
           <h3>
@@ -447,6 +548,22 @@ function ReportDoc({ report }: { report: DailyReport }) {
             ))}
             {!report.materials.length ? <li className="muted">{t("None used")}</li> : null}
           </ul>
+          {editable && materials.length ? (
+            <div className="pmc-inline-add">
+              <select className="input select" value={matKey} onChange={(e) => setMatKey(e.target.value)} aria-label={t("Material")}>
+                <option value="">{t("Material")}</option>
+                {materials.map((m) => (
+                  <option key={m.key} value={m.key}>
+                    {x(m.name)} ({unitLabel(m.unit, lang)})
+                  </option>
+                ))}
+              </select>
+              <input className="input num-inline" type="number" min={0} value={matQty} onChange={(e) => setMatQty(Math.max(0, Number(e.target.value) || 0))} aria-label={t("Qty")} />
+              <button type="button" className="icon-btn" onClick={addMaterial} aria-label={t("Add material")} disabled={!matKey || matQty <= 0}>
+                <Plus size={16} />
+              </button>
+            </div>
+          ) : null}
         </section>
       </div>
 

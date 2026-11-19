@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Avatar, Dialog, Field, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { TODAY } from "../../../ops/dates";
-import { setAttendance } from "../../../ops/ext/site-p2";
+import { employerName, setAttendance } from "../../../ops/ext/site-p2";
 import type { AttendanceStatus } from "../../../ops/types";
 import { siteMeta, WEEK, isRestDay } from "./shared";
 
@@ -14,6 +14,7 @@ export function RollCallDialog({ open, onClose }: { open: boolean; onClose: () =
   const { t, x, d } = useL();
   const workers = useOps((s) => s.workers);
   const subs = useOps((s) => s.subs);
+  const company = useOps((s) => s.setup.company);
   const rollCall = useOps((s) => s.rollCall);
   const [rows, setRows] = useState<Record<string, AttendanceStatus>>({});
 
@@ -50,7 +51,7 @@ export function RollCallDialog({ open, onClose }: { open: boolean; onClose: () =
           <button type="button" className="btn btn-ghost" onClick={() => setRows(Object.fromEntries(workers.map((w) => [w.id, "PRESENT" as AttendanceStatus])))}>
             {t("Everyone present")}
           </button>
-          <button type="button" className="btn btn-primary" onClick={save}>
+          <button type="button" className="btn btn-primary" onClick={save} disabled={!workers.length}>
             {t("Save roll call")}
           </button>
         </>
@@ -59,7 +60,7 @@ export function RollCallDialog({ open, onClose }: { open: boolean; onClose: () =
       <div className="st-rc">
         {byEmployer.map((emp) => (
           <section key={emp}>
-            <h4>{subs.find((s) => s.id === emp)?.name ?? emp}</h4>
+            <h4>{employerName(emp, subs, company, t("Own staff"))}</h4>
             <ul>
               {workers
                 .filter((w) => w.employer === emp)

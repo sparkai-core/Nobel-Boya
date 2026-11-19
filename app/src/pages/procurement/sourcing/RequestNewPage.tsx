@@ -2,14 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { AlertTriangle, CalendarClock, CheckCircle2, ClipboardList, Database, ListChecks, Save, Send, Workflow } from "lucide-react";
 import { Field, LineItemsEditor, newDraftLine, PageHero, Panel, toast, useL, type DraftLine } from "../../../components/kit";
-import { ME, useOps } from "../../../ops/store";
+import { me, useOps } from "../../../ops/store";
 import { addDays, diffDays, TODAY } from "../../../ops/dates";
 import { budgetOf, R, statusMeta, TRADES, tradeName } from "../../../ops/select";
 import { buildingShort } from "../../../lib/loc";
 import { fmtMoneyShort, fmtQty, unitLabel } from "../../../lib/format";
 import { data } from "../../../data";
 import type { Activity, Material, MaterialRequest, Priority, Trade } from "../../../ops/types";
-import { BUILDINGS, tradeLeadDays } from "./shared";
+import { buildingIds, tradeLeadDays } from "./shared";
+import { takeBillLines } from "../../../ops/ext/bill-request";
 
 const PRIORITIES: Priority[] = ["URGENT", "HIGH", "MEDIUM", "LOW"];
 
@@ -56,12 +57,12 @@ export function RequestNewPage() {
   const [lines, setLines] = useState<DraftLine[]>([]);
   const [neededBy, setNeededBy] = useState(addDays(TODAY, 14));
   const [priority, setPriority] = useState<Priority>("MEDIUM");
-  const [building, setBuilding] = useState("WH");
+  const [building, setBuilding] = useState(() => buildingIds()[0] ?? "");
   const [trade, setTrade] = useState<Trade>("Concrete");
   const [activityId, setActivityId] = useState<string | null>(null);
   const [notes, setNotes] = useState("");
   const [source, setSource] = useState<MaterialRequest["source"]>("MANUAL");
-  const [boqBuilding, setBoqBuilding] = useState("WH");
+  const [boqBuilding, setBoqBuilding] = useState(() => buildingIds()[0] ?? "");
   const [boqTrade, setBoqTrade] = useState<Trade>("Steel");
   const [progAct, setProgAct] = useState("");
   const [filled, setFilled] = useState<string | null>(null);
@@ -87,8 +88,29 @@ export function RequestNewPage() {
     setFilled(ls.length ? t("Filled {n} lines from {code}.", { n: ls.length, code: a.code }) : t("{code} has no BOQ materials; add lines by hand.", { code: a.code }));
   };
 
-  // ?activity=<id> prefills from the programme.
+  // ?activity=<id> prefills from the programme; ?bill=1 takes the lines picked on the Bill page.
   useEffect(() => {
+    if (params.get("bill")) {
+      const picked = takeBillLines();
+      if (picked.length) {
+        const ls: DraftLine[] = picked.map((p) => {
+          const m = p.material ? materials.find((mm) => mm.key === p.material) : undefined;
+          return { ...newDraftLine(m), description: p.description, qty: p.qty, unit: p.unit || m?.unit || "" };
+        });
+        const blds = [...new Set(picked.map((p) => p.building))];
+        if (blds[0]) {
+          setBuilding(blds[0]);
+          setBoqBuilding(blds[0]);
+        }
+        const tr = mainTrade(materials, ls);
+        if (tr) setTrade(tr);
+        setLines(ls);
+        setSource("BOQ");
+        setTitle(blds.length === 1 ? t("From the bill: {b}", { b: buildingShort(blds[0]!, lang) }) : t("From the bill: {n} lines", { n: ls.length }));
+        setFilled(t("Filled {n} lines picked on the bill of quantities.", { n: ls.length }));
+      }
+      return;
+    }
     const id = params.get("activity");
     const a = id ? activities.find((x2) => x2.id === id || x2.code === id) : undefined;
     if (a) fromActivity(a);
@@ -176,7 +198,7 @@ export function RequestNewPage() {
                 <strong>{t("Start from the BOQ")}</strong>
                 <div className="ps-start-row">
                   <select className="input select" value={boqBuilding} onChange={(e) => setBoqBuilding(e.target.value)} aria-label={t("Building")}>
-                    {BUILDINGS.map((b) => (
+                    {buildingIds().map((b) => (
                       <option key={b} value={b}>
                         {buildingShort(b, lang)}
                       </option>
@@ -264,7 +286,7 @@ export function RequestNewPage() {
               </Field>
               <Field label={t("Building")}>
                 <select className="input select" value={building} onChange={(e) => setBuilding(e.target.value)}>
-                  {BUILDINGS.map((b) => (
+                  {buildingIds().map((b) => (
                     <option key={b} value={b}>
                       {buildingShort(b, lang)}
                     </option>
@@ -385,7 +407,7 @@ export function RequestNewPage() {
                 </span>
               )}
               <small>
-                {t("Requested by {name}", { name: ME })} · {d(TODAY)}
+                {t("Requested by {name}", { name: me() })} · {d(TODAY)}
               </small>
             </div>
           </div>

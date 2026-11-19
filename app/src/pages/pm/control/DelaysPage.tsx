@@ -1,6 +1,6 @@
 import { Fragment, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ArrowRight, Check, CircleSlash, Flag, GitBranch, Link2, MapPin, Plus, RotateCcw, ShieldCheck, Timer, TrendingDown } from "lucide-react";
+import { ArrowRight, Building2, CalendarRange, Check, CircleSlash, Flag, GitBranch, Link2, Plus, RotateCcw, ShieldCheck, Timer, TrendingDown } from "lucide-react";
 import { Badge, Empty, FilterChips, Kebab, PageHero, Panel, Register, SearchBox, StatTiles, StatusBadge, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
@@ -21,15 +21,6 @@ const LINK_HREF: Record<DelayEvent["links"][number]["kind"], (id: string) => str
 };
 const LINK_LABEL: Record<DelayEvent["links"][number]["kind"], string> = { PO: "Order", RFI: "RFI", CHANGE: "Change", REPORT: "Daily report" };
 
-/** Site plan positions (0–100 units) of the buildings for the "where the open delays sit" map. */
-const PLAN: { b: string; x: number; y: number; w: number; h: number }[] = [
-  { b: "WH", x: 6, y: 10, w: 52, h: 44 },
-  { b: "AD", x: 64, y: 10, w: 30, h: 26 },
-  { b: "PS", x: 64, y: 44, w: 13, h: 14 },
-  { b: "TK", x: 80, y: 44, w: 14, h: 14 },
-  { b: "SITE", x: 6, y: 62, w: 88, h: 12 },
-];
-
 export function DelaysPage() {
   const { t, x, d, lang } = useL();
   const navigate = useNavigate();
@@ -47,6 +38,8 @@ export function DelaysPage() {
   const [formOpen, setFormOpen] = useState(params.get("new") === "1");
   const chainRef = useRef<HTMLDivElement>(null);
 
+  const hasActs = activities.length > 0;
+  const contractSet = useOps((s) => !!s.setup.contractFinish);
   const stats = programmeStats(activities);
   const floatLeft = diffDays(stats.forecastFinish, PROJECT_FINISH);
   const msLate = milestones.map((m) => ({ m, f: milestoneForecast(m, activities) })).filter((r) => !r.f.done && r.f.slip > 0);
@@ -94,7 +87,11 @@ export function DelaysPage() {
     return map;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, activities]);
-  const maxBuildingDays = Math.max(1, ...[...byBuilding.values()].map((ds) => ds.reduce((a, x2) => a + x2.daysLost, 0)));
+  const buildingRows = useMemo(
+    () => [...byBuilding.entries()].map(([b, ds]) => ({ b, ds, days: ds.reduce((a, x2) => a + x2.daysLost, 0) })).sort((a, b) => b.days - a.days),
+    [byBuilding],
+  );
+  const maxBuildingDays = Math.max(1, ...buildingRows.map((r) => r.days));
 
   const columns: Column<DelayEvent>[] = [
     { key: "ref", header: t("Ref"), sort: (r) => r.ref, width: "96px", render: (r) => <span className="k-ref">{r.ref}</span> },
@@ -155,18 +152,34 @@ export function DelaysPage() {
         flow={["Log the event", "Preview the impact", "Confirm", "Mitigate", "Resolve"]}
         art="delay"
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setFormOpen(true)}>
+          <button type="button" className="btn btn-primary" onClick={() => setFormOpen(true)} disabled={!hasActs} title={hasActs ? undefined : t("Add activities to the programme first.")}>
             <Plus size={15} />
             {t("New delay event")}
           </button>
         }
       />
 
+      {!hasActs ? (
+        <div className="k-callout k-tone-info">
+          <CalendarRange size={18} />
+          <span>
+            {t("A delay is logged against an activity of the programme. The programme has no activities yet.")}{" "}
+            <Link to={R.programme()} className="k-link-btn">
+              {t("Open the programme")}
+            </Link>
+          </span>
+        </div>
+      ) : null}
+
       <StatTiles
         items={[
-          { icon: <Timer size={14} />, label: t("Float left on the critical path"), value: t("{n} d", { n: signed(floatLeft) }), tone: floatLeft < 0 ? "bad" : floatLeft < 5 ? "warn" : "ok", sub: t("against the contract finish {date}", { date: d(PROJECT_FINISH) }) },
-          { icon: <Flag size={14} />, label: t("Forecast finish"), value: d(stats.forecastFinish), tone: stats.varianceDays > 0 ? "bad" : "ok", sub: stats.varianceDays > 0 ? t("{n} days after the contract date", { n: stats.varianceDays }) : t("on or before the contract date") },
-          { icon: <TrendingDown size={14} />, label: t("Milestones forecast late"), value: String(msLate.length), tone: msLate.length ? "bad" : "ok", sub: msLate.length ? msLate.slice(0, 4).map((r) => r.m.code).join(" · ") : t("all on track"), onClick: () => navigate(R.milestones) },
+          hasActs
+            ? { icon: <Timer size={14} />, label: t("Float left on the critical path"), value: t("{n} d", { n: signed(floatLeft) }), tone: floatLeft < 0 ? "bad" : floatLeft < 5 ? "warn" : "ok", sub: contractSet ? t("against the contract finish {date}", { date: d(PROJECT_FINISH) }) : t("no contract finish set: measured to the latest activity finish") }
+            : { icon: <Timer size={14} />, label: t("Float left on the critical path"), value: "—", tone: "muted", sub: t("no programme yet") },
+          hasActs
+            ? { icon: <Flag size={14} />, label: t("Forecast finish"), value: d(stats.forecastFinish), tone: stats.varianceDays > 0 ? "bad" : "ok", sub: stats.varianceDays > 0 ? t("{n} days after the contract date", { n: stats.varianceDays }) : t("on or before the contract date") }
+            : { icon: <Flag size={14} />, label: t("Forecast finish"), value: "—", tone: "muted", sub: t("no programme yet") },
+          { icon: <TrendingDown size={14} />, label: t("Milestones forecast late"), value: milestones.length ? String(msLate.length) : "—", tone: !milestones.length ? "muted" : msLate.length ? "bad" : "ok", sub: !milestones.length ? t("no milestones yet") : msLate.length ? msLate.slice(0, 4).map((r) => r.m.code).join(" · ") : t("all on track"), onClick: () => navigate(R.milestones) },
           { icon: <CircleSlash size={14} />, label: t("Days lost to open delays"), value: String(openLost), tone: openHits ? "warn" : "neutral", sub: t("{n} of them still hit the programme", { n: openHits }) },
         ]}
       />
@@ -209,7 +222,17 @@ export function DelaysPage() {
               </div>
             </div>
           ) : (
-            <Empty title={t("No delays logged")} />
+            <Empty
+              title={t("No delays logged")}
+              action={
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setFormOpen(true)} disabled={!hasActs}>
+                  <Plus size={14} />
+                  {t("New delay event")}
+                </button>
+              }
+            >
+              {t("Log the first event that cost working days on site.")}
+            </Empty>
           )}
           <div className="k-legend">
             <span style={{ ["--lc" as string]: "var(--redline)" }}>{t("Still hits the programme")}</span>
@@ -217,42 +240,31 @@ export function DelaysPage() {
           </div>
         </Panel>
 
-        <Panel title={t("Where the open delays sit")} icon={<MapPin size={15} />} sub={t("Darker means more working days lost.")}>
-          <svg viewBox="0 0 100 78" className="pmc-plan" role="img" aria-label={t("Site plan")}>
-            <rect x={1} y={2} width={98} height={74} rx={3} className="pmc-plan-site" />
-            {PLAN.map((p) => {
-              const ds = byBuilding.get(p.b) ?? [];
-              const days = ds.reduce((a, x2) => a + x2.daysLost, 0);
-              const k = days / maxBuildingDays;
-              return (
-                <g key={p.b} className={`pmc-plan-b${ds.length ? " hot" : ""}`} onClick={ds[0] ? () => pick(ds[0]!.id) : undefined}>
-                  <rect x={p.x} y={p.y} width={p.w} height={p.h} rx={1.5} style={{ fillOpacity: ds.length ? 0.15 + k * 0.7 : 1 }} />
-                  <text x={p.x + 2} y={p.y + 5} className="pmc-plan-name">{buildingShort(p.b, lang)}</text>
-                  {ds.length ? (
-                    <g>
-                      <circle cx={p.x + p.w - 5} cy={p.y + 5.5} r={3.6} className="pmc-plan-badge" />
-                      <text x={p.x + p.w - 5} y={p.y + 6.8} textAnchor="middle" className="pmc-plan-count">{ds.length}</text>
-                    </g>
-                  ) : null}
-                </g>
-              );
-            })}
-          </svg>
-          <ul className="pmc-plan-list">
-            {[...byBuilding.entries()].sort((a, b) => b[1].length - a[1].length).map(([b, ds]) => (
-              <li key={b}>
-                <strong>{buildingShort(b, lang)}</strong>
-                <span className="pmc-plan-chips">
-                  {ds.map((dl) => (
-                    <button key={dl.id} type="button" className={`pmc-chip${selected?.id === dl.id ? " on" : ""}`} onClick={() => pick(dl.id)}>
-                      {dl.ref} · {t("{n} d", { n: dl.daysLost })}
-                    </button>
-                  ))}
-                </span>
-              </li>
-            ))}
-            {!byBuilding.size ? <li className="muted">{t("No open delays.")}</li> : null}
-          </ul>
+        <Panel title={t("Open delays by building")} icon={<Building2 size={15} />} sub={t("Working days lost to open delays, by the building of the activity hit.")}>
+          {buildingRows.length ? (
+            <ul className="pmc-plan-list">
+              {buildingRows.map(({ b, ds, days }) => (
+                <li key={b}>
+                  <span className="k-row" style={{ gap: 8, flexWrap: "nowrap" }}>
+                    <strong className="truncate" style={{ flex: 1 }}>{buildingShort(b, lang)}</strong>
+                    <span className="pmc-tally-bar" style={{ width: 90 }}>
+                      <i className="k-grow-x" style={{ width: `${(days / maxBuildingDays) * 100}%` }} />
+                    </span>
+                    <b className="num-inline">{t("{n} d", { n: days })}</b>
+                  </span>
+                  <span className="pmc-plan-chips">
+                    {ds.map((dl) => (
+                      <button key={dl.id} type="button" className={`pmc-chip${selected?.id === dl.id ? " on" : ""}`} onClick={() => pick(dl.id)}>
+                        {dl.ref} · {t("{n} d", { n: dl.daysLost })}
+                      </button>
+                    ))}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="muted small">{t("No open delays.")}</p>
+          )}
         </Panel>
       </div>
 
@@ -289,12 +301,16 @@ export function DelaysPage() {
           </Toolbar>
         }
         empty={
+          !delays.length ? (
+            t("No delays logged yet.")
+          ) : (
           <>
             {t("No delays match.")}{" "}
             <button type="button" className="k-link-btn" onClick={() => { setStatus("all"); setCause(null); setQ(""); }}>
               {t("Clear filters")}
             </button>
           </>
+          )
         }
       />
 

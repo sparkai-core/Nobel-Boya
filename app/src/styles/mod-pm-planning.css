@@ -301,14 +301,21 @@
 }
 
 /* ---------------------------------------------------------------- import dialog */
-.pp-samples {
+.pp-check-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 6px 0 0;
+  cursor: pointer;
+}
+.pp-check-row input {
+  margin-top: 2px;
+}
+.pp-empty-actions {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 8px 14px;
-}
-.pp-samples .k-link-btn {
-  gap: 6px;
+  justify-content: center;
+  gap: 8px;
 }
 .pp-filepill {
   display: flex;
@@ -2276,4 +2283,32 @@
   .pp-tr-ms {
     animation: none;
   }
+}
+
+/* ---------------------------------------------------------------- create / edit dialogs */
+.pp-foot-left {
+  margin-right: auto;
+}
+.pp-foot-note {
+  margin-right: auto;
+  align-self: center;
+}
+.btn.pp-danger {
+  background: var(--redline, #c0392b);
+  color: #fff;
+}
+.btn.pp-danger:hover:not(:disabled) {
+  filter: brightness(0.95);
+}
+@media (max-width: 520px) {
+  .pp-foot-note {
+    flex-basis: 100%;
+  }
+}
+.k-dialog-foot:has(.pp-foot-note) {
+  flex-wrap: wrap;
+}
+.pp-pane-title > .btn {
+  margin-left: auto;
+  flex: none;
 }

@@ -1,10 +1,10 @@
 import { useMemo, useState, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { CircleCheck, Hourglass, PackageCheck, Truck, Wallet } from "lucide-react";
+import { CircleCheck, Hourglass, PackageCheck, Plus, Truck, Wallet } from "lucide-react";
 import { Avatar, Badge, FilterChips, FlowRail, Money, PageHero, Register, SearchBox, StagePath, StatusBadge, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { diffDays, TODAY } from "../../../ops/dates";
-import { PATHS, poLate, poTotal, R } from "../../../ops/select";
+import { PATHS, poLate, poTotal, R, to } from "../../../ops/select";
 import type { Payment, PurchaseOrder } from "../../../ops/types";
 import { orderShares, short, TwoBars, vendorName, VisualHead } from "./shared";
 
@@ -169,6 +169,12 @@ export function OrdersPage() {
         subtitle={t("Every order issued to a vendor: what has arrived, what is late and what is owed.")}
         flow={["Issued", "Vendor accepts", "Dispatched", "Received", "Paid"]}
         art="order"
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => navigate(to("procurement/orders/new"))}>
+            <Plus size={15} />
+            {t("New purchase order")}
+          </button>
+        }
       />
       <FlowRail current="order" />
 
@@ -230,6 +236,7 @@ export function OrdersPage() {
         onRowClick={(p) => navigate(R.order(p.id))}
         initialSort={{ key: "order", dir: "desc" }}
         rowClass={(p) => (poLate(p) ? "po-row-late" : undefined)}
+        empty={s.pos.length ? t("Nothing matches these filters.") : t("No purchase orders yet. Place one directly, or approve a quote to issue one.")}
         toolbar={
           <Toolbar>
             <SearchBox value={q} onChange={setQ} placeholder="Search orders, vendors, materials" />

@@ -1,25 +1,28 @@
-import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
-import { CalendarCheck2, Check, ChevronDown, Download, Flag, Info, Save, Upload, X } from "lucide-react";
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { CalendarCheck2, Check, Download, Flag, Info, Plus, Save, Upload, X } from "lucide-react";
 import { Badge, Dialog, Field, Kebab, PageHero, TabBar, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { diffDays } from "../../../ops/dates";
+import { diffDays, TODAY } from "../../../ops/dates";
+import { projectName } from "../../../lib/loc";
 import { cpm, programmeStats, to } from "../../../ops/select";
-import { setCurrentProgramme } from "../../../ops/ext/planning-p2";
-import type { Programme } from "../../../ops/types";
 import { ActivitiesTab } from "./ActivitiesTab";
+import { ActivityDialog } from "./ActivityDialog";
 import { ChangesTab } from "./ChangesTab";
 import { ImportDialog, ToolBadge, type Imported } from "./ImportDialog";
 import { ProgrammesTab } from "./ProgrammesTab";
 import { ResourcesTab } from "./ResourcesTab";
-import { baselineFinish, buildMspXml, buildP6Xml, buildXer, download, TABS, TOOL_NAME, type Tab } from "./model";
+import { baselineFinish, buildMspXml, buildP6Xml, buildXer, download, TABS, TOOL_NAME, type ExportMeta, type Tab } from "./model";
+
+/** File-safe short name: "Qobu anbar kompleksi" → "Qobu_anbar_kompleksi". */
+const fileSafe = (s: string) => s.replace(/[^\p{L}\p{N}]+/gu, "_").replace(/^_+|_+$/g, "").slice(0, 40) || "programme";
 
 /**
  * Planning and programme: the P6 / MS Project side of the project. Programme files, the activity table
  * (P6 look), the resource histogram and what changed between saved points, with a live status footer.
  */
 export function PlanningPage() {
-  const { t, d } = useL();
+  const { t, d, lang } = useL();
   const navigate = useNavigate();
   const params = useParams();
   const tab: Tab = (TABS as readonly string[]).includes(params.tab ?? "") ? (params.tab as Tab) : "activities";
@@ -29,40 +32,47 @@ export function PlanningPage() {
   const activities = useOps((s) => s.activities);
   const links = useOps((s) => s.links);
   const wbs = useOps((s) => s.wbs);
-  const dataDate = useOps((s) => s.dataDate);
+  const storedDataDate = useOps((s) => s.dataDate);
+  const workweek = useOps((s) => s.workweek);
+  const contractSet = useOps((s) => s.setup.contractFinish);
   const saveRevision = useOps((s) => s.saveRevision);
   const setBaseline = useOps((s) => s.setBaseline);
   const current = programmes.find((p) => p.current) ?? programmes[programmes.length - 1];
+  // An imported programme has its own data date; a programme kept by hand is as of today.
+  const dataDate = current ? storedDataDate : TODAY;
 
   const stats = useMemo(() => programmeStats(activities), [activities]);
   const cp = useMemo(() => cpm(activities, links), [activities, links]);
   const critical = activities.filter((a) => cp.get(a.id)?.critical && a.status !== "COMPLETED").length;
-  const contract = current?.contractFinish ?? stats.forecastFinish;
-  const late = diffDays(contract, stats.forecastFinish);
-  const slip = diffDays(baselineFinish(activities), stats.forecastFinish);
+  const has = activities.length > 0;
+  const contract = contractSet || current?.contractFinish || null;
+  const late = has && contract ? diffDays(contract, stats.forecastFinish) : null;
+  const slip = has ? diffDays(baselineFinish(activities), stats.forecastFinish) : 0;
 
   const [importing, setImporting] = useState(false);
   const [banner, setBanner] = useState<Imported | null>(null);
   const [savePoint, setSavePoint] = useState(false);
   const [label, setLabel] = useState("");
   const [baseline, setBaselineOpen] = useState(false);
+  const [adding, setAdding] = useState(false);
+  const [query, setQuery] = useSearchParams();
+  // Other pages link here with ?import=1 / ?add=1 to open the import or the new-activity dialog.
+  useEffect(() => {
+    if (query.get("import")) setImporting(true);
+    else if (query.get("add")) setAdding(true);
+    else return;
+    setQuery({}, { replace: true });
+  }, [query, setQuery]);
 
-  const base = (current?.file ?? "QOBU").replace(/\.[^.]+$/, "");
+  const base = current?.file ? current.file.replace(/\.[^.]+$/, "") : fileSafe(projectName(lang) || "programme");
   const doExport = (kind: "xer" | "p6xml" | "msp") => {
-    const name = current?.name ?? "Qobu";
-    if (kind === "xer") download(`${base}.xer`, buildXer(name, activities, links, wbs, dataDate));
-    if (kind === "p6xml") download(`${base}_P6.xml`, buildP6Xml(name, activities, links, wbs, dataDate), "application/xml");
-    if (kind === "msp") download(`${base}_MSProject.xml`, buildMspXml(name, activities, links, wbs, dataDate), "application/xml");
+    const meta: ExportMeta = { name: current?.name ?? (projectName(lang) || base), code: current?.projectCode || fileSafe(projectName("en") || base).slice(0, 20), dataDate, workweek };
+    if (kind === "xer") download(`${base}.xer`, buildXer(meta, activities, links, wbs));
+    if (kind === "p6xml") download(`${base}_P6.xml`, buildP6Xml(meta, activities, links, wbs), "application/xml");
+    if (kind === "msp") download(`${base}_MSProject.xml`, buildMspXml(meta, activities, links, wbs), "application/xml");
     toast(t("Programme exported: {n} activities, {l} links", { n: activities.length, l: links.length }));
   };
 
-  const follow = (p: Programme) => {
-    if (!p.current) {
-      setCurrentProgramme(p.id);
-      toast(t("The project now follows {name}", { name: p.name }));
-    }
-    go("activities");
-  };
 
   return (
     <div className="k-page pp-page pp-planning">
@@ -87,43 +97,31 @@ export function PlanningPage() {
         />
         <div className="pp-strip-end">
           {current ? (
-            <Kebab
-              label="Choose a programme"
-              items={programmes.map((p) => ({
-                label: (
-                  <span className="pp-pick-item">
-                    <ToolBadge tool={p.tool} small />
-                    <span className="truncate">{p.name}</span>
-                    {p.current ? <Check size={14} /> : null}
-                  </span>
-                ),
-                onClick: () => follow(p),
-              }))}
-            >
-              <span className="pp-picker">
-                <ToolBadge tool={current.tool} small />
-                <span className="truncate">{current.name}</span>
-                <ChevronDown size={14} />
-              </span>
-            </Kebab>
+            <button type="button" className="btn btn-ghost pp-picker" onClick={() => go("programmes")} title={t("The project follows the last imported programme")}>
+              <ToolBadge tool={current.tool} small />
+              <span className="truncate">{current.name}</span>
+            </button>
           ) : null}
           <button type="button" className="btn btn-primary" onClick={() => setImporting(true)}>
             <Upload size={15} /> {t("Import file")}
           </button>
+          <button type="button" className="btn btn-ghost" onClick={() => setAdding(true)}>
+            <Plus size={15} /> <span className="pp-hide-sm">{t("Add activity")}</span>
+          </button>
           <Kebab
             label="Export"
             items={[
-              { label: t("Primavera P6 (.xer)"), icon: <Download size={14} />, onClick: () => doExport("xer") },
-              { label: t("Primavera P6 XML"), icon: <Download size={14} />, onClick: () => doExport("p6xml") },
-              { label: t("MS Project XML"), icon: <Download size={14} />, onClick: () => doExport("msp") },
+              { label: t("Primavera P6 (.xer)"), icon: <Download size={14} />, onClick: () => doExport("xer"), disabled: !has },
+              { label: t("Primavera P6 XML"), icon: <Download size={14} />, onClick: () => doExport("p6xml"), disabled: !has },
+              { label: t("MS Project XML"), icon: <Download size={14} />, onClick: () => doExport("msp"), disabled: !has },
             ]}
           >
             <Download size={15} /> <span className="pp-hide-sm">{t("Export")}</span>
           </Kebab>
           <Kebab
             items={[
-              { label: t("Save a point"), icon: <Save size={14} />, onClick: () => { setLabel(""); setSavePoint(true); } },
-              { label: t("Set baseline to these dates"), icon: <Flag size={14} />, onClick: () => setBaselineOpen(true) },
+              { label: t("Save a point"), icon: <Save size={14} />, onClick: () => { setLabel(""); setSavePoint(true); }, disabled: !has },
+              { label: t("Set baseline to these dates"), icon: <Flag size={14} />, onClick: () => setBaselineOpen(true), disabled: !has },
             ]}
           />
         </div>
@@ -138,7 +136,7 @@ export function PlanningPage() {
             <strong>{banner.mode === "REVISION" ? t("New revision imported.") : t("New programme imported.")}</strong>{" "}
             <span>
               {banner.tool === "P6" ? "P6" : "MSP"} · {t("{n} activities", { n: banner.activities })} · {t("from {file}", { file: banner.file })}
-              {banner.mode === "REVISION" && diffDays(banner.result.finishBefore, banner.result.finishAfter) !== 0
+              {banner.mode === "REVISION" && banner.result.finishBefore && banner.result.finishAfter && diffDays(banner.result.finishBefore, banner.result.finishAfter) !== 0
                 ? ` · ${t("finish {a} → {b}", { a: d(banner.result.finishBefore), b: d(banner.result.finishAfter) })}`
                 : ""}
             </span>
@@ -153,46 +151,54 @@ export function PlanningPage() {
       ) : null}
 
       <div className="pp-body" key={tab}>
-        {tab === "programmes" ? <ProgrammesTab programmes={programmes} fresh={banner?.mode === "NEW" ? banner.result.programmeId : null} onOpen={follow} /> : null}
-        {tab === "activities" ? <ActivitiesTab /> : null}
+        {tab === "programmes" ? <ProgrammesTab programmes={programmes} fresh={banner?.mode === "NEW" ? banner.result.programmeId : null} onOpen={() => go("activities")} onImport={() => setImporting(true)} /> : null}
+        {tab === "activities" ? <ActivitiesTab onImport={() => setImporting(true)} onAdd={() => setAdding(true)} /> : null}
         {tab === "resources" ? <ResourcesTab /> : null}
-        {tab === "changes" ? <ChangesTab /> : null}
+        {tab === "changes" ? <ChangesTab onImport={() => setImporting(true)} /> : null}
       </div>
 
       <footer className="pp-foot" aria-label={t("Programme status")}>
         <div className="pp-foot-item">
           <small>{t("Data date")}</small>
-          <b className="num-inline">{d(dataDate)}</b>
+          <b className="num-inline">{has ? d(dataDate) : "—"}</b>
         </div>
         <div className="pp-foot-item">
           <small>{t("Contract finish")}</small>
-          <b className="num-inline">{d(contract)}</b>
+          <b className="num-inline">{contract ? d(contract) : t("Not set")}</b>
         </div>
         <div className="pp-foot-item">
           <small>{t("Forecast finish")}</small>
           <b className="num-inline">
-            {d(stats.forecastFinish)} {late > 0 ? <Badge tone="bad">{t("{n}d late", { n: late })}</Badge> : <Badge tone="ok">{t("On time")}</Badge>}
+            {has ? d(stats.forecastFinish) : "—"} {late != null ? late > 0 ? <Badge tone="bad">{t("{n}d late", { n: late })}</Badge> : <Badge tone="ok">{t("On time")}</Badge> : null}
           </b>
         </div>
         <div className="pp-foot-item">
           <small>{t("Progress")}</small>
           <b className="num-inline">
-            {(stats.actualPct * 100).toFixed(1)}% <span className="muted">/ {(stats.plannedPct * 100).toFixed(1)}% {t("planned")}</span>
+            {has ? (
+              <>
+                {(stats.actualPct * 100).toFixed(1)}% <span className="muted">/ {(stats.plannedPct * 100).toFixed(1)}% {t("planned")}</span>
+              </>
+            ) : (
+              "—"
+            )}
           </b>
         </div>
         <div className="pp-foot-item">
           <small>{t("Critical")}</small>
-          <b className="num-inline k-text-bad">{t("{n} activities", { n: critical })}</b>
+          <b className={`num-inline${critical ? " k-text-bad" : ""}`}>{has ? t("{n} activities", { n: critical }) : "—"}</b>
         </div>
         <div className="pp-foot-item">
           <small>{t("Baseline slip")}</small>
-          <b className={`num-inline ${slip > 0 ? "k-text-bad" : "k-text-ok"}`}>{slip > 0 ? t("+{n} days", { n: slip }) : t("None")}</b>
+          <b className={`num-inline ${slip > 0 ? "k-text-bad" : has ? "k-text-ok" : ""}`}>{!has ? "—" : slip > 0 ? t("+{n} days", { n: slip }) : t("None")}</b>
         </div>
         <div className="pp-foot-info">
           <Info size={13} />
-          {current ? t("Dates as in the {tool} file {file}", { tool: TOOL_NAME[current.tool], file: current.file }) : t("Dates as in the P6 file")}
+          {current ? t("Dates as in the {tool} file {file}", { tool: TOOL_NAME[current.tool], file: current.file }) : has ? t("Dates entered in this programme") : t("No programme yet")}
         </div>
       </footer>
+
+      <ActivityDialog open={adding} onClose={() => setAdding(false)} onSaved={() => go("activities")} />
 
       <ImportDialog
         open={importing}
@@ -262,7 +268,7 @@ export function PlanningPage() {
         }
       >
         <div className="k-stack">
-          <p>{t("Every activity's baseline start and finish become today's programme dates. The {n}-day slip against the old baseline will read as zero.", { n: Math.max(0, slip) })}</p>
+          <p>{slip > 0 ? t("Every activity's baseline start and finish become today's programme dates. The {n}-day slip against the old baseline will read as zero.", { n: slip }) : t("Every activity's baseline start and finish become today's programme dates.")}</p>
           <p className="k-note">{t("The old dates are kept as a saved point first.")}</p>
         </div>
       </Dialog>

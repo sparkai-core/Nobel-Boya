@@ -6,6 +6,7 @@ import {
   CalendarRange,
   ClipboardCheck,
   Construction,
+  FileInput,
   FileQuestion,
   Flag,
   GitBranch,
@@ -13,7 +14,6 @@ import {
   LayoutGrid,
   NotebookPen,
   Radio,
-  ScanEye,
   ShieldAlert,
   ShoppingCart,
   TrendingUp,
@@ -27,7 +27,7 @@ import { useOps } from "../../../ops/store";
 import { addDays, diffDays, PROJECT_START, TODAY } from "../../../ops/dates";
 import { poLate, projectHealth, R, sCurve, statusMeta, type Tone } from "../../../ops/select";
 import { lateness, milestoneRows, MS_TONE, programmeFilter, useSchedule } from "./model";
-import { ProjectRunStrip } from "./ProjectRunStrip";
+import { NoProgramme, ProjectRunStrip } from "./ProjectRunStrip";
 
 type Attention = { key: string; icon: LucideIcon; tone: "bad" | "warn" | "brand"; title: string; sub: string; tag?: string; step: { label: string; to: string }; open?: string; weight: number };
 
@@ -42,7 +42,8 @@ export function PmOverviewPage() {
   const s = useOps();
   const { activities, cp, stats, outlook, byId, milestones } = useSchedule();
   const health = useMemo(() => projectHealth(s), [s]);
-  const curve = useMemo(() => sCurve(activities), [activities]);
+  const has = activities.length > 0;
+  const curve = useMemo(() => sCurve(activities, 7, s.snapshots.map((p) => ({ date: p.dataDate, actual: p.actualPct }))), [activities, s.snapshots]);
   const [glance, setGlance] = useState<"job" | "finish">("job");
 
   // ------------------------------------------------------------ tasks by state
@@ -114,12 +115,12 @@ export function PmOverviewPage() {
     [milestones, activities],
   );
   const msLate = milestoneRows(milestones, activities).filter((r) => r.f.state === "LATE" || r.f.state === "AT_RISK").length;
+  const msOpen = milestones.length - milestoneRows(milestones, activities).filter((r) => r.f.done).length;
 
   // ------------------------------------------------------------ module tiles
   const openMrs = s.mrs.filter((m) => m.status === "SUBMITTED" || m.status === "SOURCING" || m.status === "DRAFT").length;
   const latePos = s.pos.filter(poLate).length;
-  const zoneExp = s.zones.length ? s.zones.reduce((a, z) => a + z.expectedPct, 0) / s.zones.length : 0;
-  const zoneAct = s.zones.length ? s.zones.reduce((a, z) => a + z.actualPct, 0) / s.zones.length : 0;
+  const followed = s.programmes.find((p) => p.current);
   const report = s.reports.find((r) => r.date === TODAY);
   const insOpen = s.inspections.filter((i) => i.status === "REQUESTED").length;
   const ncrOpen = s.inspections.filter((i) => i.kind === "NCR" && i.status === "OPEN").length;
@@ -127,13 +128,14 @@ export function PmOverviewPage() {
   const critCount = activities.filter((a) => cp.get(a.id)?.critical && a.status !== "COMPLETED").length;
 
   const gap = Math.round((stats.plannedPct - stats.actualPct) * 100);
+
   const top = queue[0];
 
   return (
     <div className="k-page pms">
       <ProjectRunStrip
         big
-        health={{ score: health.score, status: health.status, tone: health.tone }}
+        health={{ score: health.score, status: health.status, tone: health.tone, hasData: health.hasData }}
         actions={
           <>
             <button type="button" className="btn btn-primary" onClick={() => navigate(R.programme())}>
@@ -151,7 +153,11 @@ export function PmOverviewPage() {
       <div className="k-grid-main">
         <div className="k-stack">
           {/* ---------------- where we stand ---------------- */}
-          <Panel title={t("Where we stand")} icon={<TrendingUp size={15} />} actions={<Link to={R.health} className="k-link-btn">{t("Earned value")} <ArrowRight size={13} /></Link>}>
+          <Panel title={t("Where we stand")} icon={<TrendingUp size={15} />} actions={has ? <Link to={R.health} className="k-link-btn">{t("Earned value")} <ArrowRight size={13} /></Link> : undefined}>
+            {!has ? (
+              <NoProgramme />
+            ) : (
+            <>
             <div className="pms-stand">
               <div className="pms-stand-fig">
                 <span>{t("Planned by today")}</span>
@@ -173,6 +179,9 @@ export function PmOverviewPage() {
               </div>
             </div>
             <CurveWithTags points={curve} planned={stats.plannedPct} actual={stats.actualPct} />
+            {!s.snapshots.length ? <p className="muted small">{t("The actual line starts with your first progress update; only today's figure is shown until then.")}</p> : null}
+            </>
+            )}
           </Panel>
 
           {/* ---------------- needs attention ---------------- */}
@@ -230,13 +239,13 @@ export function PmOverviewPage() {
             icon={<Flag size={15} />}
             actions={<Segmented value={glance} onChange={setGlance} label={t("Time window")} options={[{ value: "job", label: t("Whole job") }, { value: "finish", label: t("Around the finish") }]} />}
           >
-            <Glance window={glance} outlook={outlook} />
+            {has ? <Glance window={glance} outlook={outlook} /> : <p className="muted small">{t("The finish dates appear here once the project has a programme.")}</p>}
             <ul className="pms-routes">
               <li>
                 <Link to={R.critical}>
                   <GitBranch size={15} />
                   <span>{t("Critical path")}</span>
-                  <small>{t("{n} activities decide the finish", { n: critCount })}</small>
+                  <small>{has ? t("{n} activities decide the finish", { n: critCount }) : t("No programme yet")}</small>
                   <ArrowRight size={14} />
                 </Link>
               </li>
@@ -244,7 +253,7 @@ export function PmOverviewPage() {
                 <Link to={R.milestones}>
                   <Flag size={15} />
                   <span>{t("Milestones")}</span>
-                  <small>{msLate ? t("{n} of {m} forecast late or at risk", { n: msLate, m: milestones.length }) : t("All {m} on track", { m: milestones.length })}</small>
+                  <small>{!milestones.length ? t("No milestones yet") : msLate ? t("{n} of {m} forecast late or at risk", { n: msLate, m: milestones.length }) : t("All {m} on track", { m: milestones.length })}</small>
                   <ArrowRight size={14} />
                 </Link>
               </li>
@@ -252,7 +261,7 @@ export function PmOverviewPage() {
                 <Link to={R.delays}>
                   <Ban size={15} />
                   <span>{t("Delays")}</span>
-                  <small>{t("{n} open · {d} days lost", { n: openDelays.length, d: openDelays.reduce((a, z) => a + z.daysLost, 0) })}</small>
+                  <small>{s.delays.length ? t("{n} open · {d} days lost", { n: openDelays.length, d: openDelays.reduce((a, z) => a + z.daysLost, 0) }) : t("No delays recorded")}</small>
                   <ArrowRight size={14} />
                 </Link>
               </li>
@@ -271,8 +280,12 @@ export function PmOverviewPage() {
         <div className="k-stack">
           {/* ---------------- health ---------------- */}
           <Panel title={t("Project health")} icon={<HeartPulse size={15} />} actions={<Link to={R.health} className="k-link-btn">{t("Health")} <ArrowRight size={13} /></Link>}>
+            {!health.hasData ? (
+              <p className="muted small">{t("Health is worked out from the project's own records once it has a programme.")}</p>
+            ) : (
             <div className="pms-health">
               <RingGauge value={health.score} size={118} tone={health.tone} label={x(health.status)} />
+              {!health.drivers.length ? <p className="muted small">{t("Nothing recorded is pulling the score up or down.")}</p> : null}
               <ul className="pms-drivers">
                 {health.drivers.slice(0, 3).map((dr, i) => (
                   <li key={i}>
@@ -287,11 +300,12 @@ export function PmOverviewPage() {
                 ))}
               </ul>
             </div>
+            )}
           </Panel>
 
           {/* ---------------- tasks by state ---------------- */}
           <Panel title={t("Tasks by state")} icon={<LayoutGrid size={15} />} count={activities.length} sub={lateCount ? t("One square per activity. Red outlines are running late.") : t("One square per activity.")}>
-            <Waffle groups={mix} onPick={(k) => navigate(programmeFilter(k))} />
+            {has ? <Waffle groups={mix} onPick={(k) => navigate(programmeFilter(k))} /> : <p className="muted small">{t("No activities yet.")}</p>}
             {lateCount ? (
               <Link to={programmeFilter("late")} className="pms-late-link">
                 <i aria-hidden="true" />
@@ -320,8 +334,15 @@ export function PmOverviewPage() {
                   </li>
                 ))}
               </ul>
-            ) : (
+            ) : milestones.length && !msOpen ? (
               <p className="k-panel-body muted">{t("Every milestone is done.")}</p>
+            ) : (
+              <div className="k-panel-body">
+                <p className="muted small">{t("No milestones yet.")}</p>
+                <Link to={`${R.milestones}?new=1`} className="k-link-btn">
+                  {t("Add a milestone")} <ArrowRight size={13} />
+                </Link>
+              </div>
             )}
           </Panel>
         </div>
@@ -330,7 +351,7 @@ export function PmOverviewPage() {
       {/* ---------------- module tiles ---------------- */}
       <section className="pms-tiles" aria-label={t("Other modules")}>
         <Tile to={R.proc} icon={ShoppingCart} title={t("Procurement")} value={openMrs} unit={t("open requests")} note={latePos ? t("{n} orders late", { n: latePos }) : t("No late orders")} tone={latePos ? "bad" : "ok"} />
-        <Tile to={R.progress} icon={ScanEye} title={t("Site progress")} value={Math.round(zoneAct)} unit={t("% done on site")} note={t("plan says {n}% across {m} zones", { n: Math.round(zoneExp), m: s.zones.length })} tone={zoneAct + 3 < zoneExp ? "warn" : "ok"} />
+        <Tile to={R.planning()} icon={FileInput} title={t("Planning")} value={activities.length} unit={t("activities")} note={followed ? t("Follows {name}", { name: followed.name }) : t("Nothing imported yet")} tone={followed ? "ok" : "muted"} />
         <Tile to={report ? R.report(report.id) : R.reports} icon={NotebookPen} title={t("Daily report today")} value={report ? report.entries.length : 0} unit={t("entries")} note={report ? `${report.labour.reduce((a, l) => a + l.count, 0)} ${t("on site")} · ${x(statusMeta("report", report.status).label)}` : t("Not started yet")} tone={report?.status === "DRAFT" ? "warn" : "ok"} />
         <Tile to={R.inspections} icon={ClipboardCheck} title={t("Inspections")} value={insOpen} unit={t("waiting")} note={ncrOpen ? t("{n} NCR open", { n: ncrOpen }) : t("No open NCRs")} tone={ncrOpen ? "bad" : "ok"} />
       </section>
@@ -389,17 +410,18 @@ function CurveWithTags({ points, planned, actual }: { points: ReturnType<typeof 
 /** Four lanes: contract target, baseline finish, current programme finish and forecast finish. */
 function Glance({ window, outlook }: { window: "job" | "finish"; outlook: ReturnType<typeof useSchedule>["outlook"] }) {
   const { t, d, lang } = useL();
-  const lastDate = [outlook.forecast, outlook.contract, outlook.current, outlook.baseline].sort().slice(-1)[0]!;
-  const firstDate = [outlook.forecast, outlook.contract, outlook.current, outlook.baseline].sort()[0]!;
+  const dates = [outlook.forecast, outlook.current, outlook.baseline, ...(outlook.contractKnown ? [outlook.contract] : [])].sort();
+  const lastDate = dates[dates.length - 1]!;
+  const firstDate = dates[0]!;
   const from = window === "job" ? PROJECT_START : addDays(firstDate, -40);
   const to = addDays(lastDate, window === "job" ? 25 : 20);
   const span = Math.max(1, diffDays(from, to));
   const pos = (date: string) => (diffDays(from, date) / span) * 100;
   const lanes = [
-    { key: "contract", label: t("Contract target"), date: outlook.contract, tone: "neutral" as Tone, filled: false },
+    ...(outlook.contractKnown ? [{ key: "contract", label: t("Contract target"), date: outlook.contract, tone: "neutral" as Tone, filled: false }] : []),
     { key: "baseline", label: t("Baseline finish"), date: outlook.baseline, tone: "muted" as Tone, filled: false },
     { key: "current", label: t("Current programme"), date: outlook.current, tone: "brand" as Tone, filled: true },
-    { key: "forecast", label: t("Forecast finish"), date: outlook.forecast, tone: outlook.forecast > outlook.contract ? ("bad" as Tone) : ("ok" as Tone), filled: true },
+    { key: "forecast", label: t("Forecast finish"), date: outlook.forecast, tone: outlook.contractKnown ? (outlook.forecast > outlook.contract ? ("bad" as Tone) : ("ok" as Tone)) : ("brand" as Tone), filled: true },
   ];
   const ticks: string[] = [];
   for (let m = `${from.slice(0, 7)}-01`; m <= to; ) {
@@ -443,7 +465,7 @@ function Glance({ window, outlook }: { window: "job" | "finish"; outlook: Return
         {todayIn ? (
           <span className="pms-glance-today">{t("Dashed line is today")}</span>
         ) : (
-          <span className="pms-glance-today">{t("Today is {n} days before this window", { n: diffDays(TODAY, from) })}</span>
+          <span className="pms-glance-today">{TODAY < from ? t("Today is {n} days before this window", { n: diffDays(TODAY, from) }) : t("Today is {n} days after this window", { n: diffDays(to, TODAY) })}</span>
         )}
         {outlook.pendingDays > 0 ? <span>{t("Forecast adds {n} days from site impacts still under review.", { n: outlook.pendingDays })}</span> : null}
       </p>

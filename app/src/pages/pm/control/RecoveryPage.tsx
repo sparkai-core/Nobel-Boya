@@ -1,13 +1,14 @@
 import { useMemo, useState } from "react";
-import { Award, BadgeCheck, Check, Coins, Gauge, PlayCircle, RotateCcw, Send, ShieldCheck, Sparkles, TrendingDown, X as XIcon } from "lucide-react";
-import { Badge, Dialog, Empty, Money, PageHero, Panel, StatusBadge, toast, useL } from "../../../components/kit";
+import { Link } from "react-router-dom";
+import { Award, BadgeCheck, CalendarRange, Check, Coins, Gauge, PlayCircle, Plus, RotateCcw, Send, ShieldCheck, Sparkles, Trash2, TrendingDown, X as XIcon } from "lucide-react";
+import { Badge, Dialog, Empty, Kebab, Money, PageHero, Panel, StatusBadge, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, PROJECT_FINISH, TODAY } from "../../../ops/dates";
 import { programmeStats, R, type Tone } from "../../../ops/select";
 import { fmtMoneyShort } from "../../../lib/format";
 import type { RecoveryScenario, Txt } from "../../../ops/types";
-import { PEOPLE } from "../../../ops/seed";
 import { finishAfterRecovery, isOpenDelay, signed, useCpm } from "./shared";
+import { ScenarioDialog, type ScenarioDraft } from "./ScenarioDialog";
 
 const RISK_ORDER = { low: 0, medium: 1, high: 2 } as const;
 const RISK_TONE: Record<RecoveryScenario["risk"], Tone> = { low: "ok", medium: "warn", high: "bad" };
@@ -16,7 +17,8 @@ const T = (en: string, az: string): Txt => ({ en, az });
 const live = (r: RecoveryScenario) => r.status !== "REJECTED" && r.status !== "APPLIED";
 const perDay = (r: RecoveryScenario) => r.cost / Math.max(1, r.daysRecovered);
 
-type Suggestion = Omit<RecoveryScenario, "id" | "status"> & { key: string; why: Txt };
+/** A way to win days back, read from the programme and the open delays. The cost is left to the user. */
+type Suggestion = Omit<RecoveryScenario, "id" | "status" | "cost"> & { key: string; why: Txt };
 
 export function RecoveryPage() {
   const { t, x, d } = useL();
@@ -25,9 +27,12 @@ export function RecoveryPage() {
   const delays = useOps((s) => s.delays);
   const subs = useOps((s) => s.subs);
   const recovery = useOps((s) => s.recovery);
-  const addScenario = useOps((s) => s.addScenario);
   const setScenarioStatus = useOps((s) => s.setScenarioStatus);
   const applyScenario = useOps((s) => s.applyScenario);
+  const removeItem = useOps((s) => s.removeItem);
+  const hasActs = activities.length > 0;
+  const contractSet = useOps((s) => !!s.setup.contractFinish);
+  const [draft, setDraft] = useState<ScenarioDraft | null>(null);
   const crit = useCpm();
 
   const stats = programmeStats(activities);
@@ -69,11 +74,10 @@ export function RecoveryPage() {
         key: "rfi",
         name: T(`Close ${ref} in a design workshop`, `${ref}-ü layihə görüşündə bağlamaq`),
         daysRecovered: days,
-        cost: 600,
         risk: "medium",
         summary: T(`Sit the designer and the fabricator together this week so ${ref} is answered in days, not weeks.`, `Layihəçi ilə istehsalçını bu həftə bir araya gətirmək ki, ${ref} həftələrlə yox, günlərlə cavablansın.`),
         assumptions: [T("The designer agrees to a workshop within 3 days", "Layihəçi 3 gün ərzində görüşə razıdır"), T("The fabricator can start the day the detail is issued", "İstehsalçı detal verildiyi gün başlaya bilir")],
-        actions: [{ title: T(`Book the ${ref} workshop`, `${ref} görüşünü təyin etmək`), owner: PEOPLE.pm, due: addDays(TODAY, 3), days }],
+        actions: [{ title: T(`Book the ${ref} workshop`, `${ref} görüşünü təyin etmək`), owner: "", due: addDays(TODAY, 3), days }],
         why: T(`${rfiDelay.ref} still pushes the programme by ${rfiDelay.daysLost - rfiDelay.floatAbsorbed} days.`, `${rfiDelay.ref} qrafiki hələ ${rfiDelay.daysLost - rfiDelay.floatAbsorbed} gün itələyir.`),
       });
     }
@@ -81,16 +85,14 @@ export function RecoveryPage() {
     const crewTarget = critical.find((a) => a.status !== "BLOCKED" && dur(a.id) >= 20 && dur(a.id) <= 60);
     if (crewTarget) {
       const days = Math.min(10, Math.round(dur(crewTarget.id) * 0.2));
-      const cost = Math.round((crewTarget.crew * dur(crewTarget.id) * 0.5 * 60) / 100) * 100;
       out.push({
         key: "crew",
         name: T(`Second crew on ${crewTarget.code}`, `${crewTarget.code} üzrə ikinci briqada`),
         daysRecovered: days,
-        cost,
         risk: "medium",
         summary: T(`Split ${crewTarget.name.en.toLowerCase()} into two work fronts with a second ${crewTarget.crew}-person crew.`, `${crewTarget.name.az} işini ikinci ${crewTarget.crew} nəfərlik briqada ilə iki iş cəbhəsinə bölmək.`),
         assumptions: [T(`${owner(crewTarget.owner)} can field a second crew`, `${owner(crewTarget.owner)} ikinci briqada çıxara bilir`), T("Crane and access allow two fronts", "Kran və giriş iki cəbhəyə imkan verir")],
-        actions: [{ title: T(`Agree the second crew with ${owner(crewTarget.owner)}`, `${owner(crewTarget.owner)} ilə ikinci briqadanı razılaşdırmaq`), owner: PEOPLE.pm, due: addDays(TODAY, 5), days }],
+        actions: [{ title: T(`Agree the second crew with ${owner(crewTarget.owner)}`, `${owner(crewTarget.owner)} ilə ikinci briqadanı razılaşdırmaq`), owner: "", due: addDays(TODAY, 5), days }],
         why: T(`${crewTarget.code} is on the critical path and runs ${dur(crewTarget.id)} days.`, `${crewTarget.code} kritik yoldadır və ${dur(crewTarget.id)} gün davam edir.`),
       });
     }
@@ -98,16 +100,14 @@ export function RecoveryPage() {
     const longest = [...critical].sort((a, b) => dur(b.id) - dur(a.id))[0];
     if (longest) {
       const days = Math.floor(Math.min(dur(longest.id), 70) / 7);
-      const cost = Math.round((days * longest.crew * 1.5 * 60) / 100) * 100;
       out.push({
         key: "sunday",
         name: T(`Sunday working on ${longest.code}`, `${longest.code} üzrə bazar günləri iş`),
         daysRecovered: days,
-        cost,
         risk: "low",
         summary: T(`Work Sundays for ten weeks on the longest critical activity, ${longest.name.en.toLowerCase()}.`, `Ən uzun kritik iş olan ${longest.name.az} üzrə on həftə bazar günləri işləmək.`),
         assumptions: [T("Overtime paid at 1.5 times the day rate", "Əlavə iş gündəlik tarifin 1,5 misli ödənilir"), T("Client allows Sunday working on site", "Sifarişçi bazar günləri işə icazə verir")],
-        actions: [{ title: T("Add Sundays to the working calendar", "Bazar günlərini iş təqviminə əlavə etmək"), owner: PEOPLE.planner, due: addDays(TODAY, 7), days }],
+        actions: [{ title: T("Add Sundays to the working calendar", "Bazar günlərini iş təqviminə əlavə etmək"), owner: "", due: addDays(TODAY, 7), days }],
         why: T(`${longest.code} is the longest critical activity (${dur(longest.id)} days).`, `${longest.code} ən uzun kritik işdir (${dur(longest.id)} gün).`),
       });
     }
@@ -122,11 +122,10 @@ export function RecoveryPage() {
         key: "overlap",
         name: T(`Overlap ${a.code} and ${b.code}`, `${a.code} və ${b.code} işlərini üst-üstə salmaq`),
         daysRecovered: days,
-        cost: 1_800,
         risk: "high",
         summary: T(`Start ${b.code} on the finished bays while ${a.code} completes the rest.`, `${a.code} qalan hissəni bitirərkən ${b.code}-ni hazır aşırımlarda başlamaq.`),
         assumptions: [T("The work can be split into bays", "İşi aşırımlara bölmək mümkündür"), T("Both crews can share the access safely", "Hər iki briqada girişdən təhlükəsiz istifadə edə bilir")],
-        actions: [{ title: T(`Change ${a.code} → ${b.code} to start-to-start`, `${a.code} → ${b.code} əlaqəsini başlanğıc–başlanğıca dəyişmək`), owner: PEOPLE.planner, due: addDays(TODAY, 4), days }],
+        actions: [{ title: T(`Change ${a.code} → ${b.code} to start-to-start`, `${a.code} → ${b.code} əlaqəsini başlanğıc–başlanğıca dəyişmək`), owner: "", due: addDays(TODAY, 4), days }],
         why: T(`${a.code} → ${b.code} is a finish-to-start link on the critical path.`, `${a.code} → ${b.code} kritik yolda bitmə–başlanğıc əlaqəsidir.`),
       });
     }
@@ -134,13 +133,18 @@ export function RecoveryPage() {
   }, [activities, links, delays, subs, crit]);
 
   const created = (sg: Suggestion) => recovery.some((r) => r.name.en === sg.name.en);
-  const createSuggestion = (sg: Suggestion) => {
-    const { key: _k, why: _w, ...rest } = sg;
-    void _k;
-    void _w;
-    const id = addScenario(rest);
-    setPlan((p) => new Set(p).add(id));
-    toast(t("{id} created and calculated: {n} days back", { id, n: sg.daysRecovered }));
+  const pickSuggestion = (sg: Suggestion) => {
+    const a = sg.actions[0];
+    setDraft({ name: sg.name, daysRecovered: sg.daysRecovered, risk: sg.risk, summary: sg.summary, assumptions: sg.assumptions, action: a?.title, due: a?.due });
+  };
+  const remove = (r: RecoveryScenario) => {
+    removeItem("recovery", r.id);
+    setPlan((p) => {
+      const n = new Set(p);
+      n.delete(r.id);
+      return n;
+    });
+    toast(t("{id} deleted", { id: r.id }), "muted");
   };
 
   // ---------------------------------------------------------------- comparison badges
@@ -207,8 +211,31 @@ export function RecoveryPage() {
         subtitle={t("How to win back the days the programme has lost: what each option costs, what it risks and how far it closes the gap to the contract date.")}
         flow={["Find options", "Calculate", "Send for approval", "Approve", "Apply to the programme"]}
         art="recovery"
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => setDraft({})}>
+            <Plus size={15} />
+            {t("New scenario")}
+          </button>
+        }
       />
 
+      {!hasActs ? (
+        <Panel>
+          <Empty
+            icon={<CalendarRange size={20} />}
+            title={t("No programme yet")}
+            action={
+              <Link to={R.programme()} className="btn btn-primary">
+                {t("Open the programme")}
+              </Link>
+            }
+          >
+            {t("Recovery works on the programme: the gap to the contract date and the critical path. Add activities or import a P6 / MS Project file first.")}
+          </Empty>
+        </Panel>
+      ) : null}
+
+      {hasActs ? (
       <Panel
         title={t("Recovery ladder")}
         icon={<TrendingDown size={15} />}
@@ -220,6 +247,9 @@ export function RecoveryPage() {
           </span>
         }
       >
+        {!contractSet ? (
+          <p className="k-note">{t("No contract finish date is set for this project, so the gap is measured to the latest activity finish.")}</p>
+        ) : null}
         {gap === 0 && !steps.length ? (
           <div className="k-callout k-tone-ok">
             <BadgeCheck size={18} />
@@ -281,8 +311,10 @@ export function RecoveryPage() {
           <span className="muted small">{landing > 0 ? t("Still {n} days late after the plan.", { n: landing }) : landing < 0 ? t("{n} days spare against the contract.", { n: -landing }) : t("Lands exactly on the contract date.")}</span>
         </div>
       </Panel>
+      ) : null}
 
-      <Panel title={t("Ways to win days back")} icon={<Sparkles size={15} />} sub={t("Suggested from the critical path, the open delays and the crews on the job.")}>
+      {hasActs ? (
+      <Panel title={t("Ways to win days back")} icon={<Sparkles size={15} />} sub={t("Suggested from the critical path and the open delays. Check the days, enter the cost, then create the scenario.")}>
         {suggestions.length ? (
           <div className="pmc-sugs">
             {suggestions.map((sg, i) => {
@@ -301,7 +333,7 @@ export function RecoveryPage() {
                     </span>
                     <span>
                       <small>{t("Cost")}</small>
-                      <b className="num-inline">{fmtMoneyShort(sg.cost)}</b>
+                      <b className="num-inline muted">{t("you enter it")}</b>
                     </span>
                     <span>
                       <small>{t("Risk")}</small>
@@ -314,9 +346,9 @@ export function RecoveryPage() {
                       <li key={j}>{x(a)}</li>
                     ))}
                   </ul>
-                  <button type="button" className={done ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"} disabled={done} onClick={() => createSuggestion(sg)}>
+                  <button type="button" className={done ? "btn btn-ghost btn-sm" : "btn btn-primary btn-sm"} disabled={done} onClick={() => pickSuggestion(sg)}>
                     {done ? <Check size={14} /> : <PlayCircle size={14} />}
-                    {done ? t("Created") : t("Create and calculate")}
+                    {done ? t("Created") : t("Use this")}
                   </button>
                 </article>
               );
@@ -326,6 +358,7 @@ export function RecoveryPage() {
           <Empty title={t("No suggestions right now")}>{t("Nothing on the critical path is open to recovery.")}</Empty>
         )}
       </Panel>
+      ) : null}
 
       <Panel title={t("What-if scenarios side by side")} icon={<Gauge size={15} />} count={recovery.length} pad={false}>
         {recovery.length ? (
@@ -343,7 +376,10 @@ export function RecoveryPage() {
                           </span>
                         ))}
                       </div>
-                      <span className="k-ref">{r.id}</span>
+                      <span className="k-row" style={{ gap: 6, justifyContent: "space-between" }}>
+                        <span className="k-ref">{r.id}</span>
+                        {r.status !== "APPLIED" ? <Kebab items={[{ label: t("Delete"), icon: <Trash2 size={14} />, danger: true, onClick: () => remove(r) }]} /> : null}
+                      </span>
                       <strong>{x(r.name)}</strong>
                       <span className="k-row" style={{ gap: 6 }}>
                         <StatusBadge kind="scenario" status={r.status} />
@@ -422,7 +458,7 @@ export function RecoveryPage() {
                           <li key={i}>
                             <span>{x(a.title)}</span>
                             <small>
-                              {a.owner} · {d(a.due, false)}
+                              {a.owner || "—"} · {d(a.due, false)}
                             </small>
                           </li>
                         ))}
@@ -471,10 +507,22 @@ export function RecoveryPage() {
           </div>
         ) : (
           <div className="k-panel-body">
-            <Empty title={t("No scenarios yet")}>{t("Create one from the suggestions above.")}</Empty>
+            <Empty
+              title={t("No scenarios yet")}
+              action={
+                <button type="button" className="btn btn-primary btn-sm" onClick={() => setDraft({})}>
+                  <Plus size={14} />
+                  {t("New scenario")}
+                </button>
+              }
+            >
+              {t("Create one by hand, or from a suggestion above.")}
+            </Empty>
           </div>
         )}
       </Panel>
+
+      <ScenarioDialog open={!!draft} onClose={() => setDraft(null)} initial={draft ?? undefined} onSaved={(id) => setPlan((p) => new Set(p).add(id))} />
 
       <Dialog
         open={!!applying}

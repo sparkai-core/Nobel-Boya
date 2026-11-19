@@ -150,7 +150,7 @@ export function CommandPalette() {
     return [
       ...pages,
       { key: "p:vendor", scope: "pages", group: t("Pages"), icon: ExternalLink, label: t("Vendor portal"), sub: t("Opens without login"), to: "#/vendor", external: true },
-      { key: "p:projects", scope: "pages", group: t("Pages"), icon: Building2, label: t("Projects"), sub: t("Portfolio"), to: "/projects" },
+      { key: "p:projects", scope: "pages", group: t("Pages"), icon: Building2, label: t("Projects"), sub: t("Project list"), to: "/projects" },
       ...s.mrs.map<Hit>((m) => ({ key: m.id, scope: "proc", group: t("Material requests"), icon: ClipboardList, ref: m.ref, label: x(m.title), sub: m.requestedBy, status: st("mr", m.status), to: R.request(m.id) })),
       ...s.rfqs.map<Hit>((r) => ({ key: r.id, scope: "proc", group: t("RFQs"), icon: Send, ref: r.ref, label: x(r.title), sub: t("{n} vendors", { n: r.invitations.length }), status: st("rfq", r.status), to: R.rfq(r.id) })),
       ...s.quotes.map<Hit>((q2) => ({ key: q2.id, scope: "proc", group: t("Quotations"), icon: FileStack, ref: q2.id, label: vendor(q2.vendorId), sub: q2.ref, status: st("quote", q2.status), to: R.quote(q2.id) })),
@@ -159,7 +159,7 @@ export function CommandPalette() {
       ...s.grns.map<Hit>((g) => ({ key: g.id, scope: "proc", group: t("Goods receipt"), icon: Truck, ref: g.ref, label: vendor(g.vendorId), sub: g.poId, status: st("grn", g.status), to: R.receipt(g.id) })),
       ...s.invoices.map<Hit>((i) => ({ key: i.id, scope: "proc", group: t("Supplier invoices"), icon: Receipt, ref: i.id, label: `${i.ref} · ${vendor(i.vendorId)}`, sub: i.poId, to: to(`procurement/invoices/${i.id}`) })),
       ...s.payments.map<Hit>((p) => ({ key: p.id, scope: "proc", group: t("Payments"), icon: Wallet, ref: p.ref, label: vendor(p.vendorId), sub: p.poId, status: st("payment", p.status), to: R.payment(p.id) })),
-      ...s.vendors.map<Hit>((v) => ({ key: v.id, scope: "vendors", group: t("Vendors"), icon: Building2, ref: v.id, label: v.name, sub: `${tradeName(v.trade, lang)} · ${v.city} · ${v.overall.toFixed(1)}/10`, keywords: [v.trade, ...v.trades].join(" "), status: st("vendor", v.status), to: R.vendor(v.id) })),
+      ...s.vendors.map<Hit>((v) => ({ key: v.id, scope: "vendors", group: t("Vendors"), icon: Building2, ref: v.id, label: v.name, sub: [tradeName(v.trade, lang), v.city].filter(Boolean).join(" · "), keywords: [v.trade, ...v.trades].join(" "), status: st("vendor", v.status), to: R.vendor(v.id) })),
       ...s.activities.map<Hit>((a) => ({ key: a.id, scope: "pm", group: t("Activities"), icon: ChartGantt, ref: a.code, label: x(a.name), sub: `${a.pct}%`, status: st("activity", a.status), to: R.programme(a.id) })),
       ...s.rfis.map<Hit>((r) => ({ key: r.id, scope: "pm", group: t("RFIs"), icon: FileQuestion, ref: r.ref, label: x(r.subject), sub: r.raisedBy, status: st("rfi", r.status), to: R.rfi(r.id) })),
       ...s.changes.map<Hit>((c) => ({ key: c.id, scope: "pm", group: t("Changes"), icon: GitFork, ref: c.ref, label: x(c.title), status: st("change", c.status), to: R.change(c.id) })),
@@ -217,7 +217,8 @@ export function CommandPalette() {
     .map((l) => index.find((h) => h.scope === "pages" && h.label === t(l)))
     .filter((h): h is Hit => !!h)
     .slice(0, 6);
-  const recentHits: Hit[] = recent.map((r) => ({ ...r, scope: "pages", icon: Clock }));
+  // Only recent items that still exist (a record may have been cleared, a page hidden).
+  const recentHits: Hit[] = recent.filter((r) => index.some((h) => h.key === r.key && h.to === r.to)).map((r) => ({ ...r, scope: "pages", icon: Clock }));
   const flat = words.length ? hits : [...recentHits, ...actions, ...popular];
 
   useEffect(() => setSel(0), [q, scope]);
@@ -339,7 +340,7 @@ export function CommandPalette() {
                   <Search size={20} />
                 </span>
                 <strong>{t("No match for “{q}”", { q: q.trim() })}</strong>
-                <p>{t("Try a reference like PO-0002, an activity code like WH-150, or a vendor name.")}</p>
+                <p>{t("Try a record number such as an order or request reference, an activity code, or a vendor name.")}</p>
               </div>
             )
           ) : (

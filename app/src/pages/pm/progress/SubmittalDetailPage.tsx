@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { Check, CheckCheck, FileImage, FileSearch, Link2, Maximize2, MessageSquare, Package, Plane, RotateCcw, Send, ShoppingCart, Undo2, X } from "lucide-react";
+import { Check, CheckCheck, FileImage, FileSearch, Link2, Maximize2, MessageSquare, Package, Plane, RotateCcw, Send, ShoppingCart, Trash2, Undo2, X } from "lucide-react";
 import { Avatar, Breadcrumbs, DetailHeader, Empty, Kebab, KeyFigure, LifecycleStrip, Meter, NextBar, Panel, StatusBadge, toast, useL, type LifeStep } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { same, TODAY } from "../../../ops/dates";
@@ -32,6 +32,7 @@ export function SubmittalDetailPage() {
   const rfqs = useOps((s) => s.rfqs);
   const patchItem = useOps((s) => s.patchItem);
   const pushFeed = useOps((s) => s.pushFeed);
+  const removeItem = useOps((s) => s.removeItem);
   const [comment, setComment] = useState("");
   const [sheet, setSheet] = useState<string | null>(null);
 
@@ -69,7 +70,7 @@ export function SubmittalDetailPage() {
     setComment("");
     toast(text ?? t("{id}: {status}", { id: sub.ref, status: t(SUB_META[status].label) }), status === "REJECTED" ? "bad" : status === "REVISE" ? "warn" : "ok");
   };
-  const raiseMr = () => navigate(`${R.newRequest}?activity=${sub.activityId ?? ""}`);
+  const raiseMr = () => navigate(sub.activityId ? `${R.newRequest}?activity=${sub.activityId}` : R.newRequest);
 
   const steps: LifeStep[] = [
     { label: t("Prepared"), note: t("Rev {n}", { n: sub.rev }), state: sub.status === "DRAFT" ? "current" : "done" },
@@ -127,6 +128,20 @@ export function SubmittalDetailPage() {
             <Send size={14} />
             {t("Submit for review")}
           </button>
+          {sub.rev === 0 ? (
+            <button
+              type="button"
+              className="btn btn-ghost"
+              onClick={() => {
+                removeItem("submittals", sub.id);
+                toast(t("{id} deleted", { id: sub.ref }), "muted");
+                navigate(RP.submittals);
+              }}
+            >
+              <Trash2 size={14} />
+              {t("Delete draft")}
+            </button>
+          ) : null}
         </NextBar>
       ) : sub.status === "SUBMITTED" ? (
         <NextBar text={t("With {who}. Start the review, or record the decision below.", { who: sub.reviewer })}>
@@ -158,7 +173,7 @@ export function SubmittalDetailPage() {
           </button>
         </NextBar>
       ) : (
-        <NextBar tone="ok" text={mr ? t("Approved — ready for procurement. {mr} is raised; send it out for quotes.", { mr: mr.ref }) : t("Approved — ready for procurement. Raise the material request for {code}.", { code: act?.code ?? "" })}>
+        <NextBar tone="ok" text={mr ? t("Approved — ready for procurement. {mr} is raised; send it out for quotes.", { mr: mr.ref }) : act ? t("Approved — ready for procurement. Raise the material request for {code}.", { code: act.code }) : t("Approved — ready for procurement. Raise the material request.")}>
           {mr ? (
             <>
               {rfq ? (
@@ -176,7 +191,7 @@ export function SubmittalDetailPage() {
               </Link>
             </>
           ) : (
-            <button type="button" className="btn btn-primary" onClick={raiseMr} disabled={!sub.activityId}>
+            <button type="button" className="btn btn-primary" onClick={raiseMr}>
               <ShoppingCart size={14} />
               {t("Create MR")}
             </button>
@@ -276,7 +291,7 @@ export function SubmittalDetailPage() {
                   <small>{t("needed by {date}", { date: d(mr.neededBy) })}</small>
                 </Link>
               ) : approved ? (
-                <button type="button" className="pg-linkcard pg-linkcard-add" onClick={raiseMr} disabled={!sub.activityId}>
+                <button type="button" className="pg-linkcard pg-linkcard-add" onClick={raiseMr}>
                   <ShoppingCart size={15} />
                   <strong>{t("Create MR")}</strong>
                   <small>{t("The request is linked here once it exists.")}</small>

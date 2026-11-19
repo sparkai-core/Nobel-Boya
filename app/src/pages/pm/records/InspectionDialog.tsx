@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { Plus, X } from "lucide-react";
 import { Dialog, Field, toast, useL } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
-import { useOps } from "../../../ops/store";
-import { PEOPLE } from "../../../ops/seed";
+import { useOps, me } from "../../../ops/store";
 import { addDays, same, TODAY } from "../../../ops/dates";
 import type { Inspection, InspectionKind, Txt } from "../../../ops/types";
 
@@ -15,8 +14,6 @@ export const TEMPLATES: Record<InspectionKind, Txt[]> = {
   MIR: [T("Delivery note matches the order", "Qaimə sifarişə uyğundur"), T("Certificates supplied", "Sertifikatlar təqdim edilib"), T("No visible damage", "Görünən zədə yoxdur"), T("Stored as specified", "Tələbə uyğun saxlanılır")],
   NCR: [T("Cause identified", "Səbəb müəyyən edilib"), T("Corrective action agreed", "Düzəldici tədbir razılaşdırılıb"), T("Re-inspection booked", "Təkrar yoxlama təyin edilib")],
 };
-
-export const INSPECTORS = [PEOPLE.engineer, PEOPLE.qa, PEOPLE.architect, PEOPLE.site];
 
 export type InspectionDraft = Partial<Pick<Inspection, "kind" | "title" | "activityId" | "poId" | "location" | "checklist" | "notes" | "photos" | "inspector">>;
 
@@ -32,9 +29,9 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
   const [activityId, setActivityId] = useState("");
   const [poId, setPoId] = useState("");
   const [location, setLocation] = useState("");
-  const [inspector, setInspector] = useState(PEOPLE.engineer);
+  const [inspector, setInspector] = useState("");
   const [when, setWhen] = useState(addDays(TODAY, 1));
-  const [items, setItems] = useState<Txt[]>(TEMPLATES.WIR.slice(0, 3));
+  const [items, setItems] = useState<Txt[]>([]);
   const [newItem, setNewItem] = useState("");
   const [notes, setNotes] = useState("");
   const [tried, setTried] = useState(false);
@@ -47,9 +44,9 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
     setActivityId(initial?.activityId ?? "");
     setPoId(initial?.poId ?? "");
     setLocation(initial?.location ? x(initial.location) : "");
-    setInspector(initial?.inspector ?? (k === "NCR" || k === "MIR" ? PEOPLE.qa : PEOPLE.engineer));
+    setInspector(initial?.inspector ?? me());
     setWhen(k === "NCR" ? TODAY : addDays(TODAY, 1));
-    setItems(initial?.checklist?.map((c) => c.item) ?? TEMPLATES[k].slice(0, 3));
+    setItems(initial?.checklist?.map((c) => c.item) ?? []);
     setNotes(initial?.notes ? x(initial.notes) : "");
     setTried(false);
     // Reset the form each time the dialog opens.
@@ -58,8 +55,7 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
 
   const switchKind = (k: InspectionKind) => {
     setKind(k);
-    setItems(TEMPLATES[k].slice(0, 3));
-    setInspector(k === "WIR" ? PEOPLE.engineer : PEOPLE.qa);
+    setItems((l) => l.filter((it) => !Object.values(TEMPLATES).flat().some((tp) => tp.en === it.en)));
     setWhen(k === "NCR" ? TODAY : addDays(TODAY, 1));
   };
 
@@ -71,7 +67,7 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
 
   const submit = () => {
     setTried(true);
-    if (!title.trim() || !location.trim() || !items.length) return;
+    if (!title.trim() || !location.trim() || !items.length || !inspector.trim()) return;
     const fromNok = initial?.checklist;
     const id = addInspection({
       kind,
@@ -80,7 +76,7 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
       poId: poId || null,
       location: initial?.location && x(initial.location) === location ? initial.location : same(location.trim()),
       requestedAt: when,
-      inspector,
+      inspector: inspector.trim(),
       checklist: items.map((item) => ({ item, result: fromNok?.find((c) => c.item === item)?.result ?? "NA" })),
       notes: notes.trim() ? (initial?.notes && x(initial.notes) === notes ? initial.notes : same(notes.trim())) : null,
       photos: initial?.photos ?? [],
@@ -114,7 +110,7 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
           <Segmented<InspectionKind> label={t("Type")} value={kind} onChange={switchKind} options={(["WIR", "MIR", "NCR"] as InspectionKind[]).map((k) => ({ value: k, label: `${k} · ${t(KIND_LABEL[k])}` }))} />
         </Field>
         <Field label={t("Title")} wide error={tried && !title.trim() ? t("Say what is being inspected.") : undefined}>
-          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "MIR" ? t("e.g. Roof sheeting delivery, colour and gauge") : t("e.g. Reinforcement to ground beams MR-2")} />
+          <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} placeholder={kind === "MIR" ? t("What material is being checked") : t("What work is being inspected")} />
         </Field>
         <Field label={t("Activity")}>
           <select className="input select" value={activityId} onChange={(e) => setActivityId(e.target.value)}>
@@ -139,22 +135,16 @@ export function InspectionDialog({ open, onClose, onCreated, initial }: { open: 
           </Field>
         ) : (
           <Field label={t("Location")} error={tried && !location.trim() ? t("Give a location.") : undefined}>
-            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("e.g. Grid C/1–C/9")} />
+            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("Where on site")} />
           </Field>
         )}
         {kind === "MIR" ? (
           <Field label={t("Location")} error={tried && !location.trim() ? t("Give a location.") : undefined}>
-            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("e.g. Main store")} />
+            <input className="input" value={location} onChange={(e) => setLocation(e.target.value)} placeholder={t("Where the material is")} />
           </Field>
         ) : null}
-        <Field label={t("Inspector")}>
-          <select className="input select" value={inspector} onChange={(e) => setInspector(e.target.value)}>
-            {INSPECTORS.map((p) => (
-              <option key={p} value={p}>
-                {p}
-              </option>
-            ))}
-          </select>
+        <Field label={t("Inspector")} error={tried && !inspector.trim() ? t("Enter who inspects.") : undefined}>
+          <input className="input" value={inspector} onChange={(e) => setInspector(e.target.value)} />
         </Field>
         <Field label={kind === "NCR" ? t("Raised on") : t("Inspection date")}>
           <input className="input" type="date" value={when} onChange={(e) => setWhen(e.target.value || when)} />

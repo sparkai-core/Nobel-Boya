@@ -3,14 +3,14 @@ import { useNavigate } from "react-router-dom";
 import { BarChart3, CalendarRange, Clock3, Download, Filter, Gauge, LayoutGrid, PiggyBank, ShoppingCart, Timer, Truck, Wallet } from "lucide-react";
 import { Badge, Field, FilterChips, Money, PageHero, Panel, Register, StackedColumns, StatTiles, StatusBadge, toast, useL, type Column } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { diffDays, TODAY } from "../../../ops/dates";
+import { diffDays, minDate, PROJECT_START, TODAY } from "../../../ops/dates";
+import { pkgOverrides, usePkgPlan } from "../../../ops/ext/proc-client";
 import { budgetOf, poNet, poTotal, R, TRADES, tradeName } from "../../../ops/select";
 import type { OpsData, PurchaseOrder, Trade } from "../../../ops/types";
 import { fmtMoney, fmtMoneyShort } from "../../../lib/format";
-import { buildPackages, downloadText, expectedOf, monthLabel, monthOf, monthsFrom } from "./shared";
+import { buildPackages, downloadText, expectedOf, isDated, monthLabel, monthOf, monthsFrom, vendorOnTime } from "./shared";
 import { Bullets, Funnel, Scatter, Treemap, type FunnelStage, type ScatterPt } from "./AnalyticsCharts";
 
-const FROM = "2026-10-01";
 
 const median = (xs: number[]) => {
   if (!xs.length) return null;
@@ -32,6 +32,9 @@ export function AnalyticsPage() {
   const { t, d, lang } = useL();
   const navigate = useNavigate();
   const s = useOps();
+  const plan = usePkgPlan((p) => p.plan);
+  // The range starts at the project start or the first order, whichever is earlier.
+  const FROM = minDate(PROJECT_START, ...s.pos.map((p) => p.issuedAt), TODAY);
   const [trade, setTrade] = useState<Trade | null>(null);
   const [from, setFrom] = useState(FROM);
   const [to, setTo] = useState(TODAY);
@@ -60,7 +63,7 @@ export function AnalyticsPage() {
       }
       if ((r.po.status === "ISSUED" || r.po.status === "PART_RECEIVED") && expectedOf(s, r.po) < TODAY) total += 1;
     }
-    return { on, total, share: total ? on / total : 1 };
+    return { on, total, share: total ? on / total : null };
   }, [rows, s]);
 
   const kpi = useMemo(() => {
@@ -107,7 +110,7 @@ export function AnalyticsPage() {
   }, [rows, s, trade, lang]);
 
   const months = useMemo(() => {
-    const pkgs = buildPackages(s).filter((p) => p.status !== "ORDERED" && p.status !== "DELIVERED" && (!trade || p.trade === trade));
+    const pkgs = buildPackages(s, pkgOverrides(plan)).filter(isDated).filter((p) => p.status !== "ORDERED" && p.status !== "DELIVERED" && (!trade || p.trade === trade));
     const lastPlan = pkgs.reduce((m, p) => (p.latestPo > m ? p.latestPo : m), TODAY);
     const list = monthsFrom(from, lastPlan > to ? lastPlan : to);
     return list.map((mm) => {
@@ -117,7 +120,7 @@ export function AnalyticsPage() {
       const planned = pkgs.filter((p) => monthOf(p.latestPo < TODAY ? TODAY : p.latestPo) === mm).reduce((a, p) => a + p.value * 1.18, 0);
       return { key: mm, label: monthLabel(mm, lang, mm.endsWith("-01") || mm === list[0]), values: [paid, committed - paid, planned] };
     });
-  }, [rows, s, trade, from, to, lang]);
+  }, [rows, s, plan, trade, from, to, lang]);
 
   const funnel = useMemo<FunnelStage[]>(() => {
     const mrs = s.mrs.filter((m) => m.status !== "CANCELLED" && m.createdAt >= from && m.createdAt <= to && (!trade || m.trade === trade));
@@ -188,11 +191,15 @@ export function AnalyticsPage() {
       q.lines.forEach((l, i) => add(q.vendorId, l.qty * l.unitPrice, l.qty * rate(rfq.lines[i]?.material ?? null)));
     }
     for (const p of s.pos) if (p.status !== "CANCELLED" && !p.quoteId) p.lines.forEach((l) => add(p.vendorId, l.qty * l.rate, l.qty * rate(l.material)));
+    const ot = vendorOnTime(s);
     return [...acc.entries()]
       .map(([id, a]) => {
         const v = s.vendors.find((x2) => x2.id === id);
         const spend = rows.filter((r) => r.po.vendorId === id).reduce((b, r) => b + r.committed, 0);
-        return v ? { key: id, label: v.name, price: a.paid / a.boq - 1, reliability: v.scores.delivery, spend, trade: v.trade, trades: v.trades } : null;
+        // Reliability: the share delivered on time when there are deliveries, else the buyer's own score.
+        const rec = ot.get(id);
+        const reliability = rec && rec.total ? Math.round((rec.onTime / rec.total) * 100) : v && v.overall > 0 ? v.scores.delivery : null;
+        return v && a.boq > 0 && reliability != null ? { key: id, label: v.name, price: a.paid / a.boq - 1, reliability, spend, trade: v.trade, trades: v.trades } : null;
       })
       .filter((p): p is ScatterPt & { trade: Trade; trades: Trade[] } => !!p && (!trade || p.trades.includes(trade)));
   }, [s, rows, trade]);
@@ -201,7 +208,7 @@ export function AnalyticsPage() {
     const head = ["PO", "Vendor", "Trade", "Issued", "Status", "Committed AZN", "BOQ value AZN", "Saving AZN", "Paid AZN"];
     const q = (v: string) => `"${v.replace(/"/g, '""')}"`;
     const body = rows.map((r) => [r.po.ref, q(r.vendor), q(r.trade ? tradeName(r.trade, lang) : ""), r.po.issuedAt, r.po.status, r.committed.toFixed(2), r.boq.toFixed(2), r.saving.toFixed(2), r.paid.toFixed(2)].join(","));
-    downloadText(`qobu-spend-${from}-to-${to}.csv`, [head.join(","), ...body].join("\n"));
+    downloadText(`spend-${from}-to-${to}.csv`, [head.join(","), ...body].join("\n"));
     toast(t("Exported {n} orders to CSV.", { n: rows.length }), "ok");
   };
 
@@ -268,10 +275,14 @@ export function AnalyticsPage() {
       <StatTiles
         items={[
           { label: t("Committed"), value: <Money value={kpi.committed} short />, sub: t("incl. VAT, {n} orders", { n: rows.length }), tone: "brand", icon: <ShoppingCart size={14} /> },
-          { label: t("Paid"), value: <Money value={kpi.paid} short />, sub: t("{p} of committed", { p: `${Math.round((kpi.paid / Math.max(1, kpi.committed)) * 100)}%` }), tone: "ok", icon: <Wallet size={14} /> },
-          { label: t("Savings vs BOQ"), value: <Money value={kpi.saving} short />, sub: kpi.saving >= 0 ? t("{p}% under the BOQ rates", { p: (savingPct * 100).toFixed(1) }) : t("{p}% over the BOQ rates", { p: (-savingPct * 100).toFixed(1) }), tone: kpi.saving >= 0 ? "ok" : "bad", icon: <PiggyBank size={14} /> },
+          { label: t("Paid"), value: <Money value={kpi.paid} short />, sub: kpi.committed > 0 ? t("{p} of committed", { p: `${Math.round((kpi.paid / kpi.committed) * 100)}%` }) : t("nothing ordered yet"), tone: "ok", icon: <Wallet size={14} /> },
+          kpi.boq > 0
+            ? { label: t("Savings vs BOQ"), value: <Money value={kpi.saving} short />, sub: kpi.saving >= 0 ? t("{p}% under the BOQ rates", { p: (savingPct * 100).toFixed(1) }) : t("{p}% over the BOQ rates", { p: (-savingPct * 100).toFixed(1) }), tone: kpi.saving >= 0 ? "ok" : "bad", icon: <PiggyBank size={14} /> }
+            : { label: t("Savings vs BOQ"), value: "—", sub: t("no orders on BOQ materials yet"), icon: <PiggyBank size={14} /> },
           { label: t("Average cycle MR→PO"), value: kpi.cycle != null ? t("{n} days", { n: kpi.cycle.toFixed(1) }) : "—", sub: t("over {n} orders with a request", { n: kpi.cycleN }), tone: "neutral", icon: <Timer size={14} /> },
-          { label: t("On-time delivery"), value: `${Math.round(onTime.share * 100)}%`, sub: t("{a} of {b} deliveries", { a: onTime.on, b: onTime.total }), tone: onTime.share >= 0.85 ? "ok" : onTime.share >= 0.6 ? "warn" : "bad", icon: <Truck size={14} /> },
+          onTime.share == null
+            ? { label: t("On-time delivery"), value: "—", sub: t("no deliveries yet"), icon: <Truck size={14} /> }
+            : { label: t("On-time delivery"), value: `${Math.round(onTime.share * 100)}%`, sub: t("{a} of {b} deliveries", { a: onTime.on, b: onTime.total }), tone: onTime.share >= 0.85 ? "ok" : onTime.share >= 0.6 ? "warn" : "bad", icon: <Truck size={14} /> },
         ]}
       />
 
@@ -307,7 +318,7 @@ export function AnalyticsPage() {
       <Panel
         title={t("Vendor performance")}
         icon={<Gauge size={16} />}
-        sub={t("Price against the BOQ rate (left is cheaper) and delivery reliability score (up is better). Bubble size is the value ordered in range.")}
+        sub={t("Price against the BOQ rate (left is cheaper) and delivery reliability: share delivered on time, else your score (up is better). Bubble size is the value ordered in range.")}
         actions={<Badge tone="brand">{t("{n} vendors", { n: scatter.length })}</Badge>}
       >
         {scatter.length ? <Scatter points={scatter} onPick={(id) => navigate(R.vendor(id))} /> : <p className="ppl-empty">{t("No priced quotes or orders for this trade.")}</p>}

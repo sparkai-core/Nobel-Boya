@@ -1,8 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { Plus } from "lucide-react";
+import { FileDiff, Plus } from "lucide-react";
 import {
   Badge,
+  Empty,
   FilterChips,
   PageHero,
   Register,
@@ -18,7 +19,7 @@ import { useOps } from "../../../ops/store";
 import { PATHS, R } from "../../../ops/select";
 import { fmtMoney, fmtMoneyShort } from "../../../lib/format";
 import type { ChangeOrder } from "../../../ops/types";
-import { changeCost, signed, WORKS_VALUE } from "./shared";
+import { changeCost, signed, worksValue } from "./shared";
 import { ChangeDialog, REASONS, reasonLabel } from "./ChangeDialog";
 
 const PENDING = ["DRAFT", "SUBMITTED", "UNDER_REVIEW"];
@@ -98,6 +99,21 @@ export function ChangesPage() {
         }
       />
 
+      {!changes.length ? (
+        <Empty
+          icon={<FileDiff size={22} />}
+          title={t("No changes raised yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setCreating(true)}>
+              <Plus size={15} />
+              {t("New change")}
+            </button>
+          }
+        >
+          {t("Raise a change or variation with lines priced from the BOQ bill rates, and see its effect on the contract value and the programme.")}
+        </Empty>
+      ) : (
+        <>
       <Waterfall changes={changes} onOpen={(id) => navigate(R.change(id))} />
 
       <StagePath kind="change" path={PATHS.change} counts={counts} value={stage} onChange={setStage} extras={["REJECTED"]} />
@@ -123,6 +139,8 @@ export function ChangesPage() {
           </>
         }
       />
+        </>
+      )}
 
       <ChangeDialog
         open={creating}
@@ -144,8 +162,8 @@ function Waterfall({ changes, onOpen }: { changes: ChangeOrder[]; onOpen: (id: s
   const pending = changes.filter((c) => PENDING.includes(c.status)).sort((a, b) => a.raisedAt.localeCompare(b.raisedAt));
 
   const cols: Col[] = [];
-  let run = WORKS_VALUE;
-  cols.push({ key: "orig", label: t("Original works"), sub: t("BOQ at sample rates"), kind: "total", from: 0, to: run });
+  let run = worksValue();
+  cols.push({ key: "orig", label: t("Original works"), sub: t("BOQ at bill rates"), kind: "total", from: 0, to: run });
   for (const c of approved) {
     const v = changeCost(c);
     cols.push({ key: c.id, id: c.id, label: c.ref, sub: x(c.title), kind: "step", from: run, to: run + v });
@@ -169,7 +187,7 @@ function Waterfall({ changes, onOpen }: { changes: ChangeOrder[]; onOpen: (id: s
   const P = (v: number) => Math.max(0, Math.min(100, ((v - min) / (max - min)) * 100));
   const grid = [0, 0.25, 0.5, 0.75, 1].map((g) => min + (max - min) * g);
 
-  const approvedSum = current - WORKS_VALUE;
+  const approvedSum = current - worksValue();
   const pendingSum = run - current;
   const dayCh = changes.filter((c) => c.daysDelta !== 0 && c.status !== "REJECTED");
   const daysApproved = dayCh.filter((c) => c.status === "APPROVED").reduce((a, c) => a + c.daysDelta, 0);
@@ -200,7 +218,7 @@ function Waterfall({ changes, onOpen }: { changes: ChangeOrder[]; onOpen: (id: s
           </div>
           <div>
             <dt>{t("Growth")}</dt>
-            <dd>{(((run - WORKS_VALUE) / WORKS_VALUE) * 100).toFixed(2)}%</dd>
+            <dd>{worksValue() > 0 ? `${(((run - worksValue()) / worksValue()) * 100).toFixed(2)}%` : "—"}</dd>
           </div>
         </dl>
       </header>

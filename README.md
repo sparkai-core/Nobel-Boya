@@ -169,6 +169,7 @@ Unit-compatible (kg and t convert), one-to-one matching. Different element types
 1. Open `https://<service-name>.onrender.com`.
 2. **Create account** with your email and a password of 8+ characters (or sign in with `demo@nobel.az` / `demo` if `SEED_DEMO=1`).
 3. If only your team should have accounts: create everyone's accounts first, then set `ALLOW_SIGNUP=0` (Environment tab → Save; Render restarts the service).
+4. To create a client's account yourself (for example Boya), open the service **Shell** on Render and run `setpriv --reuid=10001 --regid=10001 --init-groups python server/create_user.py --email <client email> --name "<company name>"` (as the app's own user, so the database files keep the right owner). It asks for the password twice without showing it. `--reset-password` changes it later. A new account starts with no projects.
 
 **6. Verify the estimation module on the live site**
 1. **New Project** → upload a drawing PDF (optionally a rate list .xlsx/.csv and a client BOQ). You should reach the bill within seconds to a minute for text-based PDFs.

@@ -1,15 +1,17 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowRight, ChevronDown, ChevronRight, ListTree, Minimize2, Maximize2 } from "lucide-react";
-import { Badge, KeyVals, Meter, Money, PageHero, StatusBadge, useL } from "../../../components/kit";
+import { ArrowRight, ChevronDown, ChevronRight, ListTree, Minimize2, Maximize2, Network, Pencil, Plus } from "lucide-react";
+import { Badge, Empty, KeyVals, Meter, Money, PageHero, StatusBadge, useL } from "../../../components/kit";
 import { Drawer, Segmented } from "../../../components/ui";
 import { fmtMoneyShort } from "../../../lib/format";
 import { buildingShort } from "../../../lib/loc";
 import { useOps } from "../../../ops/store";
 import { diffDays } from "../../../ops/dates";
 import { R } from "../../../ops/select";
+import { DERIVED_WBS } from "../../../ops/seed";
 import type { Activity, WbsNode } from "../../../ops/types";
 import { rollup, subtreeIds, useSchedule, wbsChildren, type Rollup } from "./model";
+import { WbsDialog } from "./WbsDialog";
 
 /**
  * The work breakdown as a top-down org chart: project → top-level packages → sub-packages, each with
@@ -17,25 +19,62 @@ import { rollup, subtreeIds, useSchedule, wbsChildren, type Rollup } from "./mod
  */
 export function WbsPage() {
   const { t, x } = useL();
-  const { activities, wbs, cp } = useSchedule();
+  const { activities, wbs, cp, weight } = useSchedule();
   const zones = useOps((s) => s.zones);
   const kids = useMemo(() => wbsChildren(wbs), [wbs]);
-  const root = wbs.find((n) => n.parentId === null);
+  const roots = useMemo(() => {
+    const ids = new Set(wbs.map((w) => w.id));
+    return wbs.filter((n) => !n.parentId || !ids.has(n.parentId));
+  }, [wbs]);
+  const root = roots[0];
   const [folded, setFolded] = useState<Set<string>>(new Set());
   const [sel, setSel] = useState<string | null>(null);
   const [mode, setMode] = useState<"packages" | "activities">("packages");
+  const [dialog, setDialog] = useState<{ node?: WbsNode | null; parentId?: string | null } | null>(null);
 
   const rolls = useMemo(() => {
     const m = new Map<string, Rollup>();
+    const byWbs = new Map<string, typeof activities>();
+    for (const a of activities) byWbs.set(a.wbsId, [...(byWbs.get(a.wbsId) ?? []), a]);
     for (const n of wbs) {
       const ids = subtreeIds(n.id, kids);
-      m.set(n.id, rollup(activities.filter((a) => ids.has(a.wbsId)), cp));
+      m.set(n.id, rollup([...ids].flatMap((id) => byWbs.get(id) ?? []), cp, weight));
     }
     return m;
-  }, [wbs, kids, activities, cp]);
+  }, [wbs, kids, activities, cp, weight]);
+  const loose = useMemo(() => {
+    const ids = new Set(wbs.map((w) => w.id));
+    return activities.filter((a) => !ids.has(a.wbsId)).length;
+  }, [wbs, activities]);
+  const derived = wbs.some((w) => w.id.startsWith(DERIVED_WBS));
+  const dialogEl = <WbsDialog open={!!dialog} node={dialog?.node ?? null} parentId={dialog?.parentId ?? null} onClose={() => setDialog(null)} onSaved={(id) => dialog?.node && setSel(id)} />;
 
-  if (!root) return <div className="k-page" />;
-  const tops = kids.get(root.id) ?? [];
+  if (!root)
+    return (
+      <div className="k-page pms">
+        <PageHero eyebrow={t("Project management · WBS")} title={t("Work breakdown")} subtitle={t("How the project is divided into packages, with tasks, budget and progress rolled up at every level.")} art="wbs" />
+        <div className="k-panel">
+          <Empty
+            icon={<Network size={20} />}
+            title={t("No work breakdown yet")}
+            action={
+              <div className="pms-empty-actions">
+                <button type="button" className="btn btn-primary" onClick={() => setDialog({ parentId: null })}>
+                  <Plus size={15} /> {t("Add the top item")}
+                </button>
+                <Link to={`${R.planning("activities")}?import=1`} className="btn btn-ghost">
+                  {t("Import a P6 / MS Project file")}
+                </Link>
+              </div>
+            }
+          >
+            {t("Importing a programme brings its WBS. Or start with the top item (the project) and add packages under it.")}
+          </Empty>
+        </div>
+        {dialogEl}
+      </div>
+    );
+  const tops = [...(kids.get(root.id) ?? []), ...roots.slice(1)];
   const fold = (id: string) =>
     setFolded((f) => {
       const n = new Set(f);
@@ -61,8 +100,8 @@ export function WbsPage() {
           <strong>{x(n.name)}</strong>
           <span className="pms-node-figs">
             <span>{t("{n} tasks", { n: r.count })}</span>
-            <span className="num-inline">{fmtMoneyShort(r.budget)}</span>
-            <b className="num-inline">{Math.round(r.pct)}%</b>
+            {r.budget > 0 ? <span className="num-inline">{fmtMoneyShort(r.budget)}</span> : null}
+            {r.count ? <b className="num-inline">{Math.round(r.pct)}%</b> : null}
           </span>
           <Meter value={r.pct / 100} marker={r.planned / 100} tone={r.blocked ? "bad" : r.pct + 2 < r.planned ? "warn" : "brand"} label={t("Progress")} />
         </button>
@@ -95,21 +134,36 @@ export function WbsPage() {
       <PageHero
         eyebrow={t("Project management · WBS")}
         title={t("Work breakdown")}
-        subtitle={t("How the Qobu job is divided into packages, with tasks, budget and progress rolled up at every level.")}
+        subtitle={t("How the project is divided into packages, with tasks, budget and progress rolled up at every level.")}
         flow={["Project", "Package", "Sub-package", "Activity"]}
         art="wbs"
         actions={
-          <Link to={R.programme()} className="btn btn-ghost">
-            <ListTree size={15} />
-            {t("Open the programme")}
-          </Link>
+          <>
+            <button type="button" className="btn btn-primary" onClick={() => setDialog({ parentId: sel ?? root.id })}>
+              <Plus size={15} />
+              {t("Add WBS item")}
+            </button>
+            <Link to={R.programme()} className="btn btn-ghost">
+              <ListTree size={15} />
+              {t("Open the programme")}
+            </Link>
+          </>
         }
       />
 
       <section className="pms-org-wrap">
         <div className="pms-org-bar">
           <p>
-            <b>{t("{n} packages", { n: wbs.length - 1 })}</b> · {t("{n} tasks", { n: rr.count })} · <Money value={rr.budget} short /> · {t("{n}% done, plan says {m}%", { n: Math.round(rr.pct), m: Math.round(rr.planned) })}
+            <b>{t("{n} packages", { n: wbs.length - 1 })}</b> · {t("{n} tasks", { n: rr.count })}
+            {rr.budget > 0 ? (
+              <>
+                {" · "}
+                <Money value={rr.budget} short />
+              </>
+            ) : null}
+            {rr.count ? ` · ${t("{n}% done, plan says {m}%", { n: Math.round(rr.pct), m: Math.round(rr.planned) })}` : ""}
+            {loose ? ` · ${t("{n} activities have no WBS item", { n: loose })}` : ""}
+            {derived ? <span className="muted small"> · {t("Built from the BOQ buildings and sections until you import a programme or change it.")}</span> : null}
           </p>
           <div className="k-row" style={{ gap: 8 }}>
             <Segmented value={mode} onChange={setMode} label={t("Detail")} options={[{ value: "packages", label: t("Packages") }, { value: "activities", label: t("With activities") }]} />
@@ -140,8 +194,21 @@ export function WbsPage() {
       </section>
 
       <Drawer open={!!selected} onClose={() => setSel(null)} title={selected ? x(selected.name) : ""} kicker={selected ? `${selected.code} · ${t("WBS item")}` : undefined} width={460}>
-        {selected ? <NodeDetail n={selected} r={rolls.get(selected.id)!} wbs={wbs} activities={activities} zones={zones} onPick={setSel} /> : null}
+        {selected ? (
+          <>
+            <div className="pms-task-edit">
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDialog({ parentId: selected.id })}>
+                <Plus size={13} /> {t("Add a sub-item")}
+              </button>
+              <button type="button" className="btn btn-ghost btn-sm" onClick={() => setDialog({ node: selected })}>
+                <Pencil size={13} /> {t("Edit or delete")}
+              </button>
+            </div>
+            <NodeDetail n={selected} r={rolls.get(selected.id) ?? rollup([], cp)} wbs={wbs} activities={activities} zones={zones} onPick={setSel} />
+          </>
+        ) : null}
       </Drawer>
+      {dialogEl}
     </div>
   );
 }
@@ -188,12 +255,13 @@ function NodeDetail({ n, r, wbs, activities, zones, onPick }: { n: WbsNode; r: R
       <KeyVals
         items={[
           { k: t("Tasks"), v: r.count },
-          { k: t("Done"), v: `${Math.round(r.pct)}%` },
-          { k: t("Dates"), v: `${d(r.start, false)} – ${d(r.end)}` },
-          { k: t("Slip"), v: <span className={slip > 0 ? "k-text-bad" : undefined}>{slip > 0 ? t("{n} days late", { n: slip }) : t("On baseline")}</span> },
+          { k: t("Done"), v: r.count ? `${Math.round(r.pct)}%` : "—" },
+          { k: t("Dates"), v: r.count ? `${d(r.start, false)} – ${d(r.end)}` : "—" },
+          { k: t("Slip"), v: !r.count ? "—" : <span className={slip > 0 ? "k-text-bad" : undefined}>{slip > 0 ? t("{n} days late", { n: slip }) : t("On baseline")}</span> },
         ]}
       />
 
+      {r.budget > 0 ? (
       <section>
         <h3>{t("Budget against earned")}</h3>
         <div className="pms-be">
@@ -214,7 +282,9 @@ function NodeDetail({ n, r, wbs, activities, zones, onPick }: { n: WbsNode; r: R
           </div>
         </div>
       </section>
+      ) : null}
 
+      {byBuilding.size ? (
       <section>
         <h3>{t("Progress by building")}</h3>
         {byBuilding.size ? (
@@ -236,10 +306,9 @@ function NodeDetail({ n, r, wbs, activities, zones, onPick }: { n: WbsNode; r: R
               );
             })}
           </ul>
-        ) : (
-          <p className="muted small">{t("No site zones are tracked under this item yet.")}</p>
-        )}
+        ) : null}
       </section>
+      ) : null}
 
       <section>
         <h3>

@@ -228,6 +228,7 @@ export function ReceiptsPage() {
         rows={rows}
         columns={columns}
         rowKey={(g) => g.id}
+        empty={s.grns.length ? t("Nothing matches these filters.") : t("No goods receipts yet. Receive goods from an open purchase order.")}
         onRowClick={(g) => navigate(R.receipt(g.id))}
         initialSort={{ key: "grn", dir: "desc" }}
         toolbar={

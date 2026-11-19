@@ -589,8 +589,21 @@ export type OpsData = {
   expedites: Expedite[];
 
   feed: FeedEvent[];
-  /** Running counters used to number new records (MR-0013 …). */
+  /** Running counters used to number new records (MR-0001 …). */
   seq: Record<string, number>;
+  /** Project facts the user enters (nothing here is invented). */
+  setup: ProjectSetup;
+};
+
+/** Facts about the project and the company that only the user can give. */
+export type ProjectSetup = {
+  /** The user's company name, printed on orders and shown to vendors. Shared by every project. */
+  company: string;
+  plannedStart: string | null;
+  contractFinish: string | null;
+  contractValue: number | null;
+  /** Cash available for the next pay run. */
+  cashAvailable: number | null;
 };
 
 // ---------------------------------------------------------------- phase 2: planning and progress

@@ -1,14 +1,14 @@
 import { useMemo } from "react";
 import { useNavigate } from "react-router-dom";
-import { ArrowRight, CalendarPlus } from "lucide-react";
-import { Meter, Money, PageHero, StatTiles, StatusBadge, toast, useL } from "../../../components/kit";
+import { ArrowRight, CalendarPlus, ReceiptText } from "lucide-react";
+import { Empty, Meter, Money, PageHero, StatTiles, StatusBadge, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { addDays, diffDays, maxDate, PROJECT_START, TODAY } from "../../../ops/dates";
+import { addDays, diffDays, maxDate, minDate, PROJECT_START, TODAY } from "../../../ops/dates";
 import { ipcAmounts, R, sCurve } from "../../../ops/select";
 import { fmtMoneyShort } from "../../../lib/format";
 import { prepareNextIpc } from "../../../ops/ext/records";
 import type { Ipc } from "../../../ops/types";
-import { WORKS_VALUE } from "./shared";
+import { worksValue } from "./shared";
 
 /** Days after certification that the client pays (used for the cash-in timeline). */
 export const PAY_DAYS = 7;
@@ -34,6 +34,10 @@ export function BillingPage() {
   const paid = sorted.filter((i) => i.status === "PAID").reduce((a, i) => a + amounts.get(i.id)!.due, 0);
   const retention = certified.reduce((a, i) => a + amounts.get(i.id)!.retention, 0);
   const outstanding = sorted.filter((i) => i.status === "SUBMITTED" || i.status === "CERTIFIED").reduce((a, i) => a + amounts.get(i.id)!.due, 0);
+  const wv = worksValue();
+  const share = (v: number, dp = 1) => (wv > 0 ? `${((v / wv) * 100).toFixed(dp)}%` : "—");
+  const planned = useMemo(() => (activities.some((a) => a.budget > 0) ? sCurve(activities).filter((p) => Number.isFinite(p.planned)) : []), [activities]);
+  const retShares = [...new Set(certified.map((i) => Math.round(i.retention * 1000) / 10))];
 
   const prepare = () => {
     const id = prepareNextIpc();
@@ -41,7 +45,7 @@ export function BillingPage() {
       toast(t("{id} is still a draft. Submit it before opening the next one.", { id: lastAny?.id ?? "" }), "warn");
       return;
     }
-    toast(t("{id} opened as a draft from the last certificate", { id }));
+    toast(lastAny ? t("{id} opened as a draft from the last certificate", { id }) : t("{id} opened as a draft from the BOQ", { id }));
     navigate(R.ipc(id));
   };
 
@@ -56,21 +60,38 @@ export function BillingPage() {
         actions={
           <button type="button" className="btn btn-primary" onClick={prepare}>
             <CalendarPlus size={15} />
-            {t("Prepare next IPC")}
+            {sorted.length ? t("Prepare next IPC") : t("Prepare the first IPC")}
           </button>
         }
       />
 
+      {!sorted.length ? (
+        <Empty
+          icon={<ReceiptText size={22} />}
+          title={t("No payment certificates yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={prepare}>
+              <CalendarPlus size={15} />
+              {t("Prepare the first IPC")}
+            </button>
+          }
+        >
+          {wv > 0
+            ? t("The first certificate lists every building and BOQ section with its value from the bill. Enter the progress to date, then submit it.")
+            : t("This project has no priced BOQ yet. Price the bill first so certificates can be measured against it.")}
+        </Empty>
+      ) : (
+        <>
       <StatTiles
         items={[
-          { label: t("Certified to date"), value: <Money value={certifiedGross} short />, sub: t("{p} of the works value", { p: `${((certifiedGross / WORKS_VALUE) * 100).toFixed(1)}%` }), tone: "brand" },
+          { label: t("Certified to date"), value: <Money value={certifiedGross} short />, sub: t("{p} of the works value", { p: share(certifiedGross) }), tone: "brand" },
           { label: t("Claimed, not yet certified"), value: <Money value={Math.max(0, claimedGross - certifiedGross)} short />, sub: lastAny ? t("on {id}", { id: lastAny.id }) : undefined },
           { label: t("Received from the client"), value: <Money value={paid} short />, sub: t("{n} awaiting payment", { n: fmtMoneyShort(outstanding) }), tone: "ok" },
-          { label: t("Retention held"), value: <Money value={retention} short />, sub: t("5% of each certified period") },
+          { label: t("Retention held"), value: <Money value={retention} short />, sub: retShares.length === 1 ? t("{p} of each certified period", { p: `${retShares[0]}%` }) : retShares.length ? t("from each certified period") : t("nothing certified yet") },
         ]}
       />
 
-      <BillingChart ipcs={sorted} amounts={amounts} planned={sCurve(activities)} onOpen={(id) => navigate(R.ipc(id))} />
+      <BillingChart ipcs={sorted} amounts={amounts} planned={planned} onOpen={(id) => navigate(R.ipc(id))} />
 
       <section className="pmr-ipcs" aria-label={t("Certificates")}>
         {[...sorted].reverse().map((i, k) => {
@@ -93,9 +114,9 @@ export function BillingPage() {
                 <small>{t("Amount due this period")}</small>
                 <Money value={a.due} />
               </span>
-              <Meter value={a.gross / WORKS_VALUE} tone="brand" marker={a.prev / WORKS_VALUE} />
+              <Meter value={wv > 0 ? a.gross / wv : 0} tone="brand" marker={wv > 0 ? a.prev / wv : 0} />
               <span className="pmr-ipc-foot">
-                <span>{t("{p} of works to date", { p: `${((a.gross / WORKS_VALUE) * 100).toFixed(1)}%` })}</span>
+                <span>{t("{p} of works to date", { p: share(a.gross) })}</span>
                 <span className={late ? "k-text-bad" : undefined}>
                   {i.status === "PAID" ? t("paid") : i.status === "DRAFT" ? t("expected {date}", { date: d(due, false) }) : t("due {date}", { date: d(due, false) })}
                 </span>
@@ -107,6 +128,8 @@ export function BillingPage() {
           );
         })}
       </section>
+        </>
+      )}
     </div>
   );
 }
@@ -115,18 +138,19 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
   const { t, d } = useL();
   const last = ipcs[ipcs.length - 1];
   const end = maxDate(addDays(TODAY, 105), last ? addDays(last.to, 45) : TODAY);
-  const span = diffDays(PROJECT_START, end);
+  const start = minDate(PROJECT_START, ...ipcs.map((i) => i.from));
+  const span = Math.max(1, diffDays(start, end));
   const W = 760;
   const H = 260;
   const pad = { l: 52, r: 16, t: 16, b: 28 };
-  const plannedPts = planned.filter((p) => p.date <= end).map((p) => ({ date: p.date, v: p.planned * WORKS_VALUE }));
+  const plannedPts = planned.filter((p) => p.date <= end).map((p) => ({ date: p.date, v: p.planned * worksValue() }));
   const claimed = ipcs.map((i) => ({ ipc: i, date: i.to, v: amounts.get(i.id)!.gross }));
   const certified = claimed.filter((c) => c.ipc.status === "CERTIFIED" || c.ipc.status === "PAID");
   const maxV = Math.max(1, ...plannedPts.map((p) => p.v), ...claimed.map((c) => c.v)) * 1.1;
-  const X = (date: string) => pad.l + (Math.max(0, diffDays(PROJECT_START, date)) / span) * (W - pad.l - pad.r);
+  const X = (date: string) => pad.l + (Math.max(0, diffDays(start, date)) / span) * (W - pad.l - pad.r);
   const Y = (v: number) => pad.t + (1 - v / maxV) * (H - pad.t - pad.b);
   const step = (pts: { date: string; v: number }[]) => {
-    let p = `M${X(PROJECT_START)} ${Y(0)}`;
+    let p = `M${X(start)} ${Y(0)}`;
     let prev = 0;
     for (const pt of pts) {
       p += ` L${X(pt.date)} ${Y(prev)} L${X(pt.date)} ${Y(pt.v)}`;
@@ -136,7 +160,7 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
   };
   const plannedPath = plannedPts.map((p, i) => `${i ? "L" : "M"}${X(p.date).toFixed(1)} ${Y(p.v).toFixed(1)}`).join(" ");
   const months: string[] = [];
-  for (let dt = PROJECT_START.slice(0, 7); `${dt}-01` <= end; ) {
+  for (let dt = start.slice(0, 7); `${dt}-01` <= end; ) {
     months.push(dt);
     const [y, m] = dt.split("-").map(Number) as [number, number];
     dt = m === 12 ? `${y + 1}-01` : `${y}-${String(m + 1).padStart(2, "0")}`;
@@ -149,12 +173,12 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
       <header className="pmr-bill-head">
         <div>
           <h2>{t("Billed value, month by month")}</h2>
-          <p>{t("Planned value comes from the programme × the BOQ works value. Steps are certificates at the end of their period.")}</p>
+          <p>{plannedPts.length ? t("Planned value comes from the programme × the BOQ works value. Steps are certificates at the end of their period.") : t("Steps are certificates at the end of their period. A planned line shows once the programme has activities with BOQ value.")}</p>
         </div>
         <div className="pmr-bill-gap">
           <small>{t("Certified against planned today")}</small>
-          <b className={certNow < plannedToday ? "k-text-warn" : "k-text-ok"}>
-            {fmtMoneyShort(certNow)} / {fmtMoneyShort(plannedToday)}
+          <b className={!plannedPts.length ? undefined : certNow < plannedToday ? "k-text-warn" : "k-text-ok"}>
+            {fmtMoneyShort(certNow)} / {plannedPts.length ? fmtMoneyShort(plannedToday) : "—"}
           </b>
         </div>
       </header>
@@ -169,7 +193,7 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
             </g>
           ))}
           {months.map((m) => {
-            const at = `${m}-01` < PROJECT_START ? PROJECT_START : `${m}-01`;
+            const at = `${m}-01` < start ? start : `${m}-01`;
             return (
               <g key={m}>
                 <line x1={X(at)} x2={X(at)} y1={pad.t} y2={H - pad.b} className="pmr-bill-month" />
@@ -179,8 +203,12 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
               </g>
             );
           })}
-          <path d={`${plannedPath} L${X(plannedPts[plannedPts.length - 1]?.date ?? end)} ${Y(0)} L${X(PROJECT_START)} ${Y(0)}Z`} className="k-area-planned" />
-          <path d={plannedPath} className="k-line-planned" />
+          {plannedPts.length ? (
+            <>
+              <path d={`${plannedPath} L${X(plannedPts[plannedPts.length - 1]!.date)} ${Y(0)} L${X(plannedPts[0]!.date)} ${Y(0)}Z`} className="k-area-planned" />
+              <path d={plannedPath} className="k-line-planned" />
+            </>
+          ) : null}
           <path d={step(claimed)} className="pmr-line-claimed" />
           <path d={step(certified)} className="pmr-line-certified" />
           <line x1={X(TODAY)} x2={X(TODAY)} y1={pad.t} y2={H - pad.b} className="k-today" />
@@ -218,8 +246,8 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
             { key: "cert", date: i.certifiedAt ?? addDays(i.submittedAt ?? addDays(i.to, 2), 7), label: t("Certified"), done: !!i.certifiedAt },
             { key: "pay", date: due, label: i.status === "PAID" ? t("Paid") : t("Payment due"), done: i.status === "PAID" },
           ];
-          const x0 = Math.max(0, diffDays(PROJECT_START, i.to) / span);
-          const x1 = Math.min(1, diffDays(PROJECT_START, due) / span);
+          const x0 = Math.max(0, diffDays(start, i.to) / span);
+          const x1 = Math.min(1, diffDays(start, due) / span);
           return (
             <button key={i.id} type="button" className={`pmr-cash-row s-${i.status}`} onClick={() => onOpen(i.id)}>
               <span className="pmr-cash-label">
@@ -229,9 +257,9 @@ function BillingChart({ ipcs, amounts, planned, onOpen }: { ipcs: Ipc[]; amounts
               <span className="pmr-cash-track">
                 <i className="pmr-cash-span" style={{ left: `${x0 * 100}%`, width: `${Math.max(0.5, (x1 - x0) * 100)}%` }} />
                 {steps.map((s) => (
-                  <span key={s.key} className={`pmr-cash-dot c-${s.key}${s.done ? " done" : ""}`} style={{ left: `${Math.min(1, Math.max(0, diffDays(PROJECT_START, s.date) / span)) * 100}%` }} title={`${s.label} · ${d(s.date)}`} />
+                  <span key={s.key} className={`pmr-cash-dot c-${s.key}${s.done ? " done" : ""}`} style={{ left: `${Math.min(1, Math.max(0, diffDays(start, s.date) / span)) * 100}%` }} title={`${s.label} · ${d(s.date)}`} />
                 ))}
-                <i className="pmr-cash-today" style={{ left: `${(diffDays(PROJECT_START, TODAY) / span) * 100}%` }} />
+                <i className="pmr-cash-today" style={{ left: `${Math.min(1, Math.max(0, diffDays(start, TODAY) / span)) * 100}%` }} />
               </span>
             </button>
           );

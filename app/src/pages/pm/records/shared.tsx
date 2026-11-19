@@ -5,12 +5,12 @@ import { Dialog, useL } from "../../../components/kit";
 import { SheetViewer } from "../../../components/SheetViewer";
 import { data, DISCIPLINES, P, sheetById, sheetImage } from "../../../data";
 import { disciplineName, sheetTitle } from "../../../lib/loc";
-import { sectionValue } from "../../../ops/seed/util";
+import { sectionValueMap } from "../../../ops/seed/util";
 import { TODAY } from "../../../ops/dates";
 import type { ChangeOrder, Rfi } from "../../../ops/types";
 
-/** Works value of the whole BOQ at sample rates: the sum of every building × section value. */
-export const WORKS_VALUE = [...sectionValue.values()].reduce((a, v) => a + v, 0);
+/** Works value of the whole bill (quantity × bill rate), read fresh so rate edits count. */
+export const worksValue = () => [...sectionValueMap().values()].reduce((a, v) => a + v, 0);
 
 export const rfiOverdue = (r: Rfi) => r.status === "OPEN" && r.dueAt < TODAY;
 /** Status used for display: an open RFI past its due date shows as OVERDUE. */
@@ -156,7 +156,7 @@ export function NotFound({ what, back, backLabel }: { what: string; back: string
     <div className="k-page">
       <div className="k-empty">
         <h3>{t("{what} not found", { what })}</h3>
-        <p>{t("It may have been removed when the demo data was reset.")}</p>
+        <p>{t("It may have been deleted.")}</p>
         <Link to={back} className="btn btn-ghost">
           {t(backLabel)}
         </Link>

@@ -41,7 +41,7 @@ export function TaskPanel({ task: a, onOpen }: { task: Activity; onOpen: (id: st
         <StatusBadge kind="activity" status={a.status} />
         {c?.critical && a.status !== "COMPLETED" ? <Badge tone="bad">{t("Critical path")}</Badge> : c?.near ? <Badge tone="warn">{t("Near-critical")}</Badge> : null}
         {late ? <Badge tone="bad">{late === "overdue" ? t("Finish date passed") : t("Behind today's plan")}</Badge> : null}
-        <span className="muted small">{buildingShort(a.building, lang)}</span>
+        {a.building ? <span className="muted small">{buildingShort(a.building, lang)}</span> : null}
       </div>
 
       {a.status === "BLOCKED" ? (
@@ -85,8 +85,8 @@ export function TaskPanel({ task: a, onOpen }: { task: Activity; onOpen: (id: st
           { k: t("Baseline"), v: `${d(a.bStart, false)} – ${d(a.bEnd, false)}` },
           { k: t("Variance"), v: <span className={slip > 0 ? "k-text-bad" : slip < 0 ? "k-text-ok" : undefined}>{slip > 0 ? t("{n} days late", { n: slip }) : slip < 0 ? t("{n} days early", { n: -slip }) : t("On baseline")}</span> },
           { k: t("Total float"), v: c ? <span className={c.tf <= 0 ? "k-text-bad" : c.tf <= 10 ? "k-text-warn" : undefined}>{t("{n} days", { n: c.tf })}</span> : "—" },
-          { k: t("Owner"), v: ownerName(a.owner, subs) },
-          { k: t("Crew"), v: t("{n} people", { n: a.crew }) },
+          { k: t("Owner"), v: ownerName(a.owner, subs) || "—" },
+          { k: t("Crew"), v: a.crew > 0 ? t("{n} people", { n: a.crew }) : "—" },
         ]}
       />
       {a.aStart ? (
@@ -145,20 +145,32 @@ export function TaskPanel({ task: a, onOpen }: { task: Activity; onOpen: (id: st
 
       <section className="pms-task-money">
         <h3>{t("Budget")}</h3>
-        <div className="pms-task-budget">
-          <Money value={a.budget} />
-          <span className="muted small">
-            {t("earned")} <Money value={(a.budget * a.pct) / 100} short />
-          </span>
-        </div>
-        <Meter value={a.pct / 100} marker={exp / 100} tone={a.status === "BLOCKED" ? "bad" : "brand"} label={t("Earned against budget")} />
+        {a.budget > 0 ? (
+          <>
+            <div className="pms-task-budget">
+              <Money value={a.budget} />
+              <span className="muted small">
+                {t("earned")} <Money value={(a.budget * a.pct) / 100} short />
+              </span>
+            </div>
+            <Meter value={a.pct / 100} marker={exp / 100} tone={a.status === "BLOCKED" ? "bad" : "brand"} label={t("Earned against budget")} />
+          </>
+        ) : (
+          <p className="muted small">{t("No budget set for this activity.")}</p>
+        )}
         {a.section ? (
           <Link to={to("bill")} className="pms-task-boq">
             <FileSpreadsheet size={15} />
             <span>
               <strong>{sectionName(a.section, lang)}</strong>
               <small>
-                {t("BOQ section")} · {buildingShort(a.building, lang)} · <Money value={sectionWorth(a.building, a.section)} short />
+                {t("BOQ section")}
+                {a.building ? (
+                  <>
+                    {" · "}
+                    {buildingShort(a.building, lang)} · <Money value={sectionWorth(a.building, a.section)} short />
+                  </>
+                ) : null}
               </small>
             </span>
             <ArrowRight size={13} />

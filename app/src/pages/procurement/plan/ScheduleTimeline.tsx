@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { Badge, useL } from "../../../components/kit";
 import { addDays, diffDays, maxDate, minDate, TODAY } from "../../../ops/dates";
-import { APPROVAL_DAYS, monthLabel, monthsFrom, PKG_STATUS, RFQ_DAYS, type Pkg } from "./shared";
+import { APPROVAL_DAYS, monthLabel, monthsFrom, PKG_STATUS, RFQ_DAYS, type DatedPkg } from "./shared";
 
 const PX = 4;
 
@@ -10,7 +10,7 @@ const PX = 4;
  * Diamonds mark the latest PO date and the date the site needs the material. Red where a latest
  * date has passed without an order; a ghost bar shows where it lands if ordered today.
  */
-export function ScheduleTimeline({ pkgs, picked, onPick }: { pkgs: Pkg[]; picked: string | null; onPick: (key: string) => void }) {
+export function ScheduleTimeline({ pkgs, picked, onPick }: { pkgs: DatedPkg[]; picked: string | null; onPick: (key: string) => void }) {
   const { t, x, d, lang } = useL();
   const scroller = useRef<HTMLDivElement>(null);
 
@@ -60,7 +60,7 @@ export function ScheduleTimeline({ pkgs, picked, onPick }: { pkgs: Pkg[]; picked
                 <span className="ppl-tl-label">
                   <strong>{x(p.name)}</strong>
                   <small>
-                    <span className="k-mono">{p.act.code}</span>
+                    {p.act ? <span className="k-mono">{p.act.code}</span> : null}
                     <Badge tone={p.late ? "bad" : p.dueSoon ? "warn" : meta.tone}>{p.late ? t("Late to order") : t(meta.label)}</Badge>
                   </small>
                 </span>

@@ -16,6 +16,16 @@ export const DEMO_PASSWORD = "demo";
 export const DEMO_TOKEN = "demo-without-server";
 const DEMO_PROJECT_ID = "proj_qobu";
 
+/**
+ * Accounts that also work on a static deployment with no server (Vercel). They open the bundled
+ * sample project in the browser only; this is not real security, the server holds the real accounts.
+ */
+type StaticAccount = { id: string; email: string; password: string; name: string; role: string };
+const STATIC_ACCOUNTS: StaticAccount[] = [
+  { id: "demo", email: DEMO_EMAIL, password: DEMO_PASSWORD, name: "Demo User", role: "Quantity Surveyor" },
+  { id: "boya", email: "boya@nobel.az", password: "Boya-A6hAtMPAF9", name: "Boya", role: "Project Manager" },
+];
+
 /** Thrown when no API answers: the site is deployed without its server. */
 export class NoServerError extends Error {
   constructor() {
@@ -52,6 +62,8 @@ async function request(path: string, init: RequestInit = {}, fallbackError = "Re
   if (res.status === 404 && isHtml) throw new NoServerError();
   if (res.status === 405 || (res.ok && isHtml)) throw new NoServerError();
   if (res.status === 404 && path.startsWith("/auth/")) throw new NoServerError();
+  // A dev proxy with no server behind it answers 5xx with no JSON body.
+  if (res.status >= 500 && !(res.headers.get("content-type") || "").includes("application/json")) throw new NoServerError();
 
   if (res.status === 401 && !path.startsWith("/auth/")) {
     // expired or invalid session: drop it and send the user to the sign-in page
@@ -67,11 +79,11 @@ async function request(path: string, init: RequestInit = {}, fallbackError = "Re
   return res.json();
 }
 
-function demoSession(): Session {
+function demoSession(acc: StaticAccount): Session {
   return {
     token: DEMO_TOKEN,
     expires_at: Math.floor(Date.now() / 1000) + 7 * 24 * 3600,
-    user: { id: "demo", email: DEMO_EMAIL, name: "Demo User", role: "Quantity Surveyor" },
+    user: { id: acc.id, email: acc.email, name: acc.name, role: acc.role },
   };
 }
 
@@ -80,8 +92,9 @@ export async function login(email: string, password: string): Promise<Session> {
     return await request("/auth/login", { method: "POST", headers: getHeaders(), body: JSON.stringify({ email, password }) }, "Sign-in failed");
   } catch (err) {
     if (err instanceof NoServerError) {
-      if (email.trim().toLowerCase() === DEMO_EMAIL && password === DEMO_PASSWORD) return demoSession();
-      throw new Error(`This site is running without its server. Sign in with the demo account (${DEMO_EMAIL}, password ${DEMO_PASSWORD}) to explore the sample project.`);
+      const acc = STATIC_ACCOUNTS.find((a) => a.email === email.trim().toLowerCase() && a.password === password);
+      if (acc) return demoSession(acc);
+      throw new Error("The email or password is not correct.");
     }
     throw err;
   }

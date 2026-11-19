@@ -1,8 +1,9 @@
 import { useL } from "../../../components/kit";
-import { addDays, diffDays, TODAY } from "../../../ops/dates";
-import { to, type Tone } from "../../../ops/select";
+import { data } from "../../../data";
+import { addDays, diffDays, maxDate, minDate, TODAY } from "../../../ops/dates";
+import { to, type CurvePoint, type Tone } from "../../../ops/select";
 import { useOps } from "../../../ops/store";
-import type { Activity, OpsData, Submittal, SubmittalStatus, Txt } from "../../../ops/types";
+import type { Activity, MaterialRequest, OpsData, ProgressSnapshot, Submittal, SubmittalStatus, Txt } from "../../../ops/types";
 
 /** Routes of the pages in this folder (and the site pages they link to). */
 export const RP = {
@@ -15,7 +16,12 @@ export const RP = {
   material: (key: string) => to(`procurement/catalogue/${key}`),
 };
 
-export const BUILDINGS = ["WH", "AD", "PS", "TK", "SITE"] as const;
+/** Buildings of the project (from the BOQ) that carry at least one of the activities, in BOQ order, then any others. */
+export function buildingsOf(activities: Activity[]) {
+  const used = new Set(activities.map((a) => a.building).filter(Boolean));
+  const known = data.buildings.map((b) => b.id).filter((id) => used.has(id));
+  return [...known, ...[...used].filter((b) => !known.includes(b)).sort()];
+}
 
 // ---------------------------------------------------------------- maths
 
@@ -26,11 +32,81 @@ export function plannedAt(a: Pick<Activity, "bStart" | "bEnd">, date = TODAY) {
   return diffDays(a.bStart, date) / Math.max(1, diffDays(a.bStart, a.bEnd));
 }
 
-/** Deterministic small number from a string. */
-export const hashOf = (s: string) => [...s].reduce((h, c) => (h * 31 + c.charCodeAt(0)) >>> 0, 7);
+/** Weight of an activity in a progress roll-up: its budget, or an equal share when the set carries no budget. */
+export function weightOf(acts: Activity[]) {
+  const total = acts.reduce((x, a) => x + Math.max(0, a.budget), 0);
+  return (a: Activity) => (total > 0 ? Math.max(0, a.budget) : 1);
+}
 
-/** Cost performance assumed for a subset: around 0.98 with a small fixed variation per key. */
-export const cpiOf = (key: string) => Math.round((0.98 + ((hashOf(key) % 9) - 4) * 0.011) * 100) / 100;
+/** Planned and actual share (0–1) of a set of activities at a date; SPI is null while nothing is planned yet. */
+export function progressOf(acts: Activity[], date = TODAY) {
+  const w = weightOf(acts);
+  const sum = acts.reduce((x, a) => x + w(a), 0);
+  if (!sum) return { planned: 0, actual: 0, spi: null as number | null };
+  const planned = acts.reduce((x, a) => x + w(a) * plannedAt(a, date), 0) / sum;
+  const actual = acts.reduce((x, a) => x + (w(a) * a.pct) / 100, 0) / sum;
+  return { planned, actual, spi: planned > 0 ? actual / planned : null };
+}
+
+/** % complete of an activity on a past date, read from the submitted weekly updates. */
+function recordedPct(a: Activity, date: string, snaps: ProgressSnapshot[]) {
+  let before: number | null = null;
+  let after: number | null = null;
+  for (const sn of snaps) {
+    const l = sn.lines.find((x) => x.activityId === a.id);
+    if (!l) continue;
+    if (sn.dataDate <= date) before = l.pct;
+    else if (after == null) after = l.pctBefore;
+  }
+  if (before != null) return before;
+  if (after != null) return after;
+  return a.aStart && a.aStart <= date ? a.pct : 0;
+}
+
+/**
+ * Planned / actual / forecast curve of a set of activities. Planned follows the baseline dates; actual is
+ * only drawn where it was recorded (each weekly update, and today); forecast follows the current dates.
+ */
+export function curveOf(acts: Activity[], snapshots: ProgressSnapshot[], step = 7): CurvePoint[] {
+  if (!acts.length) return [];
+  const w = weightOf(acts);
+  const sum = acts.reduce((x, a) => x + w(a), 0) || 1;
+  const snaps = [...snapshots].sort((a, b) => a.dataDate.localeCompare(b.dataDate) || a.submittedAt.localeCompare(b.submittedAt));
+  const ids = new Set(acts.map((a) => a.id));
+  const recorded = new Set(snaps.filter((sn) => sn.dataDate < TODAY && sn.lines.some((l) => ids.has(l.activityId))).map((sn) => sn.dataDate));
+  const start = minDate(TODAY, ...acts.map((a) => a.bStart), ...acts.map((a) => a.start));
+  const end = maxDate(TODAY, ...acts.map((a) => a.bEnd), ...acts.map((a) => a.end));
+  const now = acts.reduce((x, a) => x + (w(a) * a.pct) / 100, 0) / sum;
+  const current = (a: Activity, d: string) => (a.status === "COMPLETED" ? 1 : plannedAt({ bStart: a.start, bEnd: a.end }, d));
+  const dates = new Set<string>([TODAY, end, ...recorded]);
+  for (let d = start; d < end; d = addDays(d, step)) dates.add(d);
+  return [...dates]
+    .sort()
+    .map((d) => ({
+      date: d,
+      planned: acts.reduce((x, a) => x + w(a) * plannedAt(a, d), 0) / sum,
+      actual: d === TODAY ? now : recorded.has(d) ? acts.reduce((x, a) => x + (w(a) * recordedPct(a, d, snaps)) / 100, 0) / sum : null,
+      forecast: d >= TODAY ? Math.max(now, acts.reduce((x, a) => x + w(a) * current(a, d), 0) / sum) : null,
+    }));
+}
+
+/**
+ * Actual cost (AC): payments made on orders raised from material requests. `pick` narrows to the
+ * requests of a building or a set of activities; without it every paid amount counts.
+ */
+export function paidCost(s: Pick<OpsData, "payments" | "pos" | "mrs">, pick?: (mr: MaterialRequest) => boolean) {
+  const mrOf = new Map(s.mrs.map((m) => [m.id, m]));
+  const poOf = new Map(s.pos.map((p) => [p.id, p]));
+  return s.payments
+    .filter((p) => p.status === "PAID")
+    .filter((p) => {
+      if (!pick) return true;
+      const po = poOf.get(p.poId);
+      const mr = po?.mrId ? mrOf.get(po.mrId) : undefined;
+      return mr ? pick(mr) : false;
+    })
+    .reduce((x, p) => x + p.amount, 0);
+}
 
 /** Weekly window: Monday to Sunday of the week `offset` weeks from today. */
 export function weekOf(offset: number) {

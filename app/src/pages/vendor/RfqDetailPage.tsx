@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Building2, Check, CheckCircle2, FileUp, Keyboard, MessageSquareText, Send, Sparkles, X } from "lucide-react";
+import { ArrowLeft, Building2, Check, CheckCircle2, MessageSquareText, Send, X } from "lucide-react";
 import { Badge, DetailHeader, Empty, Field, KeyFigure, KeyVals, Meter, Money, NextBar, Panel, StatusBadge, toast, useL } from "../../components/kit";
-import { Segmented } from "../../components/ui";
 import { useOps } from "../../ops/store";
-import { PEOPLE } from "../../ops/seed";
+import { me } from "../../ops/people";
+import { projectTxt, sendPortalQuote, siteTxt } from "../../ops/ext/proc-client";
 import { quoteTotal, tradeName } from "../../ops/select";
 import { fmtMoney, fmtQty, unitLabel } from "../../lib/format";
 import type { Quotation, Rfq, Vendor } from "../../ops/types";
-import { BUCKET_LABEL, BUCKET_TONE, BUYER, useVendor, VP } from "./model";
+import { BUCKET_LABEL, BUCKET_TONE, buyerName, useVendor, VP } from "./model";
 import { Countdown, DeclineDialog, FilePick, OutcomeBadge, QuoteJourney } from "./parts";
 
 const TERMS = ["15 days", "30 days", "45 days", "60 days", "30% advance, balance on delivery", "Monthly in advance"];
@@ -68,7 +68,7 @@ export function VpRfqDetail() {
         meta={
           <>
             <span>
-              <Building2 size={13} /> {BUYER}
+              <Building2 size={13} /> {buyerName()}
             </span>
             <span>{tradeName(rfq.trade, lang)}</span>
             <span>{t("sent {date}", { date: d(rfq.createdAt) })}</span>
@@ -100,7 +100,7 @@ export function VpRfqDetail() {
           </button>
         </NextBar>
       ) : quote ? (
-        <NextBar tone="ok" text={t("Your quote {id} is with {buyer}. You will see here when they decide.", { id: quote.id, buyer: BUYER })} />
+        <NextBar tone="ok" text={t("Your quote {id} is with {buyer}. You will see here when they decide.", { id: quote.id, buyer: buyerName() })} />
       ) : (
         <NextBar tone="muted" text={inv.status === "DECLINED" ? t("You declined this request: {reason}", { reason: inv.reason ?? "—" }) : t("This request is closed. No quote was sent.")} />
       )}
@@ -165,10 +165,10 @@ export function VpRfqDetail() {
             <KeyVals
               cols={1}
               items={[
-                { k: t("Buyer"), v: BUYER },
-                { k: t("Project"), v: t("Qobu warehouse and administration building") },
-                { k: t("Contact"), v: `${PEOPLE.buyer} · ${t("Procurement")}` },
-                { k: t("Deliver to"), v: t("Qobu site, main gate, Absheron district") },
+                { k: t("Buyer"), v: buyerName() },
+                { k: t("Project"), v: x(projectTxt()) },
+                { k: t("Contact"), v: `${me()} · ${buyerName()}` },
+                { k: t("Deliver to"), v: x(siteTxt()) },
                 { k: t("Other vendors invited"), v: t("{n} vendors", { n: Math.max(0, rfq.invitations.length - 1) }) },
               ]}
             />
@@ -184,22 +184,15 @@ export function VpRfqDetail() {
 
 function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: (id: string) => void }) {
   const { t, x, lang } = useL();
-  const submitQuote = useOps((s) => s.submitQuote);
-  const materials = useOps((s) => s.materials);
   const [prices, setPrices] = useState<Record<string, string>>({});
   const [shipping, setShipping] = useState("0");
-  const [days, setDays] = useState(String(vendor.avgDeliveryDays));
+  const [days, setDays] = useState(vendor.avgDeliveryDays > 0 ? String(vendor.avgDeliveryDays) : "");
   const [valid, setValid] = useState("30");
   const [terms, setTerms] = useState(vendor.paymentTerms);
   const [ref, setRef] = useState("");
   const [notes, setNotes] = useState("");
-  const [mode, setMode] = useState<"type" | "file">("type");
   const [file, setFile] = useState("");
-  const [reading, setReading] = useState(false);
-  const [readFrom, setReadFrom] = useState("");
   const [tried, setTried] = useState(false);
-  const timer = useRef<number | null>(null);
-  useEffect(() => () => void (timer.current && window.clearTimeout(timer.current)), []);
 
   const net = rfq.lines.reduce((a, l) => a + l.qty * num(prices[l.key]), 0);
   const vat = net * 0.18;
@@ -209,33 +202,14 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
   const missing = rfq.lines.length - priced;
   const termOptions = useMemo(() => (TERMS.includes(vendor.paymentTerms) ? TERMS : [vendor.paymentTerms, ...TERMS]), [vendor.paymentTerms]);
 
-  const pickFile = (name: string) => {
-    setFile(name);
-    if (!name) return;
-    setReading(true);
-    const vn = Number(vendor.id.slice(2)) || 1;
-    timer.current = window.setTimeout(() => {
-      const next: Record<string, string> = {};
-      rfq.lines.forEach((l, i) => {
-        const rate = materials.find((m) => m.key === l.material)?.rate ?? 10;
-        const factor = 0.96 + (((i + 1) * 37 + vn * 11) % 10) / 100;
-        next[l.key] = (Math.round(rate * factor * 100) / 100).toFixed(2);
-      });
-      setPrices(next);
-      setReading(false);
-      setReadFrom(name);
-      setMode("type");
-    }, 1300);
-  };
-
   const submit = () => {
     setTried(true);
     if (missing > 0 || num(days) <= 0 || num(valid) <= 0) {
       toast(t("Price every line and set the delivery time before you send."), "warn");
       return;
     }
-    const note = [notes.trim(), readFrom ? `${t("Attached file")}: ${readFrom}` : ""].filter(Boolean).join(" · ");
-    const id = submitQuote({
+    const note = [notes.trim(), file ? `${t("Attached file")}: ${file}` : ""].filter(Boolean).join(" · ");
+    const id = sendPortalQuote({
       rfqId: rfq.id,
       vendorId: vendor.id,
       ref: ref.trim() || undefined,
@@ -245,9 +219,8 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
       paymentTerms: terms,
       shipping: ship,
       notes: note,
-      source: "PORTAL",
     });
-    toast(t("Quote {id} sent to {buyer}.", { id, buyer: BUYER }));
+    toast(t("Quote {id} sent to {buyer}.", { id, buyer: buyerName() }));
     onSent(id);
   };
 
@@ -258,35 +231,11 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
           <span className="k-eyebrow">{t("Your quote")}</span>
           <h2>{t("Price this request")}</h2>
         </div>
-        <Segmented<"type" | "file">
-          label={t("How to quote")}
-          value={mode}
-          onChange={setMode}
-          options={[
-            { value: "type", label: <><Keyboard size={14} /> {t("Type prices")}</> },
-            { value: "file", label: <><FileUp size={14} /> {t("Upload a file instead")}</> },
-          ]}
-        />
       </header>
 
-      {mode === "file" ? (
-        <div className="vp-upload">
-          <FilePick value={file} onChange={pickFile} label="Choose your quotation file" hint={t("PDF, Excel or a photo. We read the prices into the form so you can check them. Only the file name is kept in this demo.")} />
-          {reading ? (
-            <p className="vp-reading">
-              <Sparkles size={14} />
-              <span className="k-typing">{t("Reading {file}", { file })}</span>
-            </p>
-          ) : null}
-        </div>
-      ) : (
-        <>
-          {readFrom ? (
-            <div className="k-callout k-tone-brand vp-readfrom">
-              <Sparkles size={15} />
-              <span>{t("{n} prices read from {file}. Check them before you send.", { n: rfq.lines.length, file: readFrom })}</span>
-            </div>
-          ) : null}
+      <div className="vp-upload">
+        <FilePick value={file} onChange={setFile} label="Attach your quotation file" hint={t("Optional. Type the prices below; the file name is kept for reference.")} />
+      </div>
           <div className="vp-qlines">
             <div className="vp-qline vp-qline-head" aria-hidden="true">
               <span>{t("Item")}</span>
@@ -321,8 +270,6 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
               );
             })}
           </div>
-        </>
-      )}
 
       <div className="vp-qform-grid">
         <div className="k-form">
@@ -345,7 +292,7 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
             <input className="input num" inputMode="decimal" value={shipping} onChange={(e) => setShipping(e.target.value)} />
           </Field>
           <Field label={t("Your reference")} hint={t("Your own quote number, if you have one")}>
-            <input className="input" value={ref} onChange={(e) => setRef(e.target.value)} placeholder={`${vendor.name.split(" ")[0]!.slice(0, 3).toUpperCase()}-2026-…`} />
+            <input className="input" value={ref} onChange={(e) => setRef(e.target.value)} />
           </Field>
           <Field label={t("Notes for the buyer")} wide>
             <textarea className="input" rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder={t("Exclusions, alternatives, delivery lots…")} />
@@ -375,9 +322,9 @@ function QuoteForm({ rfq, vendor, onSent }: { rfq: Rfq; vendor: Vendor; onSent: 
             <Meter value={rfq.lines.length ? priced / rfq.lines.length : 0} tone={missing ? "brand" : "ok"} label={t("Lines priced")} />
             <small className={missing && tried ? "k-text-bad" : "muted"}>{missing ? t("{n} of {m} lines priced", { n: priced, m: rfq.lines.length }) : t("Every line priced")}</small>
           </div>
-          <button type="button" className="btn btn-primary btn-lg vp-send" onClick={submit} disabled={reading}>
+          <button type="button" className="btn btn-primary btn-lg vp-send" onClick={submit}>
             <Send size={15} />
-            {t("Send quote to {buyer}", { buyer: BUYER })}
+            {t("Send quote to {buyer}", { buyer: buyerName() })}
           </button>
           <p className="muted small">{t("Sent straight to the buyer's quotations list. No email needed.")}</p>
         </aside>
@@ -398,7 +345,7 @@ function SentQuote({ q, rfq, fresh }: { q: Quotation; rfq: Rfq; fresh: boolean }
         </span>
         <div>
           <span className="k-eyebrow">{t("Your quote")} · {q.id}</span>
-          <h2>{fresh ? t("Sent to {buyer}: the buyer can see it now", { buyer: BUYER }) : t("Sent to {buyer} on {date}", { buyer: BUYER, date: d(q.receivedAt) })}</h2>
+          <h2>{fresh ? t("Sent to {buyer}: the buyer can see it now", { buyer: buyerName() }) : t("Sent to {buyer} on {date}", { buyer: buyerName(), date: d(q.receivedAt) })}</h2>
           <p className="muted">{t("Reference {ref} · for {rfq}", { ref: q.ref, rfq: rfq.ref })}</p>
         </div>
         <OutcomeBadge s={s} q={q} />

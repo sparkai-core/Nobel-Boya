@@ -29,7 +29,7 @@ export function AiPick({ rfqId, quotes }: { rfqId: string; quotes: Quotation[] }
       <div className="ps-ai-head">
         <span className="k-ai-tag">
           <Sparkles size={13} />
-          {t("AI comparison")}
+          {t("Weighted comparison")}
         </span>
         {enough ? (
           <button type="button" className="icon-btn" onClick={() => setRun((n) => n + 1)} aria-label={t("Score again")} title={t("Score again")}>

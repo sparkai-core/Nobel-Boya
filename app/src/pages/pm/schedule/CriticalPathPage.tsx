@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ArrowRight, GitBranch, Route } from "lucide-react";
-import { Badge, GanttCore, PageHero, Register, useL, type Column, type GanttBar, type GanttRow } from "../../../components/kit";
+import { ArrowRight, GitBranch, Plus, Route, Upload } from "lucide-react";
+import { Badge, Empty, GanttCore, PageHero, Register, useL, type Column, type GanttBar, type GanttRow } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
 import { useMedia } from "../../../lib/useMedia";
 import { useOps } from "../../../ops/store";
@@ -40,7 +40,8 @@ export function CriticalPathPage() {
   // The chain in order: start from the earliest critical activity and follow critical links.
   const chain = useMemo(() => {
     const critIds = new Set(activities.filter((a) => cp.get(a.id)?.critical).map((a) => a.id));
-    const starts = [...critIds].filter((id) => !links.some((l) => l.to === id && critIds.has(l.from)));
+    const hasCritPred = new Set(links.filter((l) => critIds.has(l.from) && critIds.has(l.to)).map((l) => l.to));
+    const starts = [...critIds].filter((id) => !hasCritPred.has(id));
     const head = starts.map((id) => byId.get(id)!).sort((a, b) => (cp.get(a.id)?.es ?? 0) - (cp.get(b.id)?.es ?? 0))[0];
     const out: Activity[] = [];
     const seen = new Set<string>();
@@ -79,8 +80,8 @@ export function CriticalPathPage() {
         cells: wide ? [<span key="f" className={c.tf <= 0 ? "k-text-bad" : c.tf <= 10 ? "k-text-warn" : undefined}>{c.tf}d</span>] : undefined,
       };
     });
-    out.push({ id: "f:calc", group: true, label: t("Calculated finish"), bars: [], milestones: [{ date: outlook.calculated, filled: true, tone: outlook.calculated > outlook.contract ? "bad" : "ok", title: d(outlook.calculated) }], cells: wide ? [<span key="c">{d(outlook.calculated, false)}</span>] : undefined });
-    out.push({ id: "f:contract", group: true, label: t("Contract finish"), bars: [], milestones: [{ date: outlook.contract, filled: false, tone: "neutral", title: d(outlook.contract) }], cells: wide ? [<span key="c">{d(outlook.contract, false)}</span>] : undefined });
+    out.push({ id: "f:calc", group: true, label: t("Calculated finish"), bars: [], milestones: [{ date: outlook.calculated, filled: true, tone: outlook.contractKnown ? (outlook.calculated > outlook.contract ? "bad" : "ok") : "brand", title: d(outlook.calculated) }], cells: wide ? [<span key="c">{d(outlook.calculated, false)}</span>] : undefined });
+    if (outlook.contractKnown) out.push({ id: "f:contract", group: true, label: t("Contract finish"), bars: [], milestones: [{ date: outlook.contract, filled: false, tone: "neutral", title: d(outlook.contract) }], cells: wide ? [<span key="c">{d(outlook.contract, false)}</span>] : undefined });
     return out;
   }, [list, cp, outlook, wide, t, x, d]);
 
@@ -130,7 +131,7 @@ export function CriticalPathPage() {
 
   const from = addDays(PROJECT_START, -5);
   const to = addDays(maxDate(outlook.calculated, outlook.contract), 20);
-  const late = outlook.calculated > outlook.contract;
+  const late = outlook.contractKnown && outlook.calculated > outlook.contract;
 
   return (
     <div className="k-page pms">
@@ -150,6 +151,27 @@ export function CriticalPathPage() {
 
       <ProjectRunStrip />
 
+      {!activities.length ? (
+        <div className="k-panel">
+          <Empty
+            icon={<GitBranch size={20} />}
+            title={t("No programme yet")}
+            action={
+              <div className="pms-empty-actions">
+                <button type="button" className="btn btn-primary" onClick={() => navigate(`${R.planning("activities")}?import=1`)}>
+                  <Upload size={15} /> {t("Import a P6 / MS Project file")}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => navigate(`${R.planning("activities")}?add=1`)}>
+                  <Plus size={15} /> {t("Add an activity")}
+                </button>
+              </div>
+            }
+          >
+            {t("The critical path is worked out from the activities and their links once there is a programme.")}
+          </Empty>
+        </div>
+      ) : (
+      <>
       {driver ? (
         <div className={`pms-chain k-callout ${late ? "k-tone-bad" : "k-tone-brand"}`}>
           <GitBranch size={17} />
@@ -157,7 +179,7 @@ export function CriticalPathPage() {
             <p className="pms-chain-lead">
               {t("The finish is driven by {name} ({code})", { name: x(driver.name).toLowerCase(), code: driver.code })}
               {driverRfi ? t(", held up by {ref}", { ref: driverRfi.ref }) : driver.status === "BLOCKED" ? t(", which is blocked") : ""}.{" "}
-              {late ? t("The chain finishes {date}, {n} days after the contract date.", { date: d(outlook.calculated), n: diffDays(outlook.contract, outlook.calculated) }) : t("The chain finishes {date}, within the contract date.", { date: d(outlook.calculated) })}
+              {late ? t("The chain finishes {date}, {n} days after the contract date.", { date: d(outlook.calculated), n: diffDays(outlook.contract, outlook.calculated) }) : outlook.contractKnown ? t("The chain finishes {date}, within the contract date.", { date: d(outlook.calculated) }) : t("The chain finishes {date}.", { date: d(outlook.calculated) })}
             </p>
             <ol className="pms-chain-steps">
               {chain.map((a, i) => (
@@ -190,7 +212,7 @@ export function CriticalPathPage() {
           </div>
         </div>
         <div className="pms-gantt pms-cpm">
-          <GanttCore rows={rows} from={from} to={to} zoom={wide ? "month" : "quarter"} today={TODAY} links={glinks} onRowClick={(id) => !id.startsWith("f:") && navigate(R.programme(id))} labelWidth={wide ? 380 : 190} rowHeight={34} height={560} cellHeaders={wide ? [t("Float")] : []} markers={[{ date: outlook.contract, label: t("Contract finish"), tone: "bad" }]} />
+          <GanttCore rows={rows} from={from} to={to} zoom={wide ? "month" : "quarter"} today={TODAY} links={glinks} onRowClick={(id) => !id.startsWith("f:") && navigate(R.programme(id))} labelWidth={wide ? 380 : 190} rowHeight={34} height={560} cellHeaders={wide ? [t("Float")] : []} markers={outlook.contractKnown ? [{ date: outlook.contract, label: t("Contract finish"), tone: "bad" }] : []} />
         </div>
         <div className="pms-legend">
           <span className="lg-crit">{t("Critical")}</span>
@@ -216,6 +238,8 @@ export function CriticalPathPage() {
           </div>
         }
       />
+      </>
+      )}
     </div>
   );
 }

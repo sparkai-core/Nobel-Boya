@@ -1,14 +1,14 @@
 import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Link2, PackagePlus, Plus, Save, Trash2 } from "lucide-react";
+import { Link2, PackagePlus, Pencil, Plus, Save, Trash2 } from "lucide-react";
 import { Badge, KeyVals, StatusBadge, TabBar, toast, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { addDays, diffDays, TODAY } from "../../../ops/dates";
 import { R, type Cpm } from "../../../ops/select";
 import type { Activity, LinkType } from "../../../ops/types";
-import { usePlanExtras, type ConstraintKind } from "../../../ops/ext/planning-p2";
+import { constraintKey, usePlanExtras, type ConstraintKind } from "../../../ops/ext/planning-p2";
 import { fmtQty, unitLabel } from "../../../lib/format";
-import { calendarOf, LINK_WORDS, origDur, remDur, riskDays, supplyFor, variance, type SupplyState } from "./model";
+import { calendarName, LINK_WORDS, origDur, remDur, RISK_SPREAD, riskDays, supplyFor, variance, type SupplyState } from "./model";
 
 type PaneTab = "general" | "status" | "rel" | "res" | "risk";
 
@@ -28,7 +28,7 @@ const SUPPLY: Record<SupplyState, { label: string; tone: "ok" | "brand" | "bad" 
 };
 
 /** Bottom detail pane of the Activities tab (P6 "Activity Details"). */
-export function ActivityPane({ a, cp, onPick }: { a: Activity; cp: Cpm | undefined; onPick: (id: string) => void }) {
+export function ActivityPane({ a, cp, onPick, onEdit }: { a: Activity; cp: Cpm | undefined; onPick: (id: string) => void; onEdit: () => void }) {
   const { t, x, d, lang } = useL();
   const navigate = useNavigate();
   const s = useOps();
@@ -48,6 +48,9 @@ export function ActivityPane({ a, cp, onPick }: { a: Activity; cp: Cpm | undefin
           <strong className="truncate">{x(a.name)}</strong>
           <StatusBadge kind="activity" status={a.status} />
           {cp?.critical && a.status !== "COMPLETED" ? <Badge tone="bad">{t("Critical")}</Badge> : null}
+          <button type="button" className="btn btn-ghost btn-sm" onClick={onEdit}>
+            <Pencil size={13} /> {t("Edit")}
+          </button>
         </div>
         <TabBar
           value={tab}
@@ -70,9 +73,9 @@ export function ActivityPane({ a, cp, onPick }: { a: Activity; cp: Cpm | undefin
                 { k: t("Activity ID"), v: <span className="k-mono">{a.code}</span> },
                 { k: t("Type"), v: a.isMilestone ? t("Milestone") : t("Task dependent") },
                 { k: t("Original duration"), v: t("{n} days", { n: origDur(a) }) },
-                { k: t("Calendar"), v: t(calendarOf(a)) },
+                { k: t("Calendar"), v: calendarName(s.workweek) },
                 { k: t("WBS"), v: wbsNode ? `${wbsNode.code} · ${x(wbsNode.name)}` : "—" },
-                { k: t("Owner"), v: s.subs.find((z) => z.id === a.owner)?.name ?? a.owner },
+                { k: t("Owner"), v: s.subs.find((z) => z.id === a.owner)?.name ?? (a.owner || "—") },
               ]}
             />
             <div className="pp-gen-facts">
@@ -187,7 +190,7 @@ function Fig({ label, value, sub, tone }: { label: string; value: string; sub?: 
 function StatusTab({ a }: { a: Activity }) {
   const { t, d } = useL();
   const logProgress = useOps((s) => s.logProgress);
-  const constraint = usePlanExtras((s) => s.constraints[a.id]) ?? { kind: "NONE" as ConstraintKind, date: null };
+  const constraint = usePlanExtras((s) => s.constraints[constraintKey(a.id)]) ?? { kind: "NONE" as ConstraintKind, date: null };
   const setConstraint = usePlanExtras((s) => s.setConstraint);
   const [pct, setPct] = useState(a.pct);
   const [note, setNote] = useState("");
@@ -385,7 +388,7 @@ function RiskTab({ a }: { a: Activity }) {
         <line x1={X(p80)} x2={X(p80)} y1={2} y2={32} className="pp-tri-p80" />
         <line x1={0} x2={100} y1={32} y2={32} className="pp-tri-base" />
       </svg>
-      <p className="muted small">{t("Remaining work from {d}. Spread from the P6 risk fields; the worst case widens when the activity is blocked.", { d: d(base) })}</p>
+      <p className="muted small">{t("Remaining work from {d}. An assumed spread, not read from the file: {a}% best case, +{b}% worst case (+{c}% while blocked).", { d: d(base), a: -Math.round(RISK_SPREAD.best * 100), b: Math.round(RISK_SPREAD.worst * 100), c: Math.round(RISK_SPREAD.blocked * 100) })}</p>
     </div>
   );
 }

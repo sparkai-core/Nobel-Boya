@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Clock, Coins } from "lucide-react";
 import { Dialog, Field, toast, useL } from "../../../components/kit";
-import { useOps, ME } from "../../../ops/store";
+import { useOps, me } from "../../../ops/store";
 import { addDays, same, TODAY } from "../../../ops/dates";
 import { statusMeta } from "../../../ops/select";
 import { disciplineName } from "../../../lib/loc";
@@ -45,7 +45,7 @@ export function RfiDialog({ open, onClose, onCreated }: { open: boolean; onClose
       discipline,
       sheetId,
       activityId: activityId || null,
-      raisedBy: ME,
+      raisedBy: me(),
       dueAt,
       priority,
       costImpact: cost,

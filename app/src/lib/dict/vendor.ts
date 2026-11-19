@@ -2,7 +2,6 @@
 const AZ: Record<string, string> = {
   // shell
   "Vendor portal navigation": "Təchizatçı portalı naviqasiyası",
-  "Qobu project": "Qobu layihəsi",
   buyer: "alıcı",
   Buyer: "Alıcı",
   Dashboard: "Panel",
@@ -17,13 +16,8 @@ const AZ: Record<string, string> = {
   Profile: "Profil",
   "Main pages": "Əsas səhifələr",
   "Powered by": "Təminatçı:",
-  "Vendor portal for the Qobu project. Demo data is kept in this browser and shared with the buyer's tab.":
-    "Qobu layihəsi üçün təchizatçı portalı. Demo məlumatları bu brauzerdə saxlanılır və alıcının tabı ilə paylaşılır.",
-  Demo: "Demo",
   "Viewing as": "Baxış:",
   "Switch vendor": "Təchizatçını dəyiş",
-  "Demo control: pick the vendor whose portal you want to show. Everything they do appears in the buyer's tab.":
-    "Demo idarəsi: portalını göstərmək istədiyiniz təchizatçını seçin. Onun etdiyi hər şey alıcının tabında görünür.",
   "Now viewing as {name}": "İndi {name} kimi baxırsınız",
   "{n} RFQ to answer": "{n} RFQ cavab gözləyir",
   "{n} order to accept": "{n} sifariş qəbul gözləyir",
@@ -78,7 +72,6 @@ const AZ: Record<string, string> = {
   "waiting for a decision": "qərar gözləyir",
   "{n} closed": "{n} bağlanıb",
   "Paid so far": "İndiyədək ödənilib",
-  "on the Qobu project": "Qobu layihəsi üzrə",
   "From quote to cash": "Təklifdən ödənişə",
   "What you have quoted to {buyer}, how much became orders, what arrived on site and what has been paid.":
     "{buyer} şirkətinə nə qədər təklif verdiyiniz, bunun nə qədərinin sifarişə çevrildiyi, meydançaya nə çatdığı və nə qədərinin ödənildiyi.",
@@ -169,8 +162,6 @@ const AZ: Record<string, string> = {
   "About this request": "Sorğu haqqında",
   Contact: "Əlaqə",
   "Deliver to": "Çatdırılma ünvanı",
-  "Qobu warehouse and administration building": "Qobu anbar və inzibati binası",
-  "Qobu site, main gate, Absheron district": "Qobu meydançası, əsas darvaza, Abşeron rayonu",
   "Other vendors invited": "Dəvət olunan digər təchizatçılar",
   "{n} vendors": "{n} təchizatçı",
   "Other vendors' names and prices are never shown to you, and yours are never shown to them.": "Digər təchizatçıların adları və qiymətləri sizə, sizinkilər isə onlara heç vaxt göstərilmir.",
@@ -181,8 +172,6 @@ const AZ: Record<string, string> = {
   "Upload a file instead": "Əvəzində fayl yüklə",
   "Choose a file": "Fayl seçin",
   "Choose your quotation file": "Təklif faylınızı seçin",
-  "PDF, Excel or a photo. We read the prices into the form so you can check them. Only the file name is kept in this demo.":
-    "PDF, Excel və ya foto. Qiymətləri formaya oxuyuruq ki, yoxlaya biləsiniz. Bu demoda yalnız faylın adı saxlanılır.",
   "Reading {file}": "{file} oxunur",
   "{n} prices read from {file}. Check them before you send.": "{file} faylından {n} qiymət oxundu. Göndərməzdən əvvəl yoxlayın.",
   "Unit price, AZN": "Vahid qiyməti, AZN",
@@ -351,7 +340,6 @@ const AZ: Record<string, string> = {
   "Invoice {id} sent to {buyer}.": "{id} hesab-fakturası {buyer} şirkətinə göndərildi.",
 
   // deliveries
-  "What the Qobu site store has checked in from you, line by line.": "Qobu meydança anbarının sizdən qəbul etdikləri, sətir-sətir.",
   "At the gate": "Darvazada",
   "Checked in": "Qəbul edilib",
   "Short or in full": "Əskik və ya tam",
@@ -431,7 +419,6 @@ const AZ: Record<string, string> = {
   "With {buyer}": "{buyer} ilə",
   Invitations: "Dəvətlər",
   Send: "Göndər",
-  "PDF or a photo of the document. Only the file name is kept in this demo.": "Sənədin PDF-i və ya fotosu. Bu demoda yalnız faylın adı saxlanılır.",
   "Sent to {buyer} for checking.": "Yoxlama üçün {buyer} şirkətinə göndərildi.",
   // ---------------------------------------------------------------- phase 2: invoices
   Invoices: "Fakturalar",
@@ -513,7 +500,6 @@ const AZ: Record<string, string> = {
   "Welcome, {company}. {buyer} is checking your documents.": "Xoş gəlmisiniz, {company}. {buyer} sənədlərinizi yoxlayır.",
   "Invitation {id}": "Dəvət {id}",
   "Join the portal": "Portala qoşulun",
-  "{buyer} invites {company} to work with them on the Qobu project through the vendor portal.": "{buyer} {company} şirkətini təchizatçı portalı vasitəsilə Qobu layihəsində əməkdaşlığa dəvət edir.",
   "Link valid until": "Keçid qüvvədədir",
   "Answer requests for quotation": "Təklif sorğularını cavablandırın",
   "Accept orders and dispatch deliveries": "Sifarişləri qəbul edin və malı yola salın",
@@ -532,6 +518,38 @@ const AZ: Record<string, string> = {
   "This invite link is not valid": "Bu dəvət keçidi etibarsızdır",
   "No invitation {id} was found. Check the link in your e-mail.": "{id} dəvəti tapılmadı. E-poçtunuzdakı keçidi yoxlayın.",
   "The link has no invitation in it. Open it again from your e-mail.": "Keçiddə dəvət yoxdur. Onu e-poçtunuzdan yenidən açın.",
-  "Demo: open invitations": "Demo: açıq dəvətlər",
+
+  // client data: honest entry, empty states, project setup
+  "No vendors yet. Add a vendor in Procurement → Vendors, then open the portal as that vendor.": "Hələ təchizatçı yoxdur. Satınalma → Təchizatçılar bölməsində təchizatçı əlavə edin, sonra portalı həmin təchizatçı kimi açın.",
+  "Vendor portal for {p}. Records are kept in this browser and shared with the buyer's tab.": "{p} üçün təchizatçı portalı. Qeydlər bu brauzerdə saxlanılır və alıcının tabı ilə paylaşılır.",
+  "Vendors have no login yet: pick the vendor whose portal you want to open. Everything they do appears in the buyer's tab.": "Təchizatçıların hələ girişi yoxdur: portalını açmaq istədiyiniz təchizatçını seçin. Onların etdiyi hər şey alıcının tabında görünür.",
+  "Add a document": "Sənəd əlavə edin",
+  "Add a renewed copy": "Yenilənmiş nüsxə əlavə edin",
+  "Add document": "Sənəd əlavə et",
+  "Document type": "Sənədin növü",
+  "Document name": "Sənədin adı",
+  "Reference or number": "İstinad və ya nömrə",
+  "Expiry date": "Bitmə tarixi",
+  "Leave empty if it does not expire.": "Müddəti bitmirsə, boş saxlayın.",
+  "File": "Fayl",
+  "Save document": "Sənədi saxla",
+  "Document added. The buyer can see it.": "Sənəd əlavə edildi. Alıcı onu görə bilir.",
+  "No documents yet": "Hələ sənəd yoxdur",
+  "Add your trade licence, insurance and other certificates with their reference and expiry date, so {buyer} has them on file.": "Ticarət lisenziyanızı, sığortanızı və digər sertifikatlarınızı nömrəsi və bitmə tarixi ilə əlavə edin ki, {buyer} onları qeydə alsın.",
+  "No file attached": "Fayl əlavə edilməyib",
+  "Added {when}.": "{when} əlavə edilib.",
+  "{file} added {when}.": "{file} {when} əlavə edilib.",
+  "No documents added yet.": "Hələ sənəd əlavə edilməyib.",
+  "These documents have expired. Add a renewed copy:": "Bu sənədlərin müddəti bitib. Yenilənmiş nüsxə əlavə edin:",
+  "renew these": "bunları yeniləyin",
+  "nothing expired": "müddəti bitən yoxdur",
+  "Not scored yet. The buyer scores a vendor from its orders, deliveries and invoices.": "Hələ qiymətləndirilməyib. Alıcı təchizatçını sifarişləri, çatdırılmaları və fakturaları əsasında qiymətləndirir.",
+  "Optional. Type the prices below; the file name is kept for reference.": "İstəyə bağlı. Qiymətləri aşağıda yazın; fayl adı istinad üçün saxlanılır.",
+  "Attach your quotation file": "Təklif faylınızı əlavə edin",
+  "{buyer} invites {company} to work with them on {project} through the vendor portal.": "{buyer} {company} şirkətini təchizatçı portalı vasitəsilə {project} layihəsində birgə işləməyə dəvət edir.",
+  "Open invitations": "Açıq dəvətlər",
+  "What the site store has checked in from you, line by line.": "Meydança anbarının sizdən qəbul etdikləri, sətir-sətir.",
+  "on {p}": "{p} üzrə",
+  "On the register since {date}": "{date} tarixindən reyestrdə",
 };
 export default AZ;

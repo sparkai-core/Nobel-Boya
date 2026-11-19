@@ -4,18 +4,21 @@ import { Panel, useL } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
 import { fmtMoneyShort } from "../../../lib/format";
 import { buildingShort } from "../../../lib/loc";
-import { programmeStats, sectionName } from "../../../ops/select";
+import { sectionName } from "../../../ops/select";
+import { useOps } from "../../../ops/store";
 import type { Activity } from "../../../ops/types";
-import { BUILDINGS, cpiOf } from "./shared";
+import { buildingsOf, paidCost, plannedAt } from "./shared";
 
 export type EvRow = { key: string; label: string; pv: number; ev: number; ac: number; spi: number | null; cpi: number | null; budget: number };
 
-/** PV / EV / AC for a subset of activities. AC is assumed from EV with a small fixed variation per subset. */
-export function evOf(key: string, label: string, acts: Activity[]): EvRow {
-  const st = programmeStats(acts);
-  const cpi = cpiOf(key);
-  const ac = st.earned / cpi;
-  return { key, label, pv: st.planned, ev: st.earned, ac, spi: st.planned > 0 ? st.earned / st.planned : null, cpi: st.earned > 0 ? st.earned / ac : null, budget: acts.reduce((a, x) => a + x.budget, 0) };
+/**
+ * PV / EV / AC for a subset of activities. PV and EV come from the activity budgets; AC is the money
+ * actually paid for that work (0 = nothing recorded, so CPI shows "—").
+ */
+export function evOf(key: string, label: string, acts: Activity[], ac: number): EvRow {
+  const pv = acts.reduce((x, a) => x + a.budget * plannedAt(a), 0);
+  const ev = acts.reduce((x, a) => x + (a.budget * a.pct) / 100, 0);
+  return { key, label, pv, ev, ac, spi: pv > 0 ? ev / pv : null, cpi: ev > 0 && ac > 0 ? ev / ac : null, budget: acts.reduce((x, a) => x + a.budget, 0) };
 }
 
 const idxTone = (v: number | null) => (v == null ? "muted" : v >= 0.98 ? "ok" : v >= 0.9 ? "warn" : "bad");
@@ -27,16 +30,26 @@ export function EarnedValue({ activities }: { activities: Activity[] }) {
   const [by, setBy] = useState<"building" | "trade">("building");
   const [hover, setHover] = useState<string | null>(null);
 
-  const buildings = useMemo(() => BUILDINGS.map((b) => evOf(b, buildingShort(b, lang), activities.filter((a) => a.building === b))), [activities, lang]);
+  const payments = useOps((s) => s.payments);
+  const pos = useOps((s) => s.pos);
+  const mrs = useOps((s) => s.mrs);
+  const money = useMemo(() => ({ payments, pos, mrs }), [payments, pos, mrs]);
+
+  const buildings = useMemo(() => buildingsOf(activities).map((b) => evOf(b, buildingShort(b, lang), activities.filter((a) => a.building === b), paidCost(money, (mr) => mr.building === b))), [activities, lang, money]);
   const trades = useMemo(() => {
     const keys = [...new Set(activities.map((a) => a.section ?? "_gen"))];
     return keys
-      .map((k) => evOf(`T-${k}`, k === "_gen" ? t("General items") : sectionName(k, lang), activities.filter((a) => (a.section ?? "_gen") === k)))
+      .map((k) => {
+        const acts = activities.filter((a) => (a.section ?? "_gen") === k);
+        const ids = new Set(acts.map((a) => a.id));
+        return evOf(`T-${k}`, k === "_gen" ? t("General items") : sectionName(k, lang), acts, paidCost(money, (mr) => !!mr.activityId && ids.has(mr.activityId)));
+      })
       .filter((r) => r.budget > 0)
       .sort((a, b) => b.pv - a.pv || b.budget - a.budget);
-  }, [activities, lang, t]);
+  }, [activities, lang, t, money]);
   const rows = by === "building" ? buildings : trades;
-  const total = evOf("ALL", t("Whole project"), activities);
+  const total = evOf("ALL", t("Whole project"), activities, paidCost(money));
+  const noBudget = total.budget <= 0;
   const max = Math.max(1, ...rows.map((r) => Math.max(r.pv, r.ev, r.ac)));
 
   // Quadrant: SPI on X (0.6–1.2), CPI on Y (0.88–1.08).
@@ -52,9 +65,12 @@ export function EarnedValue({ activities }: { activities: Activity[] }) {
     <Panel
       title={t("Earned value")}
       icon={<Scale size={15} />}
-      sub={t("Planned value (PV), earned value (EV) and actual cost (AC). Actual cost is estimated from the site cost reports.")}
+      sub={t("Planned value (PV) and earned value (EV) from the activity budgets; actual cost (AC) is what has been paid on orders raised for that work.")}
       actions={<Segmented value={by} onChange={setBy} label={t("Group by")} options={[{ value: "building", label: t("By building") }, { value: "trade", label: t("By trade") }]} />}
     >
+      {noBudget ? (
+        <p className="muted small">{t("The activities carry no budget yet, so there is no earned value to show. Give the activities a budget on the programme.")}</p>
+      ) : (
       <div className="pg-ev">
         <div className="pg-ev-table">
           <div className="pg-ev-row head">
@@ -131,10 +147,11 @@ export function EarnedValue({ activities }: { activities: Activity[] }) {
             ))}
           </svg>
           <figcaption className="muted small">
-            {idle.length ? t("Not started yet: {list}.", { list: idle.map((b) => b.label).join(", ") }) : t("Every building has earned value.")} {t("Dot size is the building's budget.")}
+            {!dots.length ? t("A building shows here once it has earned value and payments recorded against its orders.") : idle.length ? t("No earned value or no payments yet: {list}.", { list: idle.map((b) => b.label).join(", ") }) : t("Every building has earned value.")} {dots.length ? t("Dot size is the building's budget.") : null}
           </figcaption>
         </figure>
       </div>
+      )}
     </Panel>
   );
 }

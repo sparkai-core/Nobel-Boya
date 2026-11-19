@@ -1,14 +1,15 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { Check } from "lucide-react";
-import { ApprovalPath, Badge, CountUp, Dialog, Dropzone, Field, fmtBytes, Money, ReadSteps, toast, useFakeRead, useL, type ReadStep } from "../../components/kit";
+import { ApprovalPath, Badge, CountUp, Dialog, Field, Money, toast, useL } from "../../components/kit";
 import { useOps, type OpsState } from "../../ops/store";
 import { matchInvoice } from "../../ops/store-phase2";
-import { addDays, diffDays, TODAY } from "../../ops/dates";
-import { sendDocument } from "../../ops/ext/vendor";
+import { diffDays, TODAY } from "../../ops/dates";
+import { DOC_TYPES, useVendorDocs, type DocType } from "../../ops/ext/vendor";
+import { hasScore } from "../../ops/ext/proc-client";
 import { invTotal, linesFromPo, sendPortalInvoice } from "../../ops/ext/money-p2";
 import { fmtMoney, fmtQty, unitLabel } from "../../lib/format";
 import type { Invoice, InvoiceLine, PurchaseOrder, Quotation, Vendor } from "../../ops/types";
-import { BUYER, quoteJourney, STAGE_META, type OrderStage, type VendorDoc } from "./model";
+import { buyerName, quoteJourney, STAGE_META, type OrderStage, type VendorDoc } from "./model";
 
 // ---------------------------------------------------------------- score rings
 
@@ -28,6 +29,7 @@ export function ScoreRings({ vendor, size = 188 }: { vendor: Vendor; size?: numb
   }, []);
   const c = size / 2;
   const stroke = size * 0.07;
+  if (!hasScore(vendor)) return <p className="muted small">{t("Not scored yet. The buyer scores a vendor from its orders, deliveries and invoices.")}</p>;
   return (
     <div className="vp-rings">
       <div className="vp-rings-art" style={{ width: size, height: size }}>
@@ -186,7 +188,7 @@ export function DeclineDialog({ open, onClose, rfqId, rfqRef, vendorId }: { open
       }
     >
       <div className="k-stack">
-        <p className="muted">{t("A short reason helps {buyer} plan. They will see it next to your name.", { buyer: BUYER })}</p>
+        <p className="muted">{t("A short reason helps {buyer} plan. They will see it next to your name.", { buyer: buyerName() })}</p>
         <div className="k-quick">
           {DECLINE_REASONS.map((r) => (
             <button key={r} type="button" className={reason === t(r) ? "on" : undefined} onClick={() => setReason(t(r))}>
@@ -375,67 +377,81 @@ export function InvoiceDialog({ open, onClose, po, vendorId, replaces }: { open:
   );
 }
 
-const DOC_STEPS: ReadStep[] = [
-  { label: "Checking the file", ms: 550 },
-  { label: "Reading the issue and expiry dates", ms: 800 },
-  { label: "Sending it to the buyer", ms: 550 },
-];
-
-/** Upload a renewed compliance document: the file is "read" and the expiry moves a year on. */
+/**
+ * Add a compliance document (or a renewed copy): the vendor types its type, reference and expiry date and
+ * may attach the file name for reference. Nothing is read from the file.
+ */
 export function DocDialog({ open, onClose, doc, vendorId }: { open: boolean; onClose: () => void; doc: VendorDoc | null; vendorId: string }) {
-  const { t, x, d } = useL();
-  const reader = useFakeRead(DOC_STEPS);
-  const [file, setFile] = useState<{ name: string; size: number } | null>(null);
-  const [done, setDone] = useState<string | null>(null);
-  if (!doc) return null;
-  const close = () => {
-    reader.reset();
-    setFile(null);
-    setDone(null);
-    onClose();
+  const { t, x } = useL();
+  const add = useVendorDocs((s) => s.add);
+  const vendorName = useOps((s) => s.vendors.find((v) => v.id === vendorId)?.name ?? vendorId);
+  const [f, setF] = useState({ type: "licence" as DocType, title: "", ref: "", expires: "", file: "" });
+  const [seen, setSeen] = useState<string | null>(null);
+  const [tried, setTried] = useState(false);
+  // Prefill each time the dialog opens: a renewal starts from the document it renews.
+  const key = doc?.key ?? "new";
+  if (open && seen !== key) {
+    setSeen(key);
+    setTried(false);
+    const prev = doc ? useVendorDocs.getState().docs.find((d) => d.id === doc.key) : undefined;
+    setF({ type: prev?.type ?? "licence", title: prev?.title ?? "", ref: "", expires: "", file: "" });
+  }
+  if (!open && seen) setSeen(null);
+  const errors = {
+    title: f.type === "other" && !f.title.trim() ? t("Required") : undefined,
+    ref: !f.ref.trim() ? t("Required") : undefined,
+    expires: f.expires && f.expires < TODAY ? t("This date has passed.") : undefined,
   };
-  const take = async (f: { name: string; size: number }) => {
-    setFile(f);
-    await reader.start();
-    const expires = addDays(TODAY, 365);
-    sendDocument(vendorId, doc.key, doc.label, f.name, doc.key === "vat" ? null : expires);
-    setDone(expires);
-    toast(t("{doc} renewed. Valid until {date}.", { doc: x(doc.label), date: d(expires) }));
+  const valid = !errors.title && !errors.ref;
+  const save = () => {
+    setTried(true);
+    if (!valid) return;
+    add({ vendorId, type: f.type, title: f.title.trim(), ref: f.ref.trim(), expires: f.expires || null, file: f.file, addedBy: vendorName });
+    toast(t("Document added. The buyer can see it."));
+    onClose();
   };
   return (
     <Dialog
       open={open}
-      onClose={close}
-      kicker={x(doc.label)}
-      title={doc.state === "missing" ? t("Upload the document") : t("Upload a renewed copy")}
+      onClose={onClose}
+      kicker={doc ? x(doc.label) : undefined}
+      title={doc ? t("Add a renewed copy") : t("Add a document")}
       footer={
-        <button type="button" className="btn btn-primary" onClick={close} disabled={reader.running}>
-          {done ? t("Done") : t("Close")}
-        </button>
+        <>
+          <button type="button" className="btn btn-ghost" onClick={onClose}>
+            {t("Cancel")}
+          </button>
+          <button type="button" className="btn btn-primary" onClick={save}>
+            {t("Save document")}
+          </button>
+        </>
       }
     >
-      {done ? (
-        <div className="vp-doc-done k-rise">
-          <span className="k-stamp-mark">{t("Valid")}</span>
-          <p>
-            <b>{file?.name}</b>
-          </p>
-          <p className="muted">{t("Now valid until {date}. The buyer sees the renewed copy.", { date: d(done) })}</p>
-        </div>
-      ) : file ? (
-        <div className="k-stack">
-          <p>
-            <b>{file.name}</b> <small className="muted">{fmtBytes(file.size)}</small>
-          </p>
-          <ReadSteps steps={DOC_STEPS} step={reader.step} />
-        </div>
-      ) : (
-        <Dropzone accept=".pdf,image/*" title={t("Drop the renewed document")} hint={t("PDF or a photo of the document. Only the file name is kept in this demo.")} onFile={(f) => void take(f)} compact>
-          <button type="button" className="btn btn-ghost btn-sm" onClick={() => void take({ name: `${doc.key}-${TODAY}.pdf`, size: 248_000 })}>
-            {t("Use a sample file")}
-          </button>
-        </Dropzone>
-      )}
+      <div className="k-form">
+        <Field label={t("Document type")}>
+          <select className="input select" value={f.type} onChange={(e) => setF((o) => ({ ...o, type: e.target.value as DocType }))}>
+            {DOC_TYPES.map((d) => (
+              <option key={d.key} value={d.key}>
+                {x(d.label)}
+              </option>
+            ))}
+          </select>
+        </Field>
+        {f.type === "other" ? (
+          <Field label={t("Document name")} error={tried ? errors.title : undefined}>
+            <input className="input" value={f.title} onChange={(e) => setF((o) => ({ ...o, title: e.target.value }))} />
+          </Field>
+        ) : null}
+        <Field label={t("Reference or number")} error={tried ? errors.ref : undefined}>
+          <input className="input k-mono" value={f.ref} onChange={(e) => setF((o) => ({ ...o, ref: e.target.value }))} />
+        </Field>
+        <Field label={t("Expiry date")} hint={errors.expires ?? t("Leave empty if it does not expire.")}>
+          <input className="input" type="date" value={f.expires} onChange={(e) => setF((o) => ({ ...o, expires: e.target.value }))} />
+        </Field>
+        <Field label={t("File")} wide hint={t("Only the file name is kept, for reference.")}>
+          <FilePick value={f.file} onChange={(name) => setF((o) => ({ ...o, file: name }))} />
+        </Field>
+      </div>
     </Dialog>
   );
 }

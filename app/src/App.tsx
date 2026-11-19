@@ -16,9 +16,6 @@ import { RatesPage } from "./pages/RatesPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { opsRoutes } from "./ops/routes";
 import { PageSkeleton } from "./components/kit/extra";
-const NewProjectPage = lazy(() => import("./pages/projects/NewProjectPage").then((m) => ({ default: m.NewProjectPage })));
-const TemplatesPage = lazy(() => import("./pages/projects/TemplatesPage").then((m) => ({ default: m.TemplatesPage })));
-const PortfolioPage = lazy(() => import("./pages/projects/PortfolioPage").then((m) => ({ default: m.PortfolioPage })));
 const VendorPortal = lazy(() => import("./pages/vendor/VendorPortal").then((m) => ({ default: m.VendorPortal })));
 
 export function App() {
@@ -54,10 +51,7 @@ export function App() {
       <Route path={`${P}/generate`} element={<GeneratePage />} />
       <Route element={<Shell />}>
         <Route path="/projects" element={<Suspense fallback={<PageSkeleton />}><ProjectsPage /></Suspense>} />
-        <Route path="/projects/portfolio" element={<Suspense fallback={<PageSkeleton />}><PortfolioPage /></Suspense>} />
-        <Route path="/projects/new" element={<Suspense fallback={<PageSkeleton />}><NewProjectPage /></Suspense>} />
-        <Route path="/projects/templates" element={<Suspense fallback={<PageSkeleton />}><TemplatesPage /></Suspense>} />
-        <Route path="/settings" element={<SettingsPage />} />
+                                <Route path="/settings" element={<SettingsPage />} />
         <Route path="/overview" element={<OverviewPage />} />
         <Route path="/bill" element={<BillPage />} />
         <Route path="/drawings" element={<DrawingsPage />} />

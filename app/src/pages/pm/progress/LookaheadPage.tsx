@@ -1,9 +1,10 @@
 import { useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { CalendarRange, Check, Grid3x3, Minus, Plus, Users, X } from "lucide-react";
-import { CountUp, Empty, PageHero, Panel, Sparkline, StatTiles, useL } from "../../../components/kit";
+import { CountUp, Empty, PageHero, Panel, StatTiles, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
 import { diffDays } from "../../../ops/dates";
+import { R } from "../../../ops/select";
 import { buildingShort } from "../../../lib/loc";
 import type { Activity } from "../../../ops/types";
 import { cellOf, issuesOf, KINDS, kindMeta, liveIn, type Issue } from "./lookahead-model";
@@ -11,7 +12,6 @@ import { ActivityDrawer, ConstraintDialog } from "./LookaheadParts";
 import { weekOf } from "./shared";
 
 const WEEKS = [0, 1, 2].map((i) => ({ i, ...weekOf(i) }));
-const HIST_PPC = [71, 78, 64, 69];
 
 /**
  * The three-week make-ready board: what starts or runs in each week, what still stands in its way
@@ -34,7 +34,7 @@ export function LookaheadPage() {
   }, [s, live]);
   const openOf = (id: string) => (issues.get(id) ?? []).filter((i) => i.open);
   const ready = live.filter((a) => !openOf(a.id).length);
-  const makeReady = live.length ? ready.length / live.length : 1;
+  const makeReady = live.length ? ready.length / live.length : null;
   const openCount = live.reduce((n, a) => n + openOf(a.id).length, 0);
   const dueThisWeek = s.constraints.filter((c) => c.status === "OPEN" && c.due <= WEEKS[0]!.to).length;
 
@@ -42,7 +42,7 @@ export function LookaheadPage() {
   const ppc = useMemo(() => {
     const lw = weekOf(-1);
     const acts = liveIn(s.activities, lw.from, lw.to).concat(s.activities.filter((a) => a.status === "COMPLETED" && a.aEnd && a.aEnd >= lw.from && a.aEnd <= lw.to));
-    if (!acts.length) return 100;
+    if (!acts.length) return null;
     const met = acts.filter((a) => {
       if (a.status === "COMPLETED") return true;
       if (a.status === "BLOCKED") return false;
@@ -51,7 +51,6 @@ export function LookaheadPage() {
     }).length;
     return Math.round((met / acts.length) * 100);
   }, [s.activities]);
-  const ppcSeries = [...HIST_PPC, ppc];
 
   const rows = onlyBlocked ? live.filter((a) => openOf(a.id).length) : live;
   const drawerAct = drawer ? s.activities.find((a) => a.id === drawer) ?? null : null;
@@ -71,7 +70,7 @@ export function LookaheadPage() {
         flow={["Pull the next three weeks", "Find the constraints", "Clear or escalate", "Start ready work"]}
         art="calendar"
         actions={
-          <button type="button" className="btn btn-primary" onClick={() => setDialog({ open: true, activity: null })}>
+          <button type="button" className="btn btn-primary" onClick={() => setDialog({ open: true, activity: null })} disabled={!live.length}>
             <Plus size={15} />
             {t("Add constraint")}
           </button>
@@ -80,22 +79,32 @@ export function LookaheadPage() {
 
       <StatTiles
         items={[
-          { label: t("Make ready"), value: <CountUp value={makeReady * 100} format={(v) => `${Math.round(v)}%`} />, sub: t("{a} of {b} activities ready", { a: ready.length, b: live.length }), tone: makeReady >= 0.8 ? "ok" : makeReady >= 0.6 ? "warn" : "bad" },
+          makeReady != null
+            ? { label: t("Make ready"), value: <CountUp value={makeReady * 100} format={(v) => `${Math.round(v)}%`} />, sub: t("{a} of {b} activities ready", { a: ready.length, b: live.length }), tone: makeReady >= 0.8 ? "ok" : makeReady >= 0.6 ? "warn" : "bad" }
+            : { label: t("Make ready"), value: "—", sub: t("no activities in the next three weeks"), tone: "muted" },
           { label: t("Open constraints"), value: <CountUp value={openCount} />, sub: t("on activities in the window"), tone: openCount ? "bad" : "ok", onClick: () => setOnlyBlocked(true) },
           { label: t("Due this week"), value: <CountUp value={dueThisWeek} />, sub: t("logged constraints to clear by {date}", { date: d(WEEKS[0]!.to, false) }), tone: dueThisWeek ? "warn" : "ok" },
-          {
-            label: t("PPC last week"),
-            value: (
-              <span className="pg-ppc">
-                <CountUp value={ppc} format={(v) => `${Math.round(v)}%`} />
-                <Sparkline values={ppcSeries} width={84} height={28} tone={ppc >= 70 ? "ok" : "warn"} />
-              </span>
-            ),
-            sub: t("percent of planned work completed, last 5 weeks"),
-            tone: ppc >= 70 ? "ok" : "warn",
-          },
+          ppc != null
+            ? { label: t("PPC last week"), value: <CountUp value={ppc} format={(v) => `${Math.round(v)}%`} />, sub: t("percent of planned work completed last week"), tone: ppc >= 70 ? "ok" : "warn" }
+            : { label: t("PPC last week"), value: "—", sub: t("no work was planned last week"), tone: "muted" },
         ]}
       />
+
+      {!s.activities.length ? (
+        <Panel>
+          <Empty
+            icon={<CalendarRange size={20} />}
+            title={t("No programme yet")}
+            action={
+              <Link to={R.programme()} className="btn btn-primary">
+                {t("Open the programme")}
+              </Link>
+            }
+          >
+            {t("The look-ahead pulls the next three weeks from the programme. Add activities or import a P6 / MS Project file first.")}
+          </Empty>
+        </Panel>
+      ) : null}
 
       <section className="pg-board" aria-label={t("Three-week look-ahead")}>
         {WEEKS.map((w) => {

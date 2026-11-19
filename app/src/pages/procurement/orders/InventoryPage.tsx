@@ -10,7 +10,8 @@ import type { Movement, StockItem, Store } from "../../../ops/types";
 import { VisualHead } from "./shared";
 
 const STORES: Store[] = ["Main store", "Warehouse site", "Admin site"];
-const STORE_LABEL: Record<Store, string> = { "Main store": "Main store", "Warehouse site": "Warehouse site", "Admin site": "Admin site" };
+/** The store type has three fixed slots; they are shown neutrally (goods receipts go into the main store). */
+const STORE_LABEL: Record<Store, string> = { "Main store": "Main store", "Warehouse site": "Second store", "Admin site": "Third store" };
 
 type Level = "out" | "empty" | "below" | "at" | "ok";
 const levelOf = (i: StockItem): Level => {
@@ -106,13 +107,13 @@ export function InventoryPage() {
         items={[
           { label: t("SKUs"), value: s.stock.length, sub: t("{n} with a reorder level", { n: s.stock.filter((i) => i.reorder > 0).length }) },
           { label: t("Low stock"), value: low.length, tone: low.length ? "bad" : "ok", sub: t("below the reorder line"), onClick: () => setBelow(true) },
-          { label: t("Stores"), value: STORES.length, sub: STORES.map((st) => `${t(STORE_LABEL[st])} ${s.stock.filter((i) => i.store === st).length}`).join(" · ") },
+          { label: t("Stores"), value: new Set(s.stock.map((i) => i.store)).size || "—", sub: STORES.filter((st) => s.stock.some((i) => i.store === st)).map((st) => `${t(STORE_LABEL[st])} ${s.stock.filter((i) => i.store === st).length}`).join(" · ") || t("nothing in stock yet") },
           { label: t("Last movement"), value: lastMv ? d(lastMv.at, false) : "—", sub: lastMv ? `${lastMv.ref} · ${x(s.stock.find((i) => i.key === lastMv.key)?.name)}` : undefined },
         ]}
       />
 
       <section className="po-visual" aria-label={t("Stock shelf")}>
-        <VisualHead title={t("Stock shelf")} sentence={low.length ? t("{n} items below the reorder line, emptiest on the left.", { n: low.length }) : t("Every item is above its reorder line.")}>
+        <VisualHead title={t("Stock shelf")} sentence={!s.stock.length ? t("nothing in stock yet") : low.length ? t("{n} items below the reorder line, emptiest on the left.", { n: low.length }) : t("Every item is above its reorder line.")}>
           <label className="po-switch">
             <input type="checkbox" checked={below} onChange={(e) => setBelow(e.target.checked)} />
             <span />
@@ -154,6 +155,7 @@ export function InventoryPage() {
         rows={rows}
         columns={columns}
         rowKey={(i) => i.key}
+        empty={s.stock.length ? t("Nothing matches these filters.") : t("Nothing in stock yet. Posted goods receipts add stock; you can also add an item by hand.")}
         onRowClick={(i) => setSel(i.key)}
         initialSort={{ key: "on", dir: "asc" }}
         rowClass={(i) => (i.reorder > 0 && i.onHand < i.reorder ? "po-row-late" : undefined)}

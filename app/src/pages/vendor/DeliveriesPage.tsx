@@ -6,7 +6,7 @@ import { Segmented } from "../../components/ui";
 import { poNet } from "../../ops/select";
 import { fmtQty, unitLabel } from "../../lib/format";
 import type { GrnStatus, ShortReason } from "../../ops/types";
-import { BUYER, orderState, useVendor, VP } from "./model";
+import { buyerName, orderState, useVendor, VP } from "./model";
 import { useEyebrow } from "./parts";
 
 type Filter = "all" | "PART_RECEIVED" | "REJECTED" | "RECEIVED";
@@ -41,7 +41,7 @@ export function VpDeliveries() {
 
   return (
     <div className="k-page vp-page">
-      <PageHero eyebrow={eyebrow("Deliveries")} title={t("Deliveries")} subtitle={t("What the Qobu site store has checked in from you, line by line.")} flow={["Dispatched", "At the gate", "Checked in", "Short or in full"]} art="receipt" />
+      <PageHero eyebrow={eyebrow("Deliveries")} title={t("Deliveries")} subtitle={t("What the site store has checked in from you, line by line.")} flow={["Dispatched", "At the gate", "Checked in", "Short or in full"]} art="receipt" />
 
       {moving.length ? (
         <section className="vp-moving" aria-label={t("On the way")}>
@@ -184,7 +184,7 @@ export function VpDeliveries() {
         </div>
       ) : (
         <Empty icon={<Truck size={20} />} title={grns.length ? t("No receipts in this group") : t("No deliveries yet")}>
-          {grns.length ? t("Pick another filter.") : t("When the {buyer} site store checks in your goods, the receipt appears here.", { buyer: BUYER })}
+          {grns.length ? t("Pick another filter.") : t("When the {buyer} site store checks in your goods, the receipt appears here.", { buyer: buyerName() })}
         </Empty>
       )}
     </div>

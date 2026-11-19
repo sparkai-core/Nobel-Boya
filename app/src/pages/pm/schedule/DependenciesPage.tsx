@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
-import { Link } from "react-router-dom";
-import { AlertTriangle, ArrowRight, CircleDot, GitMerge, ListChecks, Network, Route, Shuffle, TimerOff } from "lucide-react";
-import { Badge, Dialog, Field, PageHero, Panel, toast, useL } from "../../../components/kit";
+import { Link, useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowRight, CircleDot, GitMerge, ListChecks, Network, Plus, Route, Shuffle, TimerOff, Upload } from "lucide-react";
+import { Badge, Dialog, Empty, Field, PageHero, Panel, toast, useL } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
 import { cpm, R, type Cpm, type Tone } from "../../../ops/select";
@@ -25,7 +25,9 @@ const PAD = 26;
  */
 export function DependenciesPage() {
   const { t, x, d } = useL();
+  const navigate = useNavigate();
   const { activities, links, cp, byId, outlook } = useSchedule();
+  const [allIssues, setAllIssues] = useState(false);
   const addLink = useOps((s) => s.addLink);
   const shiftActivity = useOps((s) => s.shiftActivity);
   const updateActivity = useOps((s) => s.updateActivity);
@@ -42,11 +44,13 @@ export function DependenciesPage() {
     const first = [...activities].sort((a, b) => a.start.localeCompare(b.start))[0];
     const last = [...activities].sort((a, b) => b.end.localeCompare(a.end))[0];
     if (!first || !last) return out;
+    // Candidates for the "next activity in the same building" fix, in start order.
+    const byStart = activities.filter((z) => z.status !== "COMPLETED").sort((p, q) => p.start.localeCompare(q.start));
     for (const a of activities) {
       if (a.id !== first.id && !hasPred.has(a.id))
         out.push({ id: `os-${a.id}`, kind: "open-start", ids: [a.id], tone: "warn", title: t("{code} has no predecessor", { code: a.code }), detail: t("{name} can start any time as far as the logic knows. Tie it to the work it really waits for.", { name: x(a.name) }), fix: { from: first.id, to: a.id, type: "FS", lag: 0 } });
       if (a.id !== last.id && !hasSucc.has(a.id)) {
-        const next = activities.filter((z) => z.id !== a.id && z.building === a.building && z.start >= a.end && z.status !== "COMPLETED").sort((p, q) => p.start.localeCompare(q.start))[0];
+        const next = byStart.find((z) => z.id !== a.id && z.building === a.building && z.start >= a.end);
         out.push({ id: `oe-${a.id}`, kind: "open-end", ids: [a.id], tone: "warn", title: t("{code} has no successor", { code: a.code }), detail: t("If {name} slips, nothing in the programme moves. Its float is not real.", { name: x(a.name) }), fix: { from: a.id, to: (next ?? last).id, type: "FS", lag: 0 } });
       }
     }
@@ -64,10 +68,10 @@ export function DependenciesPage() {
       const predOpen = l.type === "FS" ? p.status !== "COMPLETED" || (p.aEnd ?? p.end) > s.aStart : !p.aStart;
       if (need && predOpen && s.aStart < need) out.push({ id: `oq-${l.id}`, kind: "out-of-seq", ids: [l.from, l.to], tone: "bad", title: t("{b} started before {a} allowed it", { a: p.code, b: s.code }), detail: t("{b} started {date} but the {type} link says it should wait for {a}. Check the logic or the progress.", { a: p.code, b: s.code, date: d(s.aStart), type: linkLabel(l) }), to: R.programme(s.id) });
     }
-    const behind = Math.max(0, dayOf(outlook.calculated) - dayOf(outlook.contract));
+    const behind = outlook.contractKnown ? Math.max(0, dayOf(outlook.calculated) - dayOf(outlook.contract)) : 0;
     const neg = activities.filter((a) => a.status !== "COMPLETED" && (cp.get(a.id)?.tf ?? 0) - behind < 0);
     if (neg.length) {
-      const worst = Math.min(...neg.map((a) => (cp.get(a.id)?.tf ?? 0) - behind));
+      const worst = neg.reduce((m, a) => Math.min(m, (cp.get(a.id)?.tf ?? 0) - behind), 0);
       out.push({ id: "neg", kind: "neg-float", ids: neg.map((a) => a.id), tone: "bad", title: t("{n} activities have negative float", { n: neg.length }), detail: t("Measured against the contract date the chain is short by {n} days. Only recovery or a time extension clears this.", { n: -worst }), to: R.recovery });
     }
     const order: Record<IssueKind, number> = { "neg-float": 0, "out-of-seq": 1, "open-start": 2, "open-end": 3, "ss-lag": 4 };
@@ -124,8 +128,8 @@ export function DependenciesPage() {
       list.forEach((a, i) => pos.set(a.id, { x: PAD + c * (BW + GX), y: PAD + 18 + i * (BH + GY) }));
       maxRows = Math.max(maxRows, list.length);
     }
-    const width = PAD * 2 + cols.length * (BW + GX) - GX;
-    const height = PAD * 2 + 18 + maxRows * (BH + GY);
+    const width = Math.max(320, PAD * 2 + cols.length * (BW + GX) - GX);
+    const height = Math.max(120, PAD * 2 + 18 + maxRows * (BH + GY));
     const edges = links.filter((l) => pos.has(l.from) && pos.has(l.to));
     return { pos, width, height, edges, cols: cols.length, shown };
   }, [activities, links, byId, scope, issues]);
@@ -153,6 +157,26 @@ export function DependenciesPage() {
         art="network"
       />
 
+      {!activities.length ? (
+        <div className="k-panel">
+          <Empty
+            icon={<Network size={20} />}
+            title={t("No programme yet")}
+            action={
+              <div className="pms-empty-actions">
+                <button type="button" className="btn btn-primary" onClick={() => navigate(`${R.planning("activities")}?import=1`)}>
+                  <Upload size={15} /> {t("Import a P6 / MS Project file")}
+                </button>
+                <button type="button" className="btn btn-ghost" onClick={() => navigate(`${R.planning("activities")}?add=1`)}>
+                  <Plus size={15} /> {t("Add an activity")}
+                </button>
+              </div>
+            }
+          >
+            {t("Links between activities come in with an imported programme, or add predecessors to each activity.")}
+          </Empty>
+        </div>
+      ) : (
       <div className="k-grid-main">
         <section className="pms-net-panel">
           <header className="pms-net-head">
@@ -163,6 +187,8 @@ export function DependenciesPage() {
             <Segmented value={scope} onChange={(v) => setScope(v)} label={t("Show")} options={[{ value: "issues", label: t("Around issues") }, { value: "all", label: t("All") }]} />
           </header>
           <div className="pms-net-scroll" ref={scroller}>
+            {!layout.shown.length ? <p className="k-panel-body muted">{t("No logic issues to show. Switch to All to see the whole network.")}</p> : null}
+            {layout.shown.length ? (
             <svg className="pms-net" width={layout.width} height={layout.height} viewBox={`0 0 ${layout.width} ${layout.height}`} role="img" aria-label={t("Logic network")}>
               <defs>
                 <marker id="pms-arr" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
@@ -214,14 +240,13 @@ export function DependenciesPage() {
                   >
                     <title>{`${a.code} ${name} · ${d(a.start)} – ${d(a.end)}`}</title>
                     <rect className="pms-box-bg" width={BW} height={BH} rx={9} />
-                    <rect className="pms-box-stripe" width={4} height={BH - 12} x={6} y={6} rx={2} />
-                    <text x={16} y={19} className="pms-box-code">
-                      {a.code}
+                    <text x={12} y={19} className="pms-box-code">
+                      {a.code.length > 14 ? `${a.code.slice(0, 13)}…` : a.code}
                     </text>
                     <text x={BW - 10} y={19} textAnchor="end" className="pms-box-pct">
                       {a.pct}%
                     </text>
-                    <text x={16} y={36} className="pms-box-name">
+                    <text x={12} y={36} className="pms-box-name">
                       {name.length > 24 ? `${name.slice(0, 23)}…` : name}
                     </text>
                     {open ? (
@@ -236,6 +261,7 @@ export function DependenciesPage() {
                 );
               })}
             </svg>
+            ) : null}
           </div>
           <footer className="pms-net-foot">
             {selAct ? (
@@ -262,7 +288,7 @@ export function DependenciesPage() {
         <Panel title={t("Issues to fix")} icon={<ListChecks size={15} />} count={issues.length} sub={t("Found in the logic as it stands. Preview a fix to see which dates move.")} pad={false}>
           {issues.length ? (
             <ul className="pms-issues">
-              {issues.map((i) => {
+              {(allIssues ? issues : issues.slice(0, 40)).map((i) => {
                 const Icon = KIND_ICON[i.kind];
                 return (
                   <li key={i.id} className={i.ids.includes(sel ?? "") ? "on" : undefined}>
@@ -296,8 +322,14 @@ export function DependenciesPage() {
           ) : (
             <p className="k-panel-body muted">{t("The logic is clean: every activity has a start and an end link.")}</p>
           )}
+          {issues.length > 40 && !allIssues ? (
+            <button type="button" className="k-link-btn pms-mt" onClick={() => setAllIssues(true)}>
+              {t("Show all {n}", { n: issues.length })}
+            </button>
+          ) : null}
         </Panel>
       </div>
+      )}
 
       {preview ? (
         <Recalc

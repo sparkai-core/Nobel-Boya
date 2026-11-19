@@ -300,5 +300,10 @@ const AZ: Record<string, string> = {
   "{a} of {b} on time": "{b}-dən {a}-i vaxtında",
   "{a} of {b} first deliveries arrived by the promised date.": "{b} ilk çatdırılmadan {a}-i vəd edilən tarixədək gəlib.",
   "No deliveries counted yet.": "Hələ sayılmış çatdırılma yoxdur.",
+
+  // client data: honest entry, empty states, project setup
+  "Register details": "Reyestr məlumatları",
+  "What goes on the vendor record. Leave a field empty if you do not have it yet; you can edit the vendor later.": "Təchizatçı qeydinə daxil ediləcək məlumatlar. Hələ yoxdursa, sahəni boş saxlayın; təchizatçını sonra redaktə edə bilərsiniz.",
+  "at the bill rates": "smeta qiymətləri ilə",
 };
 export default AZ;

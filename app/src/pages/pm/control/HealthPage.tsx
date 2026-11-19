@@ -1,16 +1,9 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowDownRight, ArrowRight, ArrowUpRight, LineChart, Radar as RadarIcon, Scale } from "lucide-react";
-import { Badge, Meter, PageHero, Panel, Radar, RingGauge, useL } from "../../../components/kit";
+import { ArrowRight, CalendarRange, LineChart, Radar as RadarIcon, Scale } from "lucide-react";
+import { Badge, Empty, Meter, PageHero, Panel, Radar, RingGauge, useL } from "../../../components/kit";
 import { useOps } from "../../../ops/store";
-import { addDays, TODAY } from "../../../ops/dates";
-import { projectHealth, type Tone } from "../../../ops/select";
-import { makeSeed } from "../../../ops/seed";
-
-/** Weekly history: fixed points relative to the seeded score, ending at today's live score. */
-const OFFSETS = [-11, -9, -10, -7, -6, -8, -4];
-let seedScore: number | null = null;
-const baseScore = () => (seedScore ??= projectHealth(makeSeed()).score);
+import { projectHealth, R, type Tone } from "../../../ops/select";
 
 const toneOf = (v: number | null): Tone => (v == null ? "muted" : v >= 72 ? "ok" : v >= 60 ? "warn" : "bad");
 
@@ -18,15 +11,44 @@ export function HealthPage() {
   const { t, x, d } = useL();
   const s = useOps();
   const h = useMemo(() => projectHealth(s), [s]);
+  const hasData = (h as { hasData?: boolean }).hasData ?? s.activities.length > 0;
   const [area, setArea] = useState<string | null>(null);
 
-  const history = useMemo(() => {
-    const base = baseScore();
-    const pts = OFFSETS.map((o, i) => ({ date: addDays(TODAY, -(OFFSETS.length - i) * 7), score: Math.max(0, Math.min(100, base + o)) }));
-    return [...pts, { date: TODAY, score: h.score }];
-  }, [h.score]);
-  const lastWeek = history[history.length - 2]!.score;
-  const delta = h.score - lastWeek;
+  // Real history: the schedule performance (SPI) of every submitted weekly progress update.
+  const history = useMemo(
+    () => [...s.snapshots].sort((a, b) => a.dataDate.localeCompare(b.dataDate) || a.submittedAt.localeCompare(b.submittedAt)).map((p) => ({ id: p.id, date: p.dataDate, score: Math.round(p.spi * 100) })),
+    [s.snapshots],
+  );
+
+  const hero = (
+    <PageHero
+      eyebrow={t("Project management · Health")}
+      title={t("Project health")}
+      subtitle={t("One score out of 100 across eight areas, and the things on site and in the office that move it up or down.")}
+      flow={["Measure eight areas", "Explain the score", "Fix what needs management"]}
+      art="health"
+    />
+  );
+
+  if (!hasData)
+    return (
+      <div className="k-page pmc">
+        {hero}
+        <Panel>
+          <Empty
+            icon={<CalendarRange size={20} />}
+            title={t("No programme to score yet")}
+            action={
+              <Link to={R.programme()} className="btn btn-primary">
+                {t("Open the programme")}
+              </Link>
+            }
+          >
+            {t("The health score is worked out from the programme. Add activities or import a P6 / MS Project file, then the score appears here.")}
+          </Empty>
+        </Panel>
+      </div>
+    );
 
   const drivers = h.drivers.filter((dr) => !area || dr.area === area);
   const maxAbs = Math.max(5, ...h.drivers.map((dr) => Math.abs(dr.impact)));
@@ -36,31 +58,27 @@ export function HealthPage() {
   };
   const lost = h.drivers.filter((dr) => dr.impact < 0).reduce((a, dr) => a + dr.impact, 0);
   const gained = h.drivers.filter((dr) => dr.impact > 0).reduce((a, dr) => a + dr.impact, 0);
+  const last = history[history.length - 1];
 
-  // Score over time chart geometry.
+  // SPI over the weekly updates chart geometry.
   const W = 560;
   const H = 200;
   const pad = { l: 30, r: 14, t: 14, b: 26 };
-  const lo = Math.max(0, Math.min(...history.map((p) => p.score)) - 10);
-  const hi = Math.min(100, Math.max(...history.map((p) => p.score)) + 8);
-  const PX = (i: number) => pad.l + (i / (history.length - 1)) * (W - pad.l - pad.r);
+  const scores = history.map((p) => p.score);
+  const lo = Math.max(0, Math.min(80, ...scores) - 10);
+  const hi = Math.max(110, ...scores) + 5;
+  const PX = (i: number) => pad.l + (history.length < 2 ? (W - pad.l - pad.r) / 2 : (i / (history.length - 1)) * (W - pad.l - pad.r));
   const PY = (v: number) => pad.t + (1 - (v - lo) / Math.max(1, hi - lo)) * (H - pad.t - pad.b);
   const line = history.map((p, i) => `${i ? "L" : "M"}${PX(i).toFixed(1)} ${PY(p.score).toFixed(1)}`).join(" ");
   const bands = [
-    { from: 72, to: 100, cls: "ok", label: t("On track") },
-    { from: 60, to: 72, cls: "warn", label: t("Watch") },
-    { from: 0, to: 60, cls: "bad", label: t("At risk") },
+    { from: 98, to: hi, cls: "ok", label: t("On plan") },
+    { from: 90, to: 98, cls: "warn", label: t("Watch") },
+    { from: lo, to: 90, cls: "bad", label: t("Behind") },
   ];
 
   return (
     <div className="k-page pmc">
-      <PageHero
-        eyebrow={t("Project management · Health")}
-        title={t("Project health")}
-        subtitle={t("One score out of 100 across eight areas, and the things on site and in the office that move it up or down.")}
-        flow={["Measure eight areas", "Explain the score", "Fix what needs management"]}
-        art="health"
-      />
+      {hero}
 
       <section className="pmc-health-top">
         <div className="pmc-health-score">
@@ -68,9 +86,8 @@ export function HealthPage() {
           <div className="pmc-health-copy">
             <Badge tone={h.tone}>{x(h.status)}</Badge>
             <h2>{t("Project health is {status}", { status: x(h.status).toLowerCase() })}</h2>
-            <p className={`pmc-trend ${delta > 0 ? "up" : delta < 0 ? "down" : ""}`}>
-              {delta > 0 ? <ArrowUpRight size={16} /> : delta < 0 ? <ArrowDownRight size={16} /> : <ArrowRight size={16} />}
-              {delta > 0 ? t("Up {n} since last week", { n: delta }) : delta < 0 ? t("Down {n} since last week", { n: -delta }) : t("Same as last week")}
+            <p className="muted small">
+              {last ? t("Last weekly update {id}: SPI {n}", { id: last.id, n: (last.score / 100).toFixed(2) }) : t("Scored from {n} activities in the programme.", { n: s.activities.length })}
             </p>
             <div className="pmc-health-split">
               <span>
@@ -141,30 +158,43 @@ export function HealthPage() {
           )}
         </Panel>
 
-        <Panel title={t("Score over time")} icon={<LineChart size={15} />} sub={t("Weekly, ending today.")}>
-          <svg viewBox={`0 0 ${W} ${H}`} className="pmc-hist" role="img" aria-label={t("Score over time")}>
-            {bands.map((b) => {
-              const y1 = PY(Math.min(hi, b.to));
-              const y2 = PY(Math.max(lo, b.from));
-              return y2 > y1 ? (
-                <g key={b.cls}>
-                  <rect x={pad.l} width={W - pad.l - pad.r} y={y1} height={y2 - y1} className={`pmc-hist-band ${b.cls}`} />
-                  <text x={W - pad.r - 4} y={y1 + 12} textAnchor="end" className="pmc-hist-band-label">{b.label}</text>
+        <Panel title={t("Schedule performance by weekly update")} icon={<LineChart size={15} />} sub={t("SPI of every submitted weekly progress update (100 = on plan).")}>
+          {history.length ? (
+            <svg viewBox={`0 0 ${W} ${H}`} className="pmc-hist" role="img" aria-label={t("Schedule performance by weekly update")}>
+              {bands.map((b) => {
+                const y1 = PY(Math.min(hi, b.to));
+                const y2 = PY(Math.max(lo, b.from));
+                return y2 > y1 ? (
+                  <g key={b.cls}>
+                    <rect x={pad.l} width={W - pad.l - pad.r} y={y1} height={y2 - y1} className={`pmc-hist-band ${b.cls}`} />
+                    <text x={W - pad.r - 4} y={y1 + 12} textAnchor="end" className="pmc-hist-band-label">{b.label}</text>
+                  </g>
+                ) : null;
+              })}
+              {history.length > 1 ? <path d={`${line} L${PX(history.length - 1)} ${H - pad.b} L${PX(0)} ${H - pad.b}Z`} className="pmc-hist-area" /> : null}
+              {history.length > 1 ? <path d={line} className="pmc-hist-line" /> : null}
+              {history.map((p, i) => (
+                <g key={p.id}>
+                  <circle cx={PX(i)} cy={PY(p.score)} r={i === history.length - 1 ? 5.5 : 3.5} className={i === history.length - 1 ? "pmc-hist-now" : "pmc-hist-dot"} />
+                  {i === history.length - 1 || i === 0 ? (
+                    <text x={PX(i)} y={PY(p.score) - 10} textAnchor="middle" className="pmc-hist-val">{(p.score / 100).toFixed(2)}</text>
+                  ) : null}
+                  <text x={PX(i)} y={H - 8} textAnchor="middle" className="k-axis">{d(p.date, false)}</text>
                 </g>
-              ) : null;
-            })}
-            <path d={`${line} L${PX(history.length - 1)} ${H - pad.b} L${PX(0)} ${H - pad.b}Z`} className="pmc-hist-area" />
-            <path d={line} className="pmc-hist-line" />
-            {history.map((p, i) => (
-              <g key={p.date}>
-                <circle cx={PX(i)} cy={PY(p.score)} r={i === history.length - 1 ? 5.5 : 3.5} className={i === history.length - 1 ? "pmc-hist-now" : "pmc-hist-dot"} />
-                {i === history.length - 1 || i === 0 ? (
-                  <text x={PX(i)} y={PY(p.score) - 10} textAnchor="middle" className="pmc-hist-val">{p.score}</text>
-                ) : null}
-                <text x={PX(i)} y={H - 8} textAnchor="middle" className="k-axis">{d(p.date, false)}</text>
-              </g>
-            ))}
-          </svg>
+              ))}
+            </svg>
+          ) : (
+            <Empty
+              title={t("No weekly updates yet")}
+              action={
+                <Link to={R.progressTracking} className="btn btn-ghost btn-sm">
+                  {t("Weekly progress update")}
+                </Link>
+              }
+            >
+              {t("Each weekly progress update adds a point here.")}
+            </Empty>
+          )}
         </Panel>
       </div>
 

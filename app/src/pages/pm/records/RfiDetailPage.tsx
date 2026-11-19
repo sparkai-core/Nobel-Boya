@@ -21,13 +21,14 @@ import {
 import { useOps } from "../../../ops/store";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { cpm, R, statusMeta } from "../../../ops/select";
+import { rateFor } from "../../../ops/seed/util";
 import { data, sheetById, sheetImage } from "../../../data";
 import { disciplineName, sheetTitle } from "../../../lib/loc";
 import { fmtMoneyShort } from "../../../lib/format";
 import type { ChangeOrder, HistoryEvent, Rfi } from "../../../ops/types";
 import { changeCost, NotFound, rfiOverdue, rfiShownStatus, SheetLightbox, signed } from "./shared";
 
-const QUICK = ["Proceed as drawn.", "A revised sheet will follow within three days.", "Use the dimension given in the schedule.", "Hold this element until the revised detail is issued."];
+const QUICK = ["Proceed as drawn.", "Use the dimension given in the schedule.", "Hold this element until the revised detail is issued."];
 
 /** One RFI: the question as a document beside its drawing, the designer's answer, and what it affects. */
 export function RfiDetailPage() {
@@ -44,6 +45,8 @@ export function RfiDetailPage() {
   const closeRfi = useOps((s) => s.closeRfi);
   const raiseChange = useOps((s) => s.raiseChange);
   const [answer, setAnswer] = useState("");
+  const [answeredBy, setAnsweredBy] = useState<string | null>(null);
+  const patchItem = useOps((s) => s.patchItem);
   const [sheet, setSheet] = useState<string | null>(null);
   const crit = useMemo(() => cpm(activities, links), [activities, links]);
 
@@ -76,6 +79,8 @@ export function RfiDetailPage() {
   const sendAnswer = () => {
     if (!answer.trim()) return;
     answerRfi(rfi.id, answer.trim());
+    const by = (answeredBy ?? designer).trim();
+    if (by) patchItem("rfis", rfi.id, { answeredBy: by });
     setAnswer("");
     toast(t("{id} answered", { id: rfi.ref }));
   };
@@ -85,19 +90,20 @@ export function RfiDetailPage() {
     if (act?.section) {
       const top = data.items
         .filter((it) => it.building === act.building && it.section === act.section)
-        .map((it) => ({ it, v: (data.rates[it.rate]?.rate ?? 0) * it.qty }))
+        .map((it) => ({ it, v: rateFor(it.rate) * it.qty }))
         .sort((a, b) => b.v - a.v)[0];
-      if (top) lines.push({ itemId: top.it.id, description: { en: top.it.en, az: top.it.az }, unit: top.it.unit, qtyDelta: Math.round(top.it.qty * 0.05 * 100) / 100, rate: data.rates[top.it.rate]?.rate ?? 0 });
+      // The BOQ line the change most likely touches, at its bill rate. The quantity is left at 0 to be measured.
+      if (top) lines.push({ itemId: top.it.id, description: { en: top.it.en, az: top.it.az }, unit: top.it.unit, qtyDelta: 0, rate: rateFor(top.it.rate) });
     }
     const ans = rfi.answer ?? { en: "", az: "" };
     const vo = raiseChange({
       title: { en: `Change from ${rfi.ref}: ${rfi.subject.en}`, az: `${rfi.ref} üzrə dəyişiklik: ${rfi.subject.az}` },
       reason: "RFI",
       description: {
-        en: `Raised from the designer's answer to ${rfi.ref}: "${ans.en}" Quantities are provisional until measured.`,
-        az: `${rfi.ref}-ə layihəçinin cavabı əsasında açılıb: "${ans.az}" Miqdarlar ölçülənə qədər ilkin hesabdır.`,
+        en: `Raised from the designer's answer to ${rfi.ref}: "${ans.en}" Enter the quantities once measured.`,
+        az: `${rfi.ref}-ə layihəçinin cavabı əsasında açılıb: "${ans.az}" Miqdarları ölçüldükdən sonra daxil edin.`,
       },
-      daysDelta: rfi.timeImpact ? 3 : 0,
+      daysDelta: 0,
       rfiId: rfi.id,
       lines,
     });
@@ -150,7 +156,7 @@ export function RfiDetailPage() {
       </DetailHeader>
 
       {rfi.status === "OPEN" ? (
-        <NextBar tone={late ? "bad" : "warn"} text={late ? t("The designer is {n} days late. Chase the answer, or answer below as the designer for the demo.", { n: -left }) : t("Waiting on the designer. Answer below as the designer for the demo.")}>
+        <NextBar tone={late ? "bad" : "warn"} text={late ? t("The designer is {n} days late. Chase the answer, then record it below when it arrives.", { n: -left }) : t("Waiting on the designer. Record the answer below when it arrives.")}>
           <button
             type="button"
             className="btn btn-primary"
@@ -161,7 +167,7 @@ export function RfiDetailPage() {
             }}
           >
             <MessageSquareReply size={15} />
-            {t("Answer")}
+            {t("Record answer")}
           </button>
         </NextBar>
       ) : rfi.status === "ANSWERED" ? (
@@ -253,8 +259,12 @@ export function RfiDetailPage() {
             {rfi.status === "OPEN" ? (
               <div className="k-stack">
                 <label className="k-field">
-                  <span className="k-field-label">{t("Answer as the designer (demo)")}</span>
+                  <span className="k-field-label">{t("The designer's answer")}</span>
                   <textarea id="pmr-answer-text" className="input" rows={4} value={answer} onChange={(e) => setAnswer(e.target.value)} placeholder={t("Type the designer's answer…")} />
+                </label>
+                <label className="k-field">
+                  <span className="k-field-label">{t("Answered by")}</span>
+                  <input className="input" value={answeredBy ?? designer} onChange={(e) => setAnsweredBy(e.target.value)} />
                 </label>
                 <div className="k-quick">
                   {QUICK.map((qk) => (
@@ -267,7 +277,7 @@ export function RfiDetailPage() {
                   <span className="k-spacer" />
                   <button type="button" className="btn btn-primary" disabled={!answer.trim()} onClick={sendAnswer}>
                     <Send size={14} />
-                    {t("Send answer")}
+                    {t("Record answer")}
                   </button>
                 </div>
               </div>
@@ -278,7 +288,7 @@ export function RfiDetailPage() {
                   <footer>
                     <Avatar name={rfi.answeredBy ?? "?"} size={22} />
                     <span>
-                      <b>{rfi.answeredBy}</b> · {designer} · {d(rfi.answeredAt)}
+                      <b>{rfi.answeredBy}</b>{rfi.answeredBy !== designer && designer ? ` · ${designer}` : ""} · {d(rfi.answeredAt)}
                     </span>
                   </footer>
                 </blockquote>

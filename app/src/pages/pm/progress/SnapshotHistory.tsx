@@ -17,7 +17,7 @@ export function SnapshotHistory() {
   if (!sorted.length)
     return (
       <Panel title={t("Update history")} icon={<History size={15} />}>
-        <Empty title={t("No weekly updates yet")}>{t("Submit the first update above to start the history.")}</Empty>
+        <Empty title={t("No weekly updates yet")}>{t("Each submitted weekly update is kept here with its planned and actual progress.")}</Empty>
       </Panel>
     );
 
@@ -41,11 +41,11 @@ export function SnapshotHistory() {
                 </span>
                 <span className="pg-snap-idx">
                   <small>SPI</small>
-                  <b className={`num-inline k-text-${s.spi >= 0.98 ? "ok" : s.spi >= 0.9 ? "warn" : "bad"}`}>{s.spi.toFixed(2)}</b>
+                  {s.plannedPct > 0 ? <b className={`num-inline k-text-${s.spi >= 0.98 ? "ok" : s.spi >= 0.9 ? "warn" : "bad"}`}>{s.spi.toFixed(2)}</b> : <b className="num-inline muted">—</b>}
                 </span>
                 <span className="pg-snap-idx">
                   <small>CPI</small>
-                  <b className={`num-inline k-text-${s.cpi >= 0.98 ? "ok" : "warn"}`}>{s.cpi.toFixed(2)}</b>
+                  {s.cpi > 0 ? <b className={`num-inline k-text-${s.cpi >= 0.98 ? "ok" : "warn"}`}>{s.cpi.toFixed(2)}</b> : <b className="num-inline muted" title={t("No cost recorded at that update")}>—</b>}
                 </span>
                 <span className="pg-snap-lines num-inline">{t("{n} lines", { n: s.lines.length })}</span>
                 <ChevronDown size={15} className="pg-snap-chev" />

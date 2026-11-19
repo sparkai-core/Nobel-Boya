@@ -222,7 +222,7 @@ export function AgreementDetailPage() {
                 <div>
                   <Link to={R.vendor(v.id)}>{v.name}</Link>
                   <small>
-                    {tradeName(v.trade, lang)} · {v.city} · {t("score {n}", { n: v.overall.toFixed(1) })}
+                    {[tradeName(v.trade, lang), v.city, v.overall > 0 ? t("score {n}", { n: v.overall.toFixed(1) }) : ""].filter(Boolean).join(" · ")}
                   </small>
                 </div>
               </div>

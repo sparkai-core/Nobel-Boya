@@ -23,8 +23,6 @@ const AZ: Record<string, string> = {
   mh: "a/s",
 
   // ------------------------------------------------------------ equipment
-  "Every machine on the Qobu site: where it stands, what it is doing, and what hired plant costs while it works or waits.":
-    "Qobu meydançasındakı hər texnika: harada dayanır, nə iş görür və icarə texnikası işləyəndə və boş dayananda neçəyə başa gəlir.",
   Mobilise: "Gətirmək",
   Assign: "Təyin etmək",
   "Track hours": "Saatları izləmək",
@@ -138,8 +136,6 @@ const AZ: Record<string, string> = {
   "Hire of {code} extended to {date}": "{code} icarəsi {date} tarixinədək uzadıldı",
 
   // ------------------------------------------------------------ workforce
-  "Who is on the Qobu site today, where each crew works, what their hours cost and whose tickets run out next.":
-    "Bu gün Qobu meydançasında kim var, hər briqada harada işləyir, saatları neçəyə başa gəlir və kimin vəsiqəsinin müddəti bitir.",
   "Roll call": "Yoxlama",
   Allocate: "Bölüşdürmək",
   Timesheets: "Tabellər",
@@ -384,5 +380,93 @@ const AZ: Record<string, string> = {
   "Signed off": "İmzalanıb",
   "Sign off the walk": "Baxışı imzala",
   "Next walk": "Növbəti baxış",
+
+  // ------------------------------------------------------------ client data: create paths and empty states
+  "Every machine on site: where it stands, what it is doing, and what hired plant costs while it works or waits.":
+    "Meydançadakı hər texnika: harada dayanır, nə iş görür və icarə texnikası işləyəndə və boş dayananda neçəyə başa gəlir.",
+  "Who is on site today, where each crew works, what their hours cost and whose tickets run out next.":
+    "Bu gün meydançada kim var, hər briqada harada işləyir, saatları neçəyə başa gəlir və kimin vəsiqəsinin müddəti bitir.",
+  "Add worker": "İşçi əlavə et",
+  "Edit worker": "İşçini redaktə et",
+  "No workers registered yet": "Hələ işçi qeydiyyata alınmayıb",
+  "Add the people on site, your own staff and subcontractor crews. Roll call, timesheets and certificate tracking start from this list.":
+    "Meydançadakı insanları, öz heyətinizi və subpodratçı briqadalarını əlavə edin. Yoxlama, tabellər və sertifikat izləmə bu siyahıdan başlayır.",
+  "No activities running now": "Hazırda gedən iş yoxdur",
+  "Crews are compared once the programme has running activities": "Qrafikdə gedən işlər olanda briqadalar müqayisə edilir",
+  "No certificates recorded": "Sertifikat qeyd edilməyib",
+  "No roll call taken today yet": "Bu gün hələ yoxlama aparılmayıb",
+  "No certificates recorded. Add them with Edit.": "Sertifikat qeyd edilməyib. Redaktə ilə əlavə edin.",
+  "Own staff": "Öz heyətimiz",
+  "Remove {name} and their attendance records?": "{name} və onun davamiyyət qeydləri silinsin?",
+  "{name} removed": "{name} silindi",
+  "{name} added to the workforce": "{name} işçi heyətinə əlavə edildi",
+  Role: "Vəzifə",
+  "e.g. Steel fixer": "məs. Armaturçu",
+  "Another company…": "Başqa şirkət…",
+  "Set your company name in Settings to show it here.": "Burada görünməsi üçün şirkətinizin adını Parametrlərdə qeyd edin.",
+  "Optional. Used for labour cost.": "İstəyə bağlı. Əmək xərci üçün istifadə olunur.",
+  "Optional. Add a ticket or licence with its expiry date to track renewals.": "İstəyə bağlı. Yeniləmələri izləmək üçün vəsiqə və ya lisenziyanı bitmə tarixi ilə əlavə edin.",
+  "Add certificate": "Sertifikat əlavə et",
+  "Open a worker and use Edit to add their tickets and licences with expiry dates. Renewals then show here.":
+    "İşçini açın və Redaktə ilə vəsiqə və lisenziyalarını bitmə tarixləri ilə əlavə edin. Yeniləmələr sonra burada görünəcək.",
+  "No crew output yet. It shows once daily reports log quantities and attendance books hours against the same activity.":
+    "Hələ briqada nəticəsi yoxdur. Gündəlik hesabatlarda həcmlər və davamiyyətdə eyni iş üzrə saatlar qeyd olunanda görünəcək.",
+  "Quantities from the daily reports divided by attendance hours on the same activity, {from} – {to}.":
+    "Gündəlik hesabatlardakı həcmlərin eyni iş üzrə davamiyyət saatlarına bölünməsi, {from} – {to}.",
+  "{n} days logged": "{n} gün qeyd olunub",
+  "Add equipment": "Texnika əlavə et",
+  "Edit equipment": "Texnikanı redaktə et",
+  "No equipment registered yet": "Hələ texnika qeydiyyata alınmayıb",
+  "Add the machines on site, owned or hired. Hire periods, day rates, services and hire invoices are tracked from here.":
+    "Meydançadakı öz və icarə texnikasını əlavə edin. İcarə dövrləri, günlük qiymətlər, texniki xidmət və icarə fakturaları buradan izlənir.",
+  "e.g. Tracked excavator 21 t": "məs. Tırtıllı ekskavator 21 t",
+  "Fleet or plate number": "Park və ya dövlət nömrəsi",
+  "Optional. A reference is given when empty.": "İstəyə bağlı. Boş qalsa nömrə avtomatik verilir.",
+  Supplier: "Təchizatçı",
+  "Day rate, AZN": "Günlük qiymət, AZN",
+  "Day cost, AZN": "Günlük xərc, AZN",
+  "Day cost": "Günlük xərc",
+  "Hire starts": "İcarə başlayır",
+  "Hire ends": "İcarə bitir",
+  "A building of this project, or type a place.": "Bu layihənin binası və ya yeri yazın.",
+  "{code} added to the fleet": "{code} texnika parkına əlavə edildi",
+  "{code} updated": "{code} yeniləndi",
+  "{code} removed": "{code} silindi",
+  "Remove {code} from the fleet?": "{code} texnika parkından silinsin?",
+  "Mark off hire": "İcarədən çıxar",
+  "{code} marked off hire": "{code} icarədən çıxarıldı",
+  "Not set": "Təyin edilməyib",
+  "Set the day rate with Edit first, so the invoice can be checked against it.": "Fakturanı yoxlamaq üçün əvvəlcə Redaktə ilə günlük qiyməti daxil edin.",
+  "Machines by the place recorded on each one. Click a place to filter the register.": "Hər texnikada qeyd olunan yerə görə. Reyestri süzmək üçün yerə klikləyin.",
+  "No place recorded": "Yer qeyd edilməyib",
+  "no hours logged": "saat qeyd edilməyib",
+  "No hours logged": "Saat qeyd edilməyib",
+  "{u} AZN has no hours logged, so it is not split.": "{u} AZN üçün saat qeyd edilməyib, ona görə bölünmür.",
+  "Hired machines have no day rate yet, so hire cost is not shown.": "İcarə texnikasının hələ günlük qiyməti yoxdur, ona görə icarə xərci göstərilmir.",
+  "No hired machines on site, so no hire cost runs today.": "Meydançada icarə texnikası yoxdur, bu gün icarə xərci yoxdur.",
+  "Hire periods of the hired machines, from their recorded start and end dates.": "İcarə texnikasının qeyd olunan başlanğıc və bitmə tarixlərinə görə icarə dövrləri.",
+  "Hire dates not set": "İcarə tarixləri qeyd edilməyib",
+  "No end date": "Bitmə tarixi yoxdur",
+  "Supplier not set": "Təchizatçı qeyd edilməyib",
+  "Incidents and their investigations, permits to work, toolbox talks and the weekly site walk.":
+    "Hadisələr və onların araşdırılması, iş icazələri, təlimatlar və həftəlik meydança baxışı.",
+  "None recorded since {date}": "{date} tarixindən bəri qeyd yoxdur",
+  "Counting starts with the first day on site: take a roll call or set the planned start.":
+    "Hesablama meydançadakı ilk gündən başlayır: yoxlama aparın və ya planlaşdırılan başlanğıcı qeyd edin.",
+  "needs attendance hours": "davamiyyət saatları lazımdır",
+  "{r} recordable in {h} man-hours": "{h} adam-saatda {r} qeydə alınan hadisə",
+  "No incidents recorded": "Hadisə qeyd edilməyib",
+  "Log near misses, first-aid cases, lost-time injuries, damage and environmental events as they happen, then track the actions that close them.":
+    "Az qala hadisələri, ilk yardım hallarını, iş vaxtı itkisi ilə xəsarətləri, zədələri və ətraf mühit hadisələrini baş verdikcə qeyd edin, sonra onları bağlayan tədbirləri izləyin.",
+  "A short title": "Qısa başlıq",
+  "No permits to work yet": "Hələ iş icazəsi yoxdur",
+  "Draft a permit for hot work, work at height, excavation, lifting, confined spaces or electrical work. It goes active once every check is ticked.":
+    "Odlu işlər, hündürlükdə iş, qazma, qaldırma, qapalı məkan və ya elektrik işləri üçün icazə hazırlayın. Bütün yoxlamalar qeyd olunanda qüvvəyə minir.",
+  "The crew or company doing the work.": "İşi görən briqada və ya şirkət.",
+  "What work the permit covers": "İcazənin əhatə etdiyi iş",
+  "No toolbox talks logged": "Təlimat qeyd edilməyib",
+  "Record each briefing: the topic, where it was given, who gave it and how many people attended.":
+    "Hər təlimatı qeyd edin: mövzu, harada keçirildi, kim keçirdi və neçə nəfər iştirak etdi.",
+  "Enter how many people attended.": "Neçə nəfərin iştirak etdiyini yazın.",
 };
 export default AZ;

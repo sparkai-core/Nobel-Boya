@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { Check, FileSearch, Hand, RotateCcw, ScanLine, ShieldCheck, X } from "lucide-react";
 import { Badge, Dialog, Empty, Field, FilterChips, Money, PageHero, StatusBadge, TabBar, Timeline, toast, useL } from "../../../components/kit";
 import { Drawer } from "../../../components/ui";
-import { useOps, ME } from "../../../ops/store";
+import { useOps, me } from "../../../ops/store";
 import { diffDays, TODAY } from "../../../ops/dates";
 import { quoteTotal, R } from "../../../ops/select";
 import type { ExceptionReason, ProcException, Quotation } from "../../../ops/types";
@@ -52,7 +52,7 @@ export function ExceptionsPage() {
   const maxAmt = Math.max(1, ...held.map(amount));
 
   const list = (() => {
-    const base = s.exceptions.filter((e) => (tab === "todo" ? live(e) : tab === "done" ? !live(e) : e.assignee === ME)).filter((e) => !stage || e.stage === stage);
+    const base = s.exceptions.filter((e) => (tab === "todo" ? live(e) : tab === "done" ? !live(e) : e.assignee === me())).filter((e) => !stage || e.stage === stage);
     const sev = (e: ProcException) => (e.severity === "critical" ? 0 : 1);
     return [...base].sort((a, b) => (sort === "worst" ? sev(a) - sev(b) || a.raisedAt.localeCompare(b.raisedAt) : sort === "longest" ? a.raisedAt.localeCompare(b.raisedAt) : amount(b) - amount(a)));
   })();
@@ -117,7 +117,7 @@ export function ExceptionsPage() {
                 tabs={[
                   { value: "todo", label: t("To do"), count: s.exceptions.filter(live).length },
                   { value: "done", label: t("Handled"), count: s.exceptions.filter((e) => !live(e)).length },
-                  { value: "mine", label: t("Yours"), count: s.exceptions.filter((e) => e.assignee === ME).length },
+                  { value: "mine", label: t("Yours"), count: s.exceptions.filter((e) => e.assignee === me()).length },
                 ]}
               />
             </div>
@@ -320,7 +320,7 @@ function ExceptionPanel({ e, q }: { e: ProcException; q: Quotation | undefined }
       <div className="po-ex-actions">
         {live ? (
           <>
-            {e.status === "open" || e.assignee !== ME ? (
+            {e.status === "open" || e.assignee !== me() ? (
               <button
                 type="button"
                 className="btn btn-primary"

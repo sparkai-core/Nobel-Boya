@@ -1,7 +1,10 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
-import { addDays, APPROVAL_LIMIT, diffDays, nowStamp, same, TODAY } from "./dates";
-import { makeSeed, PEOPLE } from "./seed";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
+import { useApp } from "../lib/store";
+import { addDays, APPROVAL_LIMIT, diffDays, maxDate, minDate, nowStamp, same, setProjectFrame, TODAY } from "./dates";
+import { me, PEOPLE } from "./people";
+import { buildMaterials, DERIVED_WBS, EMPTY_SETUP, makeSeed } from "./seed";
+import { siteAddress } from "./site";
 import { phase2Actions, type Phase2Actions } from "./store-phase2";
 import { round } from "./seed/util";
 import type {
@@ -70,7 +73,10 @@ type Actions = {
   /** Vendor the portal is showing (demo switcher). */
   vendorAs: string;
   setVendorAs: (id: string) => void;
+  /** Clears every PM and procurement record of the active project (vendors and the company name stay). */
   resetDemo: () => void;
+  /** Saves project facts the user enters (company name, planned start, contract finish …). */
+  setSetup: (patch: Partial<OpsData["setup"]>) => void;
 
   // procurement
   createMr: (input: NewMr, submit: boolean) => string;
@@ -144,15 +150,14 @@ type Actions = {
 
 export type OpsState = OpsData & Actions & Phase2Actions;
 
-/** Name the demo user acts under. */
-export const ME = PEOPLE.pm;
+export { me };
 
 function nextRef(seq: Record<string, number>, kind: string, width = 4): [string, Record<string, number>] {
   const n = (seq[kind] ?? 0) + 1;
   return [`${kind}-${String(n).padStart(width, "0")}`, { ...seq, [kind]: n }];
 }
 
-function feed(s: OpsData, module: FeedEvent["module"], text: Txt, link: string | null, actor = ME): Pick<OpsData, "feed" | "seq"> {
+function feed(s: OpsData, module: FeedEvent["module"], text: Txt, link: string | null, actor = me()): Pick<OpsData, "feed" | "seq"> {
   const n = (s.seq.F ?? 0) + 1;
   return { feed: [{ id: `F-${n}`, at: nowStamp(), module, text, link, actor }, ...s.feed].slice(0, 80), seq: { ...s.seq, F: n } };
 }
@@ -171,7 +176,6 @@ function quoteChecks(s: OpsData, q: Pick<Quotation, "lines" | "vendorId" | "vali
     { label: { en: "Every requested line is priced", az: "Bütün tələb olunan sətirlər qiymətləndirilib" }, result: priced >= Math.max(1, rfqLines.length) ? "PASSED" : "WARNING", detail: { en: `${priced} of ${Math.max(rfqLines.length, q.lines.length)} lines priced.`, az: `${Math.max(rfqLines.length, q.lines.length)} sətirdən ${priced}-i qiymətləndirilib.` } },
     { label: { en: "Lines add up to the total", az: "Sətirlərin cəmi yekuna bərabərdir" }, result: "PASSED", detail: { en: "Arithmetic checked.", az: "Hesab yoxlanıldı." } },
     { label: { en: "Price against the BOQ budget", az: "Qiymət smeta büdcəsinə qarşı" }, result: over > 0.08 ? "WARNING" : "PASSED", detail: over >= 0 ? { en: `${Math.round(over * 100)}% above the BOQ rate.`, az: `Smeta qiymətindən ${Math.round(over * 100)}% yuxarı.` } : { en: `${Math.round(-over * 100)}% below the BOQ rate.`, az: `Smeta qiymətindən ${Math.round(-over * 100)}% aşağı.` } },
-    { label: { en: "Reading confidence", az: "Oxunma etibarlılığı" }, result: q.confidence < 0.75 ? "FAILED" : q.confidence < 0.88 ? "WARNING" : "PASSED", detail: { en: `${Math.round(q.confidence * 100)}% average.`, az: `Orta ${Math.round(q.confidence * 100)}%.` } },
     { label: { en: "Price holds long enough", az: "Qiymət kifayət qədər qüvvədədir" }, result: days < 7 ? "WARNING" : "PASSED", detail: days < 7 ? { en: "Expires within 7 days.", az: "7 gün ərzində bitir." } : { en: `Valid for ${days} days.`, az: `${days} gün qüvvədədir.` } },
   ];
 }
@@ -180,14 +184,69 @@ const poTotal = (po: PurchaseOrder) => round(po.lines.reduce((a, l) => a + l.qty
 const quoteTotal = (q: Quotation) => round(q.lines.reduce((a, l) => a + l.qty * l.unitPrice, 0) * (1 + q.vatRate) + q.shipping, 2);
 const name = (s: OpsData, vendorId: string) => s.vendors.find((v) => v.id === vendorId)?.name ?? vendorId;
 
+const OPS_KEY = "nobel.ops.v2";
+const SHARED_KEY = `${OPS_KEY}:shared`;
+/** Records are kept per project; vendors, portal invites and the company name are shared by all projects. */
+const projectKey = () => `${OPS_KEY}:${useApp.getState().activeProjectId || "default"}`;
+
+function read(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function write(key: string, value: string) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* storage full or blocked: the session still works in memory */
+  }
+}
+
+type Shared = { vendors?: Vendor[]; invites?: OpsData["invites"]; company?: string; seqV?: number; seqINVT?: number };
+
+const opsStorage: StateStorage = {
+  getItem: () => {
+    const raw = read(projectKey());
+    const sharedRaw = read(SHARED_KEY);
+    if (!raw && !sharedRaw) return null;
+    const p = (raw ? JSON.parse(raw) : { state: {}, version: 2 }) as { state: Partial<OpsData> & Record<string, unknown>; version: number };
+    const sh = (sharedRaw ? JSON.parse(sharedRaw) : {}) as Shared;
+    p.state = {
+      ...p.state,
+      vendors: sh.vendors ?? [],
+      invites: sh.invites ?? [],
+      setup: { ...EMPTY_SETUP, ...p.state.setup, company: sh.company ?? "" },
+      seq: { ...p.state.seq, V: sh.seqV ?? 0, INVT: sh.seqINVT ?? 0 },
+    };
+    return JSON.stringify(p);
+  },
+  setItem: (_name, value) => {
+    const p = JSON.parse(value) as { state: Partial<OpsData> & Record<string, unknown>; version: number };
+    const { vendors, invites, ...rest } = p.state;
+    const shared: Shared = { vendors, invites, company: p.state.setup?.company ?? "", seqV: p.state.seq?.V ?? 0, seqINVT: p.state.seq?.INVT ?? 0 };
+    write(SHARED_KEY, JSON.stringify(shared));
+    write(projectKey(), JSON.stringify({ ...p, state: rest }));
+  },
+  removeItem: () => {
+    try {
+      localStorage.removeItem(projectKey());
+    } catch {
+      /* ignore */
+    }
+  },
+};
+
 export const useOps = create<OpsState>()(
   persist(
     (set, get) => ({
       ...makeSeed(),
       ...phase2Actions(set as never, get as never),
-      vendorAs: "V-02",
+      vendorAs: "",
       setVendorAs: (vendorAs) => set({ vendorAs }),
-      resetDemo: () => set({ ...makeSeed(), vendorAs: "V-02" }),
+      resetDemo: () => set((s) => ({ ...makeSeed(), vendors: s.vendors, invites: s.invites, setup: { ...EMPTY_SETUP, company: s.setup.company }, seq: { V: s.seq.V ?? 0, INVT: s.seq.INVT ?? 0 }, vendorAs: s.vendorAs })),
+      setSetup: (patch) => set((s) => ({ setup: { ...s.setup, ...patch } })),
 
       // ------------------------------------------------------------ material requests
       createMr: (input, submit) => {
@@ -199,7 +258,7 @@ export const useOps = create<OpsState>()(
           title: same(input.title),
           status: submit ? "SUBMITTED" : "DRAFT",
           priority: input.priority,
-          requestedBy: ME,
+          requestedBy: me(),
           trade: input.trade,
           building: input.building,
           activityId: input.activityId,
@@ -280,13 +339,14 @@ export const useOps = create<OpsState>()(
         const s = get();
         const [id, seq] = nextRef(s.seq, "QT");
         const rfq = input.rfqId ? s.rfqs.find((r) => r.id === input.rfqId) : null;
-        const confidence = input.source === "UPLOAD" ? 0.9 : 1;
+        // Quotes are typed in (or sent by the vendor): every line is as entered.
+        const confidence = 1;
         const lines = input.lines.map((l, i) => ({ key: `${id}-${i}`, description: l.description, qty: l.qty, unit: l.unit, unitPrice: l.unitPrice, confidence, match: "MATCHED" as const }));
         const validUntil = addDays(TODAY, input.validDays);
         const vendor = name(s, input.vendorId);
         const q: Quotation = {
           id,
-          ref: input.ref || `${vendor.split(" ")[0]!.slice(0, 3).toUpperCase()}-2026-${String(300 + (seq.QT ?? 0))}`,
+          ref: input.ref || id,
           rfqId: input.rfqId,
           vendorId: input.vendorId,
           status: input.source === "MANUAL" ? "MANUAL" : "EXTRACTED",
@@ -305,7 +365,6 @@ export const useOps = create<OpsState>()(
           notes: input.notes ? same(input.notes) : null,
           history: [
             input.source === "PORTAL" ? ev("VENDOR", `${vendor} sent the quote through the vendor portal`, `${vendor} təklifi təchizatçı portalı vasitəsilə göndərdi`) : ev("USER", "Quote entered", "Təklif daxil edildi"),
-            ev("AI", "Lines read and matched to the request", "Sətirlər oxundu və sorğu ilə uyğunlaşdırıldı"),
             ev("SYSTEM", "Checks run against the BOQ and vendor register", "Smeta və təchizatçı reyestri üzrə yoxlamalar aparıldı"),
           ],
           outcome: null,
@@ -315,7 +374,7 @@ export const useOps = create<OpsState>()(
           quotes: [q, ...s.quotes],
           rfqs: s.rfqs.map((r) => (r.id !== input.rfqId ? r : { ...r, invitations: r.invitations.some((i) => i.vendorId === input.vendorId) ? r.invitations.map((i) => (i.vendorId === input.vendorId ? { ...i, status: "SUBMITTED", at: nowStamp() } : i)) : [...r.invitations, { vendorId: input.vendorId, status: "SUBMITTED", at: nowStamp(), reason: null }] })),
           
-          ...feed({ ...s, seq }, input.source === "PORTAL" ? "VENDOR" : "PROC", { en: `${vendor} quoted ${input.rfqId ?? "directly"}`, az: `${vendor} ${input.rfqId ?? "birbaşa"} üzrə təklif verdi` }, `procurement/quotes/${id}`, input.source === "PORTAL" ? vendor : ME),
+          ...feed({ ...s, seq }, input.source === "PORTAL" ? "VENDOR" : "PROC", { en: `${vendor} quoted ${input.rfqId ?? "directly"}`, az: `${vendor} ${input.rfqId ?? "birbaşa"} üzrə təklif verdi` }, `procurement/quotes/${id}`, input.source === "PORTAL" ? vendor : me()),
         });
         return id;
       },
@@ -349,12 +408,12 @@ export const useOps = create<OpsState>()(
         const a = s.approvals.find((x) => x.id === approvalId);
         if (!a || a.status !== "PENDING") return null;
         if (decision === "REJECT") {
-          set({ approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, status: "REJECTED", notes: notes ?? x.notes, finalBy: ME, finalAt: nowStamp() } : x)), ...feed(s, "PROC", { en: `${approvalId} rejected`, az: `${approvalId} rədd edildi` }, `procurement/approvals/${approvalId}`) });
+          set({ approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, status: "REJECTED", notes: notes ?? x.notes, finalBy: me(), finalAt: nowStamp() } : x)), ...feed(s, "PROC", { en: `${approvalId} rejected`, az: `${approvalId} rədd edildi` }, `procurement/approvals/${approvalId}`) });
           return null;
         }
         const level = (a.level + 1) as 1 | 2;
         if (level < a.requiredLevels) {
-          set({ approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, level, firstBy: ME, firstAt: nowStamp(), notes: notes ?? x.notes } : x)), ...feed(s, "PROC", { en: `First approval given on ${approvalId}`, az: `${approvalId} üzrə ilk təsdiq verildi` }, `procurement/approvals/${approvalId}`) });
+          set({ approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, level, firstBy: me(), firstAt: nowStamp(), notes: notes ?? x.notes } : x)), ...feed(s, "PROC", { en: `First approval given on ${approvalId}`, az: `${approvalId} üzrə ilk təsdiq verildi` }, `procurement/approvals/${approvalId}`) });
           return null;
         }
         // Final approval: issue the order and schedule its payment.
@@ -375,7 +434,7 @@ export const useOps = create<OpsState>()(
           issuedAt: TODAY,
           expectedAt,
           paymentTerms: q.paymentTerms,
-          deliverTo: { en: "Qobu site, main gate, Absheron district", az: "Qobu meydançası, əsas darvaza, Abşeron rayonu" },
+          deliverTo: siteAddress(),
           vatRate: q.vatRate,
           shipping: q.shipping,
           lines: q.lines.map((l, i) => ({ key: `${poId}-${i}`, material: rfq?.lines[i]?.material ?? null, description: l.description, qty: l.qty, unit: l.unit, rate: l.unitPrice, received: 0 })),
@@ -386,7 +445,7 @@ export const useOps = create<OpsState>()(
         const payment: Payment = { id: payId, ref: payId, poId, vendorId: q.vendorId, amount: poTotal(po), kind: "ON_DELIVERY", dueDate: addDays(expectedAt, 30), status: "SCHEDULED", paidAt: null, method: null, bankRef: null, holdReason: null };
         const seq = seq2;
         set({
-          approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, status: "APPROVED", level, ...(a.requiredLevels === 2 ? { finalBy: PEOPLE.director } : { firstBy: ME, firstAt: nowStamp(), finalBy: ME }), finalAt: nowStamp(), notes: notes ?? x.notes, poId } : x)),
+          approvals: s.approvals.map((x) => (x.id === approvalId ? { ...x, status: "APPROVED", level, ...(a.requiredLevels === 2 ? { finalBy: PEOPLE.director } : { firstBy: me(), firstAt: nowStamp(), finalBy: me() }), finalAt: nowStamp(), notes: notes ?? x.notes, poId } : x)),
           pos: [po, ...s.pos],
           payments: [payment, ...s.payments],
           rfqs: s.rfqs.map((r) => (r.id === q.rfqId ? { ...r, status: "AWARDED", awardedQuoteId: q.id } : r)),
@@ -497,7 +556,7 @@ export const useOps = create<OpsState>()(
       addStockItem: (input) => set((s) => ({ stock: [...s.stock.filter((x) => x.key !== input.key), { ...input, updatedAt: TODAY }] })),
 
       // ------------------------------------------------------------ exceptions
-      takeException: (id) => set((s) => ({ exceptions: s.exceptions.map((e) => (e.id === id ? { ...e, status: "assigned", assignee: ME, history: [...e.history, ev("USER", `Taken by ${ME}`, `${ME} götürdü`)] } : e)) })),
+      takeException: (id) => set((s) => ({ exceptions: s.exceptions.map((e) => (e.id === id ? { ...e, status: "assigned", assignee: me(), history: [...e.history, ev("USER", `Taken by ${me()}`, `${me()} götürdü`)] } : e)) })),
       resolveException: (id, note) => set((s) => ({ exceptions: s.exceptions.map((e) => (e.id === id ? { ...e, status: "resolved", history: [...e.history, ev("USER", `Resolved: ${note}`, `Həll olundu: ${note}`)] } : e)) })),
       dismissException: (id, note) => set((s) => ({ exceptions: s.exceptions.map((e) => (e.id === id ? { ...e, status: "dismissed", history: [...e.history, ev("USER", `Dismissed: ${note}`, `Ləğv edildi: ${note}`)] } : e)) })),
       reopenException: (id) => set((s) => ({ exceptions: s.exceptions.map((e): ProcException => (e.id === id ? { ...e, status: "open", history: [...e.history, ev("USER", "Reopened", "Yenidən açıldı")] } : e)) })),
@@ -506,8 +565,9 @@ export const useOps = create<OpsState>()(
       createVendor: (input) => {
         const s = get();
         const [id, seq] = nextRef(s.seq, "V", 2);
-        const scores = input.scores ?? { reliability: 70, quality: 70, price: 70, delivery: 70 };
-        const vendor: Vendor = { ...input, id, scores, avgDeliveryDays: input.avgDeliveryDays ?? 10, overall: round((scores.reliability * 0.3 + scores.quality * 0.3 + scores.price * 0.2 + scores.delivery * 0.2) / 10, 1), history: [], since: TODAY };
+        // A new vendor is unscored until the user rates it.
+        const scores = input.scores ?? { reliability: 0, quality: 0, price: 0, delivery: 0 };
+        const vendor: Vendor = { ...input, id, scores, avgDeliveryDays: input.avgDeliveryDays ?? 0, overall: round((scores.reliability * 0.3 + scores.quality * 0.3 + scores.price * 0.2 + scores.delivery * 0.2) / 10, 1), history: [], since: TODAY };
         set({ vendors: [...s.vendors, vendor],  ...feed({ ...s, seq }, "PROC", { en: `Vendor added: ${input.name}`, az: `Təchizatçı əlavə edildi: ${input.name}` }, `procurement/vendors/${id}`) });
         return id;
       },
@@ -644,22 +704,70 @@ export const useOps = create<OpsState>()(
       },
     }),
     {
-      name: "nobel.ops.v1",
-      version: 1,
+      name: OPS_KEY,
+      version: 2,
+      storage: createJSONStorage(() => opsStorage),
       partialize: (s) => {
-        // Persist data and the vendor switcher; actions are rebuilt on load.
+        // Save the records; actions are rebuilt on load. Materials and the BOQ WBS are rebuilt from the project.
         const out: Record<string, unknown> = {};
-        for (const [k, v] of Object.entries(s)) if (typeof v !== "function") out[k] = v;
+        for (const [k, v] of Object.entries(s)) if (typeof v !== "function" && k !== "materials") out[k] = v;
+        out.wbs = s.wbs.filter((w) => !w.id.startsWith(DERIVED_WBS));
         return out as Partial<OpsState>;
       },
+      merge: (persisted, current) => mergeSaved(current, persisted as Partial<OpsState> | undefined),
     },
   ),
 );
 
-// Keep tabs in step: the vendor portal opens in a new tab and writes to the same storage key.
+function mergeSaved(base: OpsState, saved: Partial<OpsState> | undefined): OpsState {
+  if (!saved) return base;
+  const wbs = saved.wbs && saved.wbs.length ? saved.wbs : base.wbs;
+  return { ...base, ...saved, wbs, materials: base.materials, setup: { ...EMPTY_SETUP, ...saved.setup }, seq: { ...saved.seq } };
+}
+
+/** Loads the records of the active project, or starts it empty. Runs when the user opens another project. */
+function loadProject() {
+  const fresh = { ...useOps.getState(), ...makeSeed(), vendorAs: "" } as OpsState;
+  let saved: Partial<OpsState> | undefined;
+  try {
+    const raw = opsStorage.getItem(OPS_KEY);
+    if (typeof raw === "string") saved = (JSON.parse(raw) as { state?: Partial<OpsState> }).state;
+  } catch {
+    saved = undefined;
+  }
+  useOps.setState(mergeSaved(fresh, saved), true);
+}
+
+/** Keeps PROJECT_START / PROJECT_FINISH in step with the setup and the activities. */
+function updateFrame(s: OpsData) {
+  const starts = s.activities.map((a) => a.start);
+  const ends = s.activities.map((a) => a.end);
+  const start = s.setup.plannedStart ?? (starts.length ? minDate(...starts) : TODAY);
+  const finish = s.setup.contractFinish ?? (ends.length ? maxDate(...ends) : start);
+  setProjectFrame(start, finish);
+}
+updateFrame(useOps.getState());
+useOps.subscribe((s, prev) => {
+  if (s.activities !== prev.activities || s.setup !== prev.setup) updateFrame(s);
+});
+
+useApp.subscribe((s, prev) => {
+  if (s.activeProjectId !== prev.activeProjectId || s.projectRev !== prev.projectRev) loadProject();
+  else if (s.rates !== prev.rates) useOps.setState({ materials: buildMaterials() });
+});
+
+// Keep tabs in step: the vendor portal opens in a new tab and writes to the same storage.
 if (typeof window !== "undefined") {
+  try {
+    // Records from the old sample demo are not the client's: drop them.
+    localStorage.removeItem("nobel.ops.v1");
+    localStorage.removeItem("nobel.ops.planning.v1");
+  } catch {
+    /* storage blocked */
+  }
   window.addEventListener("storage", (e) => {
-    if (e.key === "nobel.ops.v1") void useOps.persist.rehydrate();
+    // Re-read without writing back, so two open tabs never bounce saves between them.
+    if (e.key?.startsWith(OPS_KEY)) void useOps.persist.rehydrate();
   });
 }
 

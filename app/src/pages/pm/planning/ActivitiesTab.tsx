@@ -1,13 +1,14 @@
 import { Fragment, useEffect, useMemo, useRef, useState, type PointerEvent as RPointerEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronRight, Columns3, ChartGantt, Search, Table2 } from "lucide-react";
+import { ChevronDown, ChevronRight, Columns3, ChartGantt, ListPlus, Plus, Search, Table2, Upload } from "lucide-react";
 import { Empty, FilterChips, GanttCore, useL, type GanttLink, type GanttRow } from "../../../components/kit";
 import { Segmented } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
 import { addDays, PROJECT_FINISH, PROJECT_START, TODAY } from "../../../ops/dates";
-import { cpm, type Cpm } from "../../../ops/select";
+import { cpm, progressWeight, type Cpm } from "../../../ops/select";
 import type { Activity } from "../../../ops/types";
-import { calendarOf, groupActivities, groupSpan, linkLabel, origDur, programmeFinish, remDur, variance, wbsTree, type WbsGroup } from "./model";
+import { calendarName, groupActivities, groupSpan, linkLabel, origDur, programmeFinish, remDur, variance, wbsTree, type WbsGroup } from "./model";
 import { ActivityPane } from "./ActivityPane";
+import { ActivityDialog } from "./ActivityDialog";
 
 type Filter = "critical" | "progress" | "behind" | "notstarted" | "done";
 type ColKey = "od" | "rd" | "pct" | "start" | "end" | "tf" | "bs" | "bf" | "var" | "as" | "af" | "cal" | "pred";
@@ -29,13 +30,22 @@ const COLS: { key: ColKey; label: string; def: boolean }[] = [
 ];
 
 /** P6-style activity table grouped by WBS, with filters, a column chooser, a Gantt view and a detail pane. */
-export function ActivitiesTab() {
+export function ActivitiesTab({ onImport, onAdd }: { onImport: () => void; onAdd: () => void }) {
   const { t, x, d } = useL();
   const activities = useOps((s) => s.activities);
   const links = useOps((s) => s.links);
   const wbs = useOps((s) => s.wbs);
+  const workweek = useOps((s) => s.workweek);
   const cp = useMemo(() => cpm(activities, links), [activities, links]);
   const byId = useMemo(() => new Map(activities.map((a) => [a.id, a])), [activities]);
+  const weight = useMemo(() => progressWeight(activities), [activities]);
+  const calName = calendarName(workweek);
+  const predsOf = useMemo(() => {
+    const m = new Map<string, typeof links>();
+    for (const l of links) m.set(l.to, [...(m.get(l.to) ?? []), l]);
+    return m;
+  }, [links]);
+  const [editing, setEditing] = useState<Activity | null>(null);
 
   const [filter, setFilter] = useState<Filter | null>(null);
   const [q, setQ] = useState("");
@@ -72,8 +82,7 @@ export function ActivitiesTab() {
   const count = (f: Filter) => activities.filter((a) => test(a, f)).length;
 
   const predText = (a: Activity) =>
-    links
-      .filter((l) => l.to === a.id)
+    (predsOf.get(a.id) ?? [])
       .map((l) => linkLabel(byId.get(l.from)?.code ?? l.from, l))
       .join(", ");
 
@@ -119,7 +128,7 @@ export function ActivitiesTab() {
       case "af":
         return a.aEnd ? d(a.aEnd) : "—";
       case "cal":
-        return t(calendarOf(a));
+        return calName;
       case "pred":
         return <span className="k-mono pp-pred">{predText(a) || "—"}</span>;
     }
@@ -134,7 +143,7 @@ export function ActivitiesTab() {
 
   const renderGroup = (g: WbsGroup): ReactNode => {
     const list = groupActivities(g);
-    const sp = groupSpan(list);
+    const sp = groupSpan(list, weight);
     const closed = collapsed.has(g.node.id);
     return (
       <Fragment key={g.node.id}>
@@ -186,7 +195,7 @@ export function ActivitiesTab() {
     const rows: GanttRow[] = [];
     const walk = (g: WbsGroup) => {
       const list = groupActivities(g);
-      const sp = groupSpan(list);
+      const sp = groupSpan(list, weight);
       rows.push({ id: `g:${g.node.id}`, label: `${g.node.code} ${x(g.node.name)}`, level: g.level, group: true, bars: sp ? [{ start: sp.start, end: sp.end, kind: "current", tone: "neutral", pct: sp.pct * 100 }] : [] });
       if (collapsed.has(g.node.id)) return;
       for (const a of g.activities) {
@@ -200,7 +209,7 @@ export function ActivitiesTab() {
     const ids = new Set(rows.map((r) => r.id));
     const gl: GanttLink[] = links.filter((l) => ids.has(l.from) && ids.has(l.to)).map((l) => ({ from: l.from, to: l.to, critical: !!cp.get(l.from)?.critical && !!cp.get(l.to)?.critical }));
     return { rows, links: gl };
-  }, [tree, collapsed, cp, links, x, t]);
+  }, [tree, collapsed, cp, links, weight, x, t]);
 
   const selected = sel ? byId.get(sel) : undefined;
 
@@ -216,6 +225,25 @@ export function ActivitiesTab() {
     window.addEventListener("pointermove", move);
     window.addEventListener("pointerup", up);
   };
+
+  if (!activities.length) {
+    return (
+      <div className="k-panel">
+        <Empty icon={<ListPlus size={20} />} title={t("No programme yet")} action={
+          <div className="pp-empty-actions">
+            <button type="button" className="btn btn-primary" onClick={onImport}>
+              <Upload size={15} /> {t("Import a P6 / MS Project file")}
+            </button>
+            <button type="button" className="btn btn-ghost" onClick={onAdd}>
+              <Plus size={15} /> {t("Add an activity")}
+            </button>
+          </div>
+        }>
+          {t("Import a Primavera P6 (.xer / .xml) or MS Project (.xml) file, or add activities by hand.")}
+        </Empty>
+      </div>
+    );
+  }
 
   return (
     <div className="pp-acts">
@@ -239,6 +267,9 @@ export function ActivitiesTab() {
           />
           <div className="pp-acts-end">
             <span className="muted small num-inline">{t("{n} of {m}", { n: shown.length, m: activities.length })}</span>
+            <button type="button" className="btn btn-ghost btn-sm" onClick={onAdd}>
+              <Plus size={14} /> {t("Add")}
+            </button>
             <ColumnChooser cols={cols} onChange={setCols} />
             <Segmented
               label={t("View")}
@@ -301,9 +332,10 @@ export function ActivitiesTab() {
           <button type="button" className="pp-pane-grip" onPointerDown={startDrag} aria-label={t("Drag to resize")} title={t("Drag to resize")}>
             <i />
           </button>
-          <ActivityPane key={selected.id} a={selected} cp={cp.get(selected.id)} onPick={setSel} />
+          <ActivityPane key={selected.id} a={selected} cp={cp.get(selected.id)} onPick={setSel} onEdit={() => setEditing(selected)} />
         </div>
       ) : null}
+      <ActivityDialog open={!!editing} activity={editing} onClose={() => setEditing(null)} />
     </div>
   );
 }

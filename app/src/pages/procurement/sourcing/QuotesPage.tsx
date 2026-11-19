@@ -5,7 +5,6 @@ import {
   Badge,
   FilterChips,
   FlowRail,
-  Meter,
   PageHero,
   Register,
   SearchBox,
@@ -94,18 +93,6 @@ export function QuotesPage() {
     },
     { key: "total", header: t("Total"), align: "right", sort: (qq) => quoteTotal(qq), render: (qq) => <span className="num-inline ps-strong">{fmtMoneyShort(quoteTotal(qq))}</span> },
     {
-      key: "conf",
-      header: t("Reading confidence"),
-      sort: (qq) => qq.confidence,
-      hideBelow: 1100,
-      render: (qq) => (
-        <span className="ps-conf">
-          <Meter value={qq.confidence} tone={qq.confidence < 0.75 ? "bad" : qq.confidence < 0.88 ? "warn" : "ok"} label={t("Reading confidence")} />
-          <b className="num-inline">{Math.round(qq.confidence * 100)}%</b>
-        </span>
-      ),
-    },
-    {
       key: "check",
       header: t("To check"),
       align: "center",
@@ -140,12 +127,12 @@ export function QuotesPage() {
         eyebrow={t("Procurement · Quotations")}
         title={t("Quotation intelligence")}
         subtitle={t("Every vendor quote read, checked against the BOQ and the vendor register, and laid next to its rivals.")}
-        flow={["Quote arrives", "Read and checked", "Compared", "Approved"]}
+        flow={["Quote arrives", "Checked", "Compared", "Approved"]}
         art="quotes"
         actions={
           <button type="button" className="btn btn-primary" onClick={() => navigate(R.uploadQuote())}>
             <FileUp size={15} />
-            {t("Ingest quotations")}
+            {t("Enter a quotation")}
           </button>
         }
       />

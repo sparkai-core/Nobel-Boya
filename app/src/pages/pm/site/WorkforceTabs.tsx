@@ -1,10 +1,10 @@
 import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { BadgeCheck } from "lucide-react";
+import { BadgeCheck, Pencil, Trash2 } from "lucide-react";
 import { Avatar, Badge, FilterChips, KeyVals, Meter, Register, SearchBox, toast, Toolbar, useL, useSearch, type Column } from "../../../components/kit";
 import { Drawer } from "../../../components/ui";
 import { useOps } from "../../../ops/store";
-import { setAttendance } from "../../../ops/ext/site-p2";
+import { employerName, removeWorker, setAttendance, workerPhone } from "../../../ops/ext/site-p2";
 import { dowShort, TODAY, toDate } from "../../../ops/dates";
 import { R } from "../../../ops/select";
 import type { Activity, AttendanceStatus, Worker } from "../../../ops/types";
@@ -12,6 +12,7 @@ import { DrawerSection, isRestDay, ROLE, siteMeta, WEEK } from "./shared";
 import { certState, liveActivity, onSite, statusOn, weekHours } from "./workforce-model";
 import { ATT_ORDER } from "./RollCall";
 import { useRenewCert } from "./WorkforceMore";
+import { WorkerDialog } from "./SiteDialogs";
 
 const CYCLE: (AttendanceStatus | null)[] = [null, ...ATT_ORDER];
 const nextStatus = (s: AttendanceStatus | null) => CYCLE[(CYCLE.indexOf(s) + 1) % CYCLE.length] ?? null;
@@ -35,13 +36,14 @@ export function WorkersTab() {
   const { t, x } = useL();
   const workers = useOps((s) => s.workers);
   const subs = useOps((s) => s.subs);
+  const company = useOps((s) => s.setup.company);
   const activities = useOps((s) => s.activities);
   const [trade, setTrade] = useState<string | null>(null);
   const [q, setQ] = useState("");
   const [openId, setOpenId] = useState<string | null>(null);
   const trades = [...new Set(workers.map((w) => w.trade.en))];
   const filtered = useMemo(() => workers.filter((w) => !trade || w.trade.en === trade), [workers, trade]);
-  const subName = (id: string) => subs.find((s) => s.id === id)?.name ?? id;
+  const subName = (id: string) => employerName(id, subs, company, t("Own staff"));
   const rows = useSearch(filtered, q, (w) => [w.name, w.trade, subName(w.employer), activities.find((a) => a.id === w.activityId)?.code]);
   const opened = workers.find((w) => w.id === openId);
 
@@ -62,7 +64,7 @@ export function WorkersTab() {
     },
     { key: "trade", header: t("Trade"), sort: (w) => x(w.trade), render: (w) => x(w.trade), hideBelow: 820 },
     { key: "employer", header: t("Employer"), sort: (w) => subName(w.employer), render: (w) => <span className="small">{subName(w.employer)}</span>, hideBelow: 900 },
-    { key: "rate", header: t("Rate, AZN/h"), sort: (w) => w.rate, align: "right", render: (w) => <span className="num-inline">{w.rate.toFixed(2)}</span>, hideBelow: 820 },
+    { key: "rate", header: t("Rate, AZN/h"), sort: (w) => w.rate, align: "right", render: (w) => (w.rate ? <span className="num-inline">{w.rate.toFixed(2)}</span> : <span className="muted">—</span>), hideBelow: 820 },
     {
       key: "activity",
       header: t("Activity"),
@@ -92,16 +94,25 @@ export function WorkersTab() {
         empty={t("No workers match.")}
       />
       <Drawer open={!!opened} onClose={() => setOpenId(null)} kicker={opened ? `${opened.id} · ${x(opened.trade)}` : undefined} title={opened?.name ?? ""} width={460}>
-        {opened ? <WorkerDetail w={opened} /> : null}
+        {opened ? <WorkerDetail w={opened} onDeleted={() => setOpenId(null)} /> : null}
       </Drawer>
       {opened ? <div className="st-scrim" onClick={() => setOpenId(null)} aria-hidden="true" /> : null}
     </>
   );
 }
 
-function WorkerDetail({ w }: { w: Worker }) {
+function WorkerDetail({ w, onDeleted }: { w: Worker; onDeleted: () => void }) {
   const { t, x, d, rel, lang } = useL();
   const subs = useOps((s) => s.subs);
+  const company = useOps((s) => s.setup.company);
+  const [editing, setEditing] = useState(false);
+  const phone = workerPhone(w);
+  const del = () => {
+    if (!window.confirm(t("Remove {name} and their attendance records?", { name: w.name }))) return;
+    removeWorker(w.id);
+    toast(t("{name} removed", { name: w.name }), "neutral");
+    onDeleted();
+  };
   const activities = useOps((s) => s.activities);
   const attendance = useOps((s) => s.attendance);
   const a = activities.find((y) => y.id === w.activityId);
@@ -116,15 +127,25 @@ function WorkerDetail({ w }: { w: Worker }) {
         <Avatar name={w.name} size={40} />
         <div className="k-cell-title">
           <strong>{x(ROLE[w.role] ?? { en: w.role, az: w.role })}</strong>
-          <small>{subs.find((s) => s.id === w.employer)?.name ?? w.employer}</small>
+          <small>{employerName(w.employer, subs, company, t("Own staff"))}</small>
         </div>
+        <span className="k-spacer" />
+        <button type="button" className="btn btn-ghost btn-sm" onClick={() => setEditing(true)}>
+          <Pencil size={13} />
+          {t("Edit")}
+        </button>
+        <button type="button" className="icon-btn" onClick={del} aria-label={t("Remove {name}", { name: w.name })} title={t("Remove")}>
+          <Trash2 size={14} />
+        </button>
       </div>
+      <WorkerDialog open={editing} onClose={() => setEditing(false)} worker={w} />
       <KeyVals
         items={[
           { k: t("Trade"), v: x(w.trade) },
-          { k: t("Rate"), v: <span className="num-inline">{w.rate.toFixed(2)} {t("AZN/h")}</span> },
+          { k: t("Rate"), v: w.rate ? <span className="num-inline">{w.rate.toFixed(2)} {t("AZN/h")}</span> : <span className="muted">—</span> },
+          ...(phone ? [{ k: t("Phone"), v: <a href={`tel:${phone.replace(/\s/g, "")}`}>{phone}</a> }] : []),
           { k: t("Activity"), v: a ? <Link to={R.programme(a.id)}>{a.code} · {x(a.name)}</Link> : t("Unassigned") },
-          { k: t("This week"), v: <span className="num-inline">{hours} {t("h")} · {Math.round(hours * w.rate)} AZN</span> },
+          { k: t("This week"), v: <span className="num-inline">{hours} {t("h")}{w.rate ? ` · ${Math.round(hours * w.rate)} AZN` : ""}</span> },
         ]}
       />
       <DrawerSection title={t("Last 7 days")} aside={<span className="muted small">{t("Click a day to change it")}</span>}>
@@ -173,6 +194,7 @@ function WorkerDetail({ w }: { w: Worker }) {
               </li>
             );
           })}
+          {!w.certs.length ? <li className="muted small">{t("No certificates recorded. Add them with Edit.")}</li> : null}
         </ul>
       </DrawerSection>
     </div>

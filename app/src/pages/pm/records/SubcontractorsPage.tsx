@@ -5,6 +5,7 @@ import {
   Avatar,
   Dialog,
   Donut,
+  Empty,
   Field,
   FilterChips,
   KeyVals,
@@ -110,6 +111,21 @@ export function SubcontractorsPage() {
         }
       />
 
+      {!subs.length ? (
+        <Empty
+          icon={<HardHat size={22} />}
+          title={t("No subcontractors yet")}
+          action={
+            <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+              <Plus size={15} />
+              {t("Add subcontractor")}
+            </button>
+          }
+        >
+          {t("Add the firms carrying work packages: their trade, contact, crew and package value. They can then be picked as employers, permit holders and activity owners.")}
+        </Empty>
+      ) : (
+        <>
       <section className="pmr-subs" aria-label={t("Crew and packages")}>
         <div className="pmr-crew">
           <header>
@@ -163,7 +179,7 @@ export function SubcontractorsPage() {
             parts={STATUSES.map((st) => ({ key: st, value: subs.filter((s) => s.status === st).reduce((a, s) => a + s.packageValue, 0), tone: st === "ACTIVE" ? "brand" : st === "SUSPENDED" ? "bad" : "muted" }))}
             center={
               <span className="pmr-pack-center">
-                <b>{fmtMoneyShort(total)}</b>
+                <b>{total ? fmtMoneyShort(total) : "—"}</b>
                 <small>AZN</small>
               </span>
             }
@@ -184,7 +200,7 @@ export function SubcontractorsPage() {
               );
             })}
           </ul>
-          <p className="muted small">{t("Largest package: {name}", { name: [...subs].sort((a, b) => b.packageValue - a.packageValue)[0]?.name ?? "—" })}</p>
+          <p className="muted small">{total ? t("Largest package: {name}", { name: [...subs].sort((a, b) => b.packageValue - a.packageValue)[0]?.name ?? "—" }) : t("No package values entered yet.")}</p>
         </div>
       </section>
 
@@ -210,6 +226,9 @@ export function SubcontractorsPage() {
           </>
         }
       />
+
+        </>
+      )}
 
       <Drawer open={!!opened} onClose={() => setOpenId(null)} kicker={opened?.code} title={opened?.name ?? ""} width={480}>
         {opened ? <SubDetail sub={opened} activities={activities.filter((a) => a.owner === opened.id)} needed={planned.get(opened.id) ?? 0} /> : null}
@@ -325,10 +344,10 @@ function SubDetail({ sub, activities, needed }: { sub: Subcontractor; activities
       ) : (
         <KeyVals
           items={[
-            { k: t("Contact"), v: sub.contact },
-            { k: t("Package value"), v: <Money value={sub.packageValue} /> },
-            { k: <Phone size={12} />, v: <a href={`tel:${sub.phone.replace(/\s/g, "")}`}>{sub.phone}</a> },
-            { k: <Mail size={12} />, v: <a href={`mailto:${sub.email}`} className="truncate">{sub.email}</a> },
+            { k: t("Contact"), v: sub.contact || "—" },
+            { k: t("Package value"), v: sub.packageValue ? <Money value={sub.packageValue} /> : "—" },
+            { k: <Phone size={12} />, v: sub.phone ? <a href={`tel:${sub.phone.replace(/\s/g, "")}`}>{sub.phone}</a> : "—" },
+            { k: <Mail size={12} />, v: sub.email ? <a href={`mailto:${sub.email}`} className="truncate">{sub.email}</a> : "—" },
             { k: <span className="k-row" style={{ gap: 4 }}><Users size={12} />{t("Crew on site")}</span>, v: <span className={needed > sub.workers ? "k-text-warn" : undefined}>{sub.workers}{needed ? ` / ${needed}` : ""}</span> },
             { k: <span className="k-row" style={{ gap: 4 }}><Truck size={12} />{t("Plant and vehicles")}</span>, v: sub.equipment },
           ]}
@@ -383,8 +402,10 @@ function AddSubDialog({ open, onClose, onAdded }: { open: boolean; onClose: () =
   const [tried, setTried] = useState(false);
   const submit = () => {
     setTried(true);
-    if (!f.name.trim() || !f.trade.trim() || !f.contact.trim()) return;
-    const code = `SC-${String(subs.length + 1).padStart(2, "0")}`;
+    if (!f.name.trim() || !f.trade.trim()) return;
+    let n = subs.length + 1;
+    while (subs.some((s) => s.code === `SC-${String(n).padStart(2, "0")}`)) n++;
+    const code = `SC-${String(n).padStart(2, "0")}`;
     const id = addSub({
       code,
       name: f.name.trim(),
@@ -422,12 +443,12 @@ function AddSubDialog({ open, onClose, onAdded }: { open: boolean; onClose: () =
     >
       <div className="k-form pmr-dlg">
         <Field label={t("Company name")} wide error={tried && !f.name.trim() ? t("Enter the company name.") : undefined}>
-          <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} placeholder={t("e.g. Xəzər İzolyasiya MMC")} />
+          <input className="input" value={f.name} onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>
         <Field label={t("Trade")} wide error={tried && !f.trade.trim() ? t("Enter the trade.") : undefined}>
           <input className="input" value={f.trade} onChange={(e) => setF({ ...f, trade: e.target.value })} placeholder={t("e.g. Waterproofing")} />
         </Field>
-        <Field label={t("Contact")} error={tried && !f.contact.trim() ? t("Enter a contact.") : undefined}>
+        <Field label={t("Contact")} hint={t("Optional")}>
           <input className="input" value={f.contact} onChange={(e) => setF({ ...f, contact: e.target.value })} />
         </Field>
         <Field label={t("Phone")}>

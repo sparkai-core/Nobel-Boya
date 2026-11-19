@@ -1,9 +1,10 @@
 import { useState } from "react";
-import { AlertTriangle, CalendarRange, FileCheck2, ShieldAlert, Upload } from "lucide-react";
+import { AlertTriangle, CalendarRange, FileCheck2, Plus, ShieldAlert, Trash2, Upload } from "lucide-react";
 import { Badge, Empty, PageHero, Panel, StatTiles, useL } from "../../components/kit";
 import { addDays, diffDays, monthShort, TODAY } from "../../ops/dates";
-import { BUYER, DOC_META, useVendor, vendorDocs, type VendorDoc } from "./model";
+import { buyerName, DOC_META, useVendor, vendorDocs, type VendorDoc } from "./model";
 import { DocDialog, useEyebrow } from "./parts";
+import { useVendorDocs } from "../../ops/ext/vendor";
 
 const FROM = addDays(TODAY, -90);
 const TO = addDays(TODAY, 400);
@@ -16,9 +17,11 @@ export function VpDocuments() {
   const eyebrow = useEyebrow();
   const { s, view } = useVendor();
   const [doc, setDoc] = useState<VendorDoc | null>(null);
-  if (!view) return <div className="k-page"><Empty title={t("Vendor not found")} /></div>;
+  const [adding, setAdding] = useState(false);
+  const remove = useVendorDocs((x2) => x2.remove);
+  if (!view) return null;
   const docs = vendorDocs(s, view.vendor);
-  const blocking = docs.filter((dc) => dc.required && (dc.state === "expired" || dc.state === "missing"));
+  const blocking = docs.filter((dc) => dc.state === "expired");
   const soon = docs.filter((dc) => dc.state === "expiring");
 
   // Month ticks along the axis.
@@ -34,16 +37,28 @@ export function VpDocuments() {
       <PageHero
         eyebrow={eyebrow("Documents")}
         title={t("Compliance documents")}
-        subtitle={t("What {buyer} keeps on file about you. Renew a document before it expires so orders keep coming.", { buyer: BUYER })}
-        flow={["Upload", "Read", "On file", "Renew before expiry"]}
+        subtitle={t("What {buyer} keeps on file about you. Renew a document before it expires so orders keep coming.", { buyer: buyerName() })}
+        flow={["Add", "On file", "Renew before expiry"]}
         art="vendor"
+        actions={
+          <button type="button" className="btn btn-primary" onClick={() => setAdding(true)}>
+            <Plus size={15} /> {t("Add document")}
+          </button>
+        }
       />
+
+      {!docs.length ? (
+        <Empty icon={<FileCheck2 size={22} />} title={t("No documents yet")} action={<button type="button" className="btn btn-primary" onClick={() => setAdding(true)}><Plus size={15} /> {t("Add document")}</button>}>
+          {t("Add your trade licence, insurance and other certificates with their reference and expiry date, so {buyer} has them on file.", { buyer: buyerName() })}
+        </Empty>
+      ) : (
+      <>
 
       <StatTiles
         items={[
           { label: t("Valid"), value: docs.filter((dc) => dc.state === "valid").length, sub: t("of {n} documents", { n: docs.length }), tone: "ok" },
           { label: t("Expire within 30 days"), value: soon.length, sub: soon[0] ? t("{doc} first", { doc: x(soon[0].label) }) : t("none soon"), tone: soon.length ? "warn" : undefined },
-          { label: t("Expired or missing"), value: blocking.length + docs.filter((dc) => !dc.required && (dc.state === "expired" || dc.state === "missing")).length, sub: blocking.length ? t("orders are blocked") : t("nothing blocking"), tone: blocking.length ? "bad" : undefined },
+          { label: t("Expired"), value: blocking.length, sub: blocking.length ? t("renew these") : t("nothing expired"), tone: blocking.length ? "bad" : undefined },
         ]}
       />
 
@@ -51,7 +66,7 @@ export function VpDocuments() {
         <div className="k-callout k-tone-bad">
           <AlertTriangle size={15} />
           <span>
-            <b>{t("{buyer} cannot place new orders with you until these are renewed:", { buyer: BUYER })}</b> {blocking.map((dc) => x(dc.label)).join(", ")}.
+            <b>{t("These documents have expired. Add a renewed copy:")}</b> {blocking.map((dc) => x(dc.label)).join(", ")}.
           </span>
         </div>
       ) : null}
@@ -102,7 +117,7 @@ export function VpDocuments() {
                 <span className="vp-doc-icon">{dc.state === "valid" ? <FileCheck2 size={17} /> : <ShieldAlert size={17} />}</span>
                 <div>
                   <b>{x(dc.label)}</b>
-                  <small>{dc.required ? t("Required") : t("Optional")}</small>
+                  <small>{dc.file ?? t("No file attached")}</small>
                 </div>
                 <Badge tone={meta.tone}>{t(meta.label)}</Badge>
               </header>
@@ -117,19 +132,25 @@ export function VpDocuments() {
                 </div>
               </dl>
               {dc.expires ? <p className={`vp-doccard-left k-text-${meta.tone}`}>{dc.state === "expired" ? t("Expired {when}", { when: rel(dc.expires) }) : t("Expires {when}", { when: rel(dc.expires) })}</p> : null}
-              {dc.sentAt ? <p className="muted small">{t("{file} uploaded {when}.", { file: dc.file ?? "", when: stamp(dc.sentAt) })}</p> : null}
-              {dc.key !== "vat" ? (
+              {dc.sentAt ? <p className="muted small">{t("Added {when}.", { when: stamp(dc.sentAt) })}</p> : null}
+              <div className="k-row" style={{ gap: 6 }}>
                 <button type="button" className={`btn btn-sm ${dc.state === "valid" ? "btn-ghost" : "btn-primary"}`} onClick={() => setDoc(dc)}>
                   <Upload size={13} />
-                  {dc.state === "missing" ? t("Upload") : t("Renew")}
+                  {t("Renew")}
                 </button>
-              ) : null}
+                <button type="button" className="btn btn-sm btn-ghost" onClick={() => remove(dc.key)} aria-label={t("Remove")}>
+                  <Trash2 size={13} />
+                </button>
+              </div>
             </li>
           );
         })}
       </ul>
 
-      <DocDialog open={!!doc} onClose={() => setDoc(null)} doc={doc} vendorId={view.vendor.id} />
+      </>
+      )}
+
+      <DocDialog open={!!doc || adding} onClose={() => { setDoc(null); setAdding(false); }} doc={doc} vendorId={view.vendor.id} />
     </div>
   );
 }
